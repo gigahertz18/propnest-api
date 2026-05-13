@@ -1,4 +1,5 @@
 import pytest
+import uuid
 from app.repositories.property import property_repo
 from app.schemas.property import PropertyCreate, PropertyUpdate
 from app.models.property import RentalType, PropertyStatus
@@ -31,7 +32,7 @@ class TestPropertyRepositoryGetById:
         assert result.id == prop.id
 
     def test_returns_none_when_not_found(self, db):
-        result = property_repo.get_by_id(db, "nonexistent-id")
+        result = property_repo.get_by_id(db, uuid.uuid4())
         assert result is None
 
 
@@ -67,7 +68,7 @@ class TestPropertyRepositoryUpdate:
 
     def test_returns_none_when_property_not_found(self, db):
         payload = PropertyUpdate(name="New Name")
-        result = property_repo.update(db, "nonexistent-id", payload)
+        result = property_repo.update(db, uuid.uuid4(), payload)
         assert result is None
 
     def test_update_status(self, db):
@@ -80,12 +81,13 @@ class TestPropertyRepositoryUpdate:
 class TestPropertyRepositoryDelete:
     def test_deletes_property_successfully(self, db):
         prop = make_property_model(db)
-        result = property_repo.delete(db, prop.id)
+        property_id = prop.id
+        result = property_repo.delete(db, property_id)
         assert result is not None
-        assert property_repo.get_by_id(db, prop.id) is None
+        assert property_repo.get_by_id(db, property_id) is None
 
     def test_returns_none_when_not_found(self, db):
-        result = property_repo.delete(db, "nonexistent-id")
+        result = property_repo.delete(db, uuid.uuid4())
         assert result is None
 
 

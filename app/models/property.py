@@ -1,9 +1,11 @@
-import uuid
+from uuid import UUID, uuid4
 import enum
 from sqlalchemy import String, Text, Enum, CheckConstraint
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from app.db.session import Base
 from app.models.base import TimestampMixin
+
 
 
 class RentalType(str, enum.Enum):
@@ -23,10 +25,10 @@ LISTING_PLATFORMS = ("direct", "airbnb", "booking", "agoda")
 class Property(Base, TimestampMixin):
     __tablename__ = "properties"
 
-    id: Mapped[str] = mapped_column(
-        String(36),
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
         primary_key=True,
-        default=lambda: str(uuid.uuid4()),
+        default=uuid4,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     address: Mapped[str] = mapped_column(String(500), nullable=False)

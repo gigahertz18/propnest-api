@@ -2,6 +2,8 @@ from typing import Generic, TypeVar, Type
 from sqlalchemy.orm import Session
 from app.db.session import Base
 
+from uuid import UUID
+
 ModelType   = TypeVar("ModelType", bound=Base)
 CreateSchema = TypeVar("CreateSchema")
 UpdateSchema = TypeVar("UpdateSchema")
@@ -25,7 +27,7 @@ class BaseRepository(Generic[ModelType, CreateSchema, UpdateSchema]):
     ) -> list[ModelType]:
         return db.query(self.model).offset(skip).limit(limit).all()
 
-    def get_by_id(self, db: Session, id: str) -> ModelType | None:
+    def get_by_id(self, db: Session, id: UUID) -> ModelType | None:
         return db.query(self.model).filter(self.model.id == id).first()
 
     def create(self, db: Session, payload: CreateSchema) -> ModelType:
@@ -38,7 +40,7 @@ class BaseRepository(Generic[ModelType, CreateSchema, UpdateSchema]):
     def update(
         self,
         db: Session,
-        id: str,
+        id: UUID,
         payload: UpdateSchema,
     ) -> ModelType | None:
         obj = self.get_by_id(db, id)
@@ -50,7 +52,7 @@ class BaseRepository(Generic[ModelType, CreateSchema, UpdateSchema]):
         db.refresh(obj)
         return obj
 
-    def delete(self, db: Session, id: str) -> ModelType | None:
+    def delete(self, db: Session, id: UUID) -> ModelType | None:
         obj = self.get_by_id(db, id)
         if not obj:
             return None

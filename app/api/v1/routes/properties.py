@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
@@ -19,7 +21,7 @@ def list_properties(
 
 @router.get("/{property_id}", response_model=PropertyResponse)
 def get_property(
-    property_id: str,
+    property_id: UUID,
     db: Session = Depends(get_db),
 ):
     """Get a single property by ID."""
@@ -43,7 +45,7 @@ def create_property(
 
 @router.patch("/{property_id}", response_model=PropertyResponse)
 def update_property(
-    property_id: str,
+    property_id: UUID,
     payload: PropertyUpdate,
     db: Session = Depends(get_db),
 ):
@@ -59,7 +61,7 @@ def update_property(
 
 @router.delete("/{property_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_property(
-    property_id: str,
+    property_id: UUID,
     db: Session = Depends(get_db),
 ):
     """Delete a property."""
