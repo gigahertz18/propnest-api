@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
+from app.api.v1.routes import properties
 
 
 app = FastAPI(
@@ -22,7 +23,7 @@ app.add_middleware(
 # ─── Routers ──────────────────────────────────────────────────────────────────
 # Uncomment as you build each module:
 # from app.api.v1.routes import properties, leases, payments, users
-# app.include_router(properties.router, prefix=settings.API_V1_PREFIX, tags=["Properties"])
+app.include_router(properties.router, prefix=settings.API_V1_PREFIX, tags=["Properties"])
 # app.include_router(leases.router,     prefix=settings.API_V1_PREFIX, tags=["Leases"])
 # app.include_router(payments.router,   prefix=settings.API_V1_PREFIX, tags=["Payments"])
 # app.include_router(users.router,      prefix=settings.API_V1_PREFIX, tags=["Users"])
