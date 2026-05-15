@@ -49,7 +49,7 @@ def create_property(
     return property_repo.create(db, payload)
 
 
-@router.patch("/{property_id}", response_model=PropertyResponse)
+@router.patch("/{property_id}", response_model=PropertyResponse, dependencies=[Depends(require_admin)])
 def update_property(
     property_id: UUID,
     payload: PropertyUpdate,

@@ -96,26 +96,37 @@ class TestCreatePropertyRoute:
 
 class TestUpdatePropertyRoute:
     def test_updates_name(self, client, db):
+        make_admin_model(db)
+        token = login(client, "adminuser")
         prop = make_property_model(db, name="Old Name")
         response = client.patch(
             f"/api/v1/properties/{prop.id}",
             json={"name": "New Name"},
+            headers=auth_headers(token),
         )
+
         assert response.status_code == 200
         assert response.json()["name"] == "New Name"
 
     def test_partial_update_does_not_affect_other_fields(self, client, db):
+        make_admin_model(db)
+        token = login(client, "adminuser")
         prop = make_property_model(db, name="My Unit", address="123 Main St")
         response = client.patch(
             f"/api/v1/properties/{prop.id}",
             json={"name": "Updated Unit"},
+            headers=auth_headers(token),
         )
+
         assert response.json()["address"] == "123 Main St"
 
-    def test_returns_404_when_not_found(self, client):
+    def test_returns_404_when_not_found(self, client, db):
+        make_admin_model(db)
+        token = login(client, "adminuser")
         response = client.patch(
             f"/api/v1/properties/{uuid.uuid4()}",
             json={"name": "Anything"},
+            headers=auth_headers(token),
         )
         assert response.status_code == 404
 

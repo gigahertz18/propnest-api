@@ -24,7 +24,7 @@ def make_property_model(db, **kwargs) -> Property:
     """Creates and persists a Property directly in the test DB."""
     data = make_property(**kwargs)
     obj = Property(
-        id=str(uuid.uuid4()),
+        id=uuid.uuid4(),
         **{k: v for k, v in data.items()},
     )
     db.add(obj)

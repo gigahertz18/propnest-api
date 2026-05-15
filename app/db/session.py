@@ -33,5 +33,8 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+    except Exception:
+        db.rollback()  # Roll back any uncommitted transactions on error
+        raise
     finally:
         db.close()

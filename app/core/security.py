@@ -40,4 +40,5 @@ def decode_access_token(token: str) -> dict | None:
         )
         return payload
     except JWTError as e:
+        # TODO: log the error for debugging (e.g. expired, invalid signature, etc.)
         return None
