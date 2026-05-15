@@ -34,7 +34,7 @@ class PropertyUpdate(BaseModel):
 
 # ─── Response ─────────────────────────────────────────────
 class PropertyResponse(PropertyBase):
-    """Rrned to the client — includes DB-generated fields."""
+    """Returned to the client — includes DB-generated fields."""
     id: uuid.UUID
     created_at: datetime
     updated_at: datetime

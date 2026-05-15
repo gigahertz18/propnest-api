@@ -27,7 +27,7 @@ class User(Base, TimestampMixin):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False,)
 
     role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole, native_enum=False), # native_enum=False ensures SQLite compatibility
+        Enum(UserRole),
         nullable=False,
         default=UserRole.USER,
     )

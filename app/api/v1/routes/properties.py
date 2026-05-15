@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from apps.backend.app.core.dependencies import require_admin
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
@@ -34,7 +35,7 @@ def get_property(
     return property
 
 
-@router.post("/", response_model=PropertyResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=PropertyResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin)])
 def create_property(
     payload: PropertyCreate,
     db: Session = Depends(get_db),
@@ -59,7 +60,7 @@ def update_property(
     return property
 
 
-@router.delete("/{property_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{property_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)])
 def delete_property(
     property_id: UUID,
     db: Session = Depends(get_db),

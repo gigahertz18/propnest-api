@@ -15,7 +15,7 @@ class BaseConfig:
     DB_PORT: int           = 5432
     DB_NAME: str           = "propnest_db"
     DB_USER: str           = "propnest"
-    DB_PASSWORD: str       = "rdw_Pr0pN3st"
+    DB_PASSWORD: str       = "propnest_secret"
 
     # Database retry — how long the app waits for PostgreSQL on startup
     DB_MAX_RETRIES: int    = 10
@@ -24,11 +24,11 @@ class BaseConfig:
     # MinIO
     MINIO_ENDPOINT: str        = "http://minio:9000"
     MINIO_ROOT_USER: str       = "propnest_minio"
-    MINIO_ROOT_PASSWORD: str   = "rdw_Pr0pN3st"
+    MINIO_ROOT_PASSWORD: str   = "propnest_secret"
     MINIO_BUCKET_NAME: str     = "propnest-contracts"
 
     # Auth / JWT
-    SECRET_KEY: str                  = "7d$&g-Z6uI3O@one[yb#5c&>fTPFJA2=zy?{S+E?+Y5"
+    SECRET_KEY: str                  = "dev-secret-key-to-the-universe-pwease-override"
     ALGORITHM: str                   = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
