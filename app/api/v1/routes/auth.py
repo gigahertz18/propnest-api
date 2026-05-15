@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.schemas.user import UserLogin, TokenResponse, UserResponse
-from app.repositories.user import user_repo
-from app.core.security import verify_password, create_access_token
+from app.services import auth_service
+from app.services.exceptions import InvalidCredentialsError, AccountInactiveError
 from app.core.dependencies import get_current_user
 from app.models.user import User
 
@@ -19,34 +19,22 @@ def login(
     Login with username or email + password.
     Returns a JWT access token on success.
     """
-    user = user_repo.get_by_identifier(db, payload.identifier)
-
-    # Use a generic error — don't reveal whether the user exists
-    if not user or not verify_password(payload.password, user.password_hash):
+    try:
+        return auth_service.login(db, payload.identifier, payload.password)
+    except InvalidCredentialsError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
-    if not user.is_active:
+    except AccountInactiveError:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is inactive",
         )
 
-    access_token = create_access_token(
-        data={
-            "sub": str(user.id),
-            "role": user.role.value,
-            "username": user.username,
-        }
-    )
-
-    return TokenResponse(access_token=access_token)
-
 
 @router.get("/me", response_model=UserResponse)
 def me(current_user: User = Depends(get_current_user)):
     """Returns the currently authenticated user's profile."""
-    return current_user
+    return auth_service.get_profile(current_user)

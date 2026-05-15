@@ -46,7 +46,7 @@ class Contract(Base, TimestampMixin):
         default="direct",
     )
 
-    status: Mapped[str] = mapped_column(String, default="ACTIVE")
+    status: Mapped[str] = mapped_column(String(10), default="ACTIVE")
 
     __table_args__ = (
         CheckConstraint(

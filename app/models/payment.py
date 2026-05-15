@@ -33,7 +33,7 @@ class Payment(Base, TimestampMixin):
         nullable=True,
     )
 
-    status: Mapped[str] = mapped_column(String, default="PAID")
+    status: Mapped[str] = mapped_column(String(10), default="PAID")
 
     __table_args__ = (
         CheckConstraint(
