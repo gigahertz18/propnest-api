@@ -9,7 +9,6 @@ psycopg2-binary==2.9.9
 
 # Settings & validation
 pydantic==2.9.2
-pydantic-settings==2.5.2
 email-validator==2.2.0
 
 # Auth

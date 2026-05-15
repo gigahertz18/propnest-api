@@ -62,7 +62,7 @@ def make_user_model(db, **kwargs) -> User:
     data = make_user(**kwargs)
     plain_password = data.pop("password")
     obj = User(
-        id=str(uuid.uuid4()),
+        id=uuid.uuid4(),
         password_hash=hash_password(plain_password),
         **data,
     )

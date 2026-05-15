@@ -12,9 +12,9 @@ from app.core.config import settings
 # Prevent tests from accidentally running against the real database.
 if not settings.is_test:
     raise RuntimeError(
-        f"Tests must run with ENV=test. "
+        f"Tests must run with ENV=unittest. "
         f"Current environment: '{settings.ENV}'. "
-        f"Run tests via `make test` or pass ENV=test explicitly."
+        f"Run tests via `make test` or pass ENV=unittest explicitly."
     )
 
 
