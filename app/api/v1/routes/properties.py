@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from apps.backend.app.core.dependencies import require_admin
+from app.core.dependencies import require_admin
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
