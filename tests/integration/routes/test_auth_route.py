@@ -70,7 +70,7 @@ class TestMe:
         assert response.status_code == 200
         assert response.json()["username"] == "john"
 
-    def test_returns_401_without_token(self, client):
+    def test_returns_403_without_token(self, client):
         response = client.get("/api/v1/auth/me")
         assert response.status_code == 403
 
@@ -88,3 +88,10 @@ class TestMe:
         data = response.json()
         assert "password" not in data
         assert "password_hash" not in data
+
+    def test_returns_401_with_invalid_token(self, client):
+        response = client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": "Bearer invalidtoken"},
+        )
+        assert response.status_code == 401

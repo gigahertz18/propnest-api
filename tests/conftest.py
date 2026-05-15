@@ -9,38 +9,59 @@ from app.db.session import Base, get_db
 from app.core.config import settings
 
 
+# ─── Guard ────────────────────────────────────────────────────────────────────
+# Prevent tests from accidentally running against the real database.
+if not settings.is_test:
+    raise RuntimeError(
+        f"Tests must run with ENV=test. "
+        f"Current environment: '{settings.ENV}'. "
+        f"Run tests via `make test` or pass ENV=test explicitly."
+    )
+
+
 # ─── Engine ───────────────────────────────────────────────────────────────────
-# Use the real PostgreSQL DB — it's available inside Docker where tests run.
-# NullPool ensures connections are not reused across tests.
+# Points to propnest_test — set by TestConfig.DB_NAME.
+# NullPool ensures connections are never reused between tests.
 engine = create_engine(settings.DATABASE_URL, poolclass=NullPool)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-# ─── Session Fixture ──────────────────────────────────────────────────────────
+# ─── Test DB Setup ────────────────────────────────────────────────────────────
+def _ensure_test_db_exists() -> None:
+    """
+    Creates the test database if it doesn't exist.
+    Connects to the postgres maintenance database to issue CREATE DATABASE.
+    """
+    admin_url = (
+        f"postgresql://{settings.DB_USER}:{settings.DB_PASSWORD}"
+        f"@{settings.DB_HOST}:{settings.DB_PORT}/postgres"
+    )
+    admin_engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
+    with admin_engine.connect() as conn:
+        exists = conn.execute(
+            text("SELECT 1 FROM pg_database WHERE datname = :name"),
+            {"name": settings.DB_NAME},
+        ).fetchone()
+        if not exists:
+            conn.execute(text(f'CREATE DATABASE "{settings.DB_NAME}"'))
+    admin_engine.dispose()
+
+
 @pytest.fixture(scope="session", autouse=True)
 def setup_database():
     """
     Runs once per test session.
-    Creates all tables cleanly, yields, then drops them.
 
-    Uses checkfirst=True so it's safe to run even if some tables
-    already exist from Alembic migrations.
+    - Creates propnest_test database if it doesn't exist
+    - Drops and recreates all tables for a clean slate
+    - Drops all tables after tests complete
+
+    Safe to do because this only touches propnest_test, never propnest_db.
     """
-    # Drop enum types that may already exist from Alembic migrations
-    # to avoid "type already exists" conflicts on create_all
-    with engine.connect() as conn:
-        conn.execute(text("DROP TYPE IF EXISTS rentaltype CASCADE"))
-        conn.execute(text("DROP TYPE IF EXISTS propertystatus CASCADE"))
-        conn.execute(text("DROP TYPE IF EXISTS userrole CASCADE"))
-        conn.commit()
-
+    _ensure_test_db_exists()
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-
     yield
-
-    # Clean up after all tests are done
-    # Run `make migrate-up` after tests to restore migration state
     Base.metadata.drop_all(bind=engine)
 
 
@@ -48,11 +69,11 @@ def setup_database():
 @pytest.fixture(scope="function")
 def db():
     """
-    Each test gets a DB session wrapped in a transaction.
-    After the test, the transaction is rolled back — keeping the DB clean
-    even though the repository code internally calls db.commit().
+    Each test function gets a DB session wrapped in a transaction.
+    After the test, the outer transaction is rolled back — keeping the DB
+    clean even though repository code internally calls db.commit().
 
-    Uses savepoints (nested transactions) so inner commits don't break isolation.
+    Savepoints (nested transactions) ensure inner commits don't break isolation.
     """
     connection = engine.connect()
     transaction = connection.begin()
@@ -76,8 +97,8 @@ def db():
 @pytest.fixture(scope="function")
 def client(db):
     """
-    FastAPI TestClient with the test DB session injected.
-    Replaces the real get_db dependency with the test session.
+    FastAPI TestClient with the real get_db dependency
+    replaced by the test session.
     """
     def override_get_db():
         yield db

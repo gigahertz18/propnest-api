@@ -1,3 +1,5 @@
+import uuid
+
 from pydantic import BaseModel
 from datetime import datetime
 from app.models.property import RentalType, PropertyStatus
@@ -32,8 +34,8 @@ class PropertyUpdate(BaseModel):
 
 # ─── Response ─────────────────────────────────────────────
 class PropertyResponse(PropertyBase):
-    """Returned to the client — includes DB-generated fields."""
-    id: str
+    """Rrned to the client — includes DB-generated fields."""
+    id: uuid.UUID
     created_at: datetime
     updated_at: datetime
 

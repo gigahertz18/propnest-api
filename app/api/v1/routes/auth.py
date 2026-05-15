@@ -36,7 +36,7 @@ def login(
         )
 
     access_token = create_access_token(data={
-        "sub": user.id,
+        "sub": str(user.id),
         "role": user.role,
         "username": user.username,
     })

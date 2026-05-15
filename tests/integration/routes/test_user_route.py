@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 from tests.factories import make_user, make_user_model, make_admin_model
 
@@ -45,7 +47,7 @@ class TestGetUserRoute:
         token = login(client, "adminuser")
         response = client.get(f"/api/v1/users/{user.id}", headers=auth_headers(token))
         assert response.status_code == 200
-        assert response.json()["id"] == user.id
+        assert response.json()["id"] == str(user.id)
 
     def test_user_can_get_themselves(self, client, db):
         user = make_user_model(db)
@@ -63,7 +65,7 @@ class TestGetUserRoute:
     def test_returns_404_when_not_found(self, client, db):
         make_admin_model(db)
         token = login(client, "adminuser")
-        response = client.get("/api/v1/users/nonexistent-id", headers=auth_headers(token))
+        response = client.get(f"/api/v1/users/{uuid.uuid4()}", headers=auth_headers(token))
         assert response.status_code == 404
 
 
@@ -90,7 +92,7 @@ class TestCreateUserRoute:
         )
         data = response.json()
         assert "password" not in data
-        assert "hashed_password" not in data
+        assert "password_hash" not in data
 
     def test_duplicate_email_returns_409(self, client, db):
         make_admin_model(db)
@@ -206,6 +208,7 @@ class TestDeleteUserRoute:
         make_admin_model(db)
         user = make_user_model(db, username="todelete", email="delete@example.com")
         token = login(client, "adminuser")
-        client.delete(f"/api/v1/users/{user.id}", headers=auth_headers(token))
-        response = client.get(f"/api/v1/users/{user.id}", headers=auth_headers(token))
+        user_id = user.id
+        client.delete(f"/api/v1/users/{user_id}", headers=auth_headers(token))
+        response = client.get(f"/api/v1/users/{user_id}", headers=auth_headers(token))
         assert response.status_code == 404

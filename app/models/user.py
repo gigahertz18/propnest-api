@@ -1,13 +1,12 @@
 
 import enum
+import uuid
 
 from app.db.session import Base
 from app.models.base import TimestampMixin
 
-from sqlalchemy import String, Enum, Boolean
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy import String, Enum, Boolean, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
-from uuid import UUID, uuid4
 
 class UserRole(str, enum.Enum):
     ADMIN = "admin"
@@ -17,10 +16,10 @@ class UserRole(str, enum.Enum):
 class User(Base, TimestampMixin):
     __tablename__ = "users"
 
-    id: Mapped[UUID] = mapped_column(
-        PG_UUID(as_uuid=True),
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
         primary_key=True,
-        default=uuid4,
+        default=uuid.uuid4,
     )
     username: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True,)
     email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True,)

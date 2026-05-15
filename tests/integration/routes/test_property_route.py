@@ -1,3 +1,5 @@
+import uuid
+
 from tests.factories import make_property, make_property_model
 from app.models.property import RentalType, PropertyStatus
 
@@ -21,10 +23,10 @@ class TestGetPropertyRoute:
         prop = make_property_model(db)
         response = client.get(f"/api/v1/properties/{prop.id}")
         assert response.status_code == 200
-        assert response.json()["id"] == prop.id
+        assert response.json()["id"] == str(prop.id)
 
     def test_returns_404_when_not_found(self, client):
-        response = client.get("/api/v1/properties/nonexistent-id")
+        response = client.get(f"/api/v1/properties/{uuid.uuid4()}")
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]
 
@@ -77,7 +79,7 @@ class TestUpdatePropertyRoute:
 
     def test_returns_404_when_not_found(self, client):
         response = client.patch(
-            "/api/v1/properties/nonexistent-id",
+            f"/api/v1/properties/{uuid.uuid4()}",
             json={"name": "Anything"},
         )
         assert response.status_code == 404
@@ -91,10 +93,11 @@ class TestDeletePropertyRoute:
 
     def test_deleted_property_is_gone(self, client, db):
         prop = make_property_model(db)
-        client.delete(f"/api/v1/properties/{prop.id}")
-        response = client.get(f"/api/v1/properties/{prop.id}")
+        property_id = prop.id
+        client.delete(f"/api/v1/properties/{property_id}")
+        response = client.get(f"/api/v1/properties/{property_id}")
         assert response.status_code == 404
 
     def test_returns_404_when_not_found(self, client):
-        response = client.delete("/api/v1/properties/nonexistent-id")
+        response = client.delete(f"/api/v1/properties/{uuid.uuid4()}")
         assert response.status_code == 404

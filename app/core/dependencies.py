@@ -65,9 +65,26 @@ def require_admin(
     Usage:
         def my_route(current_user: User = Depends(require_admin)):
     """
-    if current_user.role != UserRole.admin:
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required",
+        )
+    return current_user
+
+def require_manager_or_above(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """
+    Requires ADMIN or MANAGER role.
+    Use on routes that managers and admins can access but regular users cannot.
+
+    Usage:
+        def my_route(current_user: User = Depends(require_manager_or_above)):
+    """
+    if current_user.role not in (UserRole.ADMIN, UserRole.MANAGER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Manager access required",
         )
     return current_user
