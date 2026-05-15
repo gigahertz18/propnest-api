@@ -6,7 +6,7 @@ from tests.factories import (
     make_admin_model,
     make_user_model,
 )
-from app.models.property import RentalType, PropertyStatus
+from app.models.property import PropertyStatus
 
 
 # ─── Helpers ──────────────────────────────────────────────
@@ -75,18 +75,6 @@ class TestCreatePropertyRoute:
         token = login(client, "adminuser")
         payload = make_property()
         del payload["name"]
-        response = client.post(
-            "/api/v1/properties/",
-            json=payload,
-            headers=auth_headers(token),
-        )
-        assert response.status_code == 422
-
-    def test_returns_422_when_invalid_rental_type(self, client, db):
-        make_admin_model(db)
-        token = login(client, "adminuser")
-        payload = make_property()
-        payload["rental_type"] = "invalid_type"
         response = client.post(
             "/api/v1/properties/",
             json=payload,

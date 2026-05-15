@@ -2,7 +2,7 @@ import pytest
 import uuid
 from app.repositories.property import property_repo
 from app.schemas.property import PropertyCreate, PropertyUpdate
-from app.models.property import RentalType, PropertyStatus
+from app.models.property import PropertyStatus
 from tests.factories import make_property, make_property_model
 
 
@@ -42,7 +42,6 @@ class TestPropertyRepositoryCreate:
         result = property_repo.create(db, payload)
         assert result.id is not None
         assert result.name == "Test Property"
-        assert result.rental_type == RentalType.long_term
         assert result.status == PropertyStatus.vacant
 
     def test_created_property_is_persisted(self, db):
@@ -92,22 +91,9 @@ class TestPropertyRepositoryDelete:
 
 
 class TestPropertyRepositoryCustomQueries:
-    def test_get_by_rental_type(self, db):
-        make_property_model(db, rental_type=RentalType.long_term)
-        make_property_model(db, rental_type=RentalType.long_term)
-        make_property_model(db, rental_type=RentalType.short_term)
-        result = property_repo.get_by_rental_type(db, RentalType.long_term)
-        assert len(result) == 2
 
     def test_get_by_status(self, db):
         make_property_model(db, status=PropertyStatus.vacant)
         make_property_model(db, status=PropertyStatus.occupied)
         result = property_repo.get_by_status(db, PropertyStatus.vacant)
         assert len(result) == 1
-
-    def test_get_by_platform(self, db):
-        make_property_model(db, listing_platform="airbnb")
-        make_property_model(db, listing_platform="airbnb")
-        make_property_model(db, listing_platform="direct")
-        result = property_repo.get_by_platform(db, "airbnb")
-        assert len(result) == 2

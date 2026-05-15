@@ -1,6 +1,6 @@
 import uuid
 
-from app.models.property import Property, RentalType, PropertyStatus
+from app.models.property import Property, PropertyStatus
 from app.models.user import User, UserRole
 from app.core.security import hash_password
 
@@ -9,8 +9,6 @@ def make_property(
     name: str = "Test Property",
     address: str = "123 Test Street",
     description: str | None = "A test property",
-    rental_type: RentalType = RentalType.long_term,
-    listing_platform: str = "direct",
     status: PropertyStatus = PropertyStatus.vacant,
 ) -> dict:
     """Returns a dict matching PropertyCreate schema."""
@@ -18,8 +16,6 @@ def make_property(
         "name": name,
         "address": address,
         "description": description,
-        "rental_type": rental_type.value,
-        "listing_platform": listing_platform,
         "status": status.value,
     }
 

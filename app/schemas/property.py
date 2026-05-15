@@ -2,7 +2,7 @@ import uuid
 
 from pydantic import BaseModel
 from datetime import datetime
-from app.models.property import RentalType, PropertyStatus
+from app.models.property import PropertyStatus
 
 
 # ─── Base ─────────────────────────────────────────────────
@@ -10,8 +10,6 @@ class PropertyBase(BaseModel):
     name: str
     address: str
     description: str | None = None
-    rental_type: RentalType
-    listing_platform: str = "direct"
     status: PropertyStatus = PropertyStatus.vacant
 
 
@@ -29,8 +27,6 @@ class PropertyUpdate(BaseModel):
     name: str | None = None
     address: str | None = None
     description: str | None = None
-    rental_type: RentalType | None = None
-    listing_platform: str | None = None
     status: PropertyStatus | None = None
 
 
