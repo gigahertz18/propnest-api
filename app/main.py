@@ -38,18 +38,11 @@ def _wait_for_db(max_retries: int, retry_interval: int) -> None:
             return
         except Exception as e:
             if attempt == max_retries:
-                logger.error(
-                    f"Database not available after {max_retries} attempts. "
-                    f"Last error: {e}"
-                )
-                raise RuntimeError(
-                    f"Could not connect to the database after {max_retries} attempts."
-                ) from e
+                logger.error(f"Database not available after {max_retries} attempts. " f"Last error: {e}")
+                raise RuntimeError(f"Could not connect to the database after {max_retries} attempts.") from e
 
             logger.warning(
-                f"Database not ready "
-                f"(attempt {attempt}/{max_retries}) — "
-                f"retrying in {retry_interval}s..."
+                f"Database not ready " f"(attempt {attempt}/{max_retries}) — " f"retrying in {retry_interval}s..."
             )
             time.sleep(retry_interval)
 
@@ -73,9 +66,10 @@ app.add_middleware(
 )
 
 # ─── Routers ──────────────────────────────────────────────
-app.include_router(auth.router,       prefix=settings.API_V1_PREFIX)
-app.include_router(users.router,      prefix=settings.API_V1_PREFIX)
+app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
+app.include_router(users.router, prefix=settings.API_V1_PREFIX)
 app.include_router(properties.router, prefix=settings.API_V1_PREFIX)
+
 
 # ─── Health Check ─────────────────────────────────────────
 @app.get("/health", tags=["Health"])

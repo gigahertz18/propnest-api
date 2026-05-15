@@ -18,12 +18,14 @@ class PropertyBase(BaseModel):
 # ─── Create ───────────────────────────────────────────────
 class PropertyCreate(PropertyBase):
     """Used when creating a new property — request body."""
+
     pass
 
 
 # ─── Update ───────────────────────────────────────────────
 class PropertyUpdate(BaseModel):
     """All fields optional — only send what you want to change."""
+
     name: str | None = None
     address: str | None = None
     description: str | None = None
@@ -35,6 +37,7 @@ class PropertyUpdate(BaseModel):
 # ─── Response ─────────────────────────────────────────────
 class PropertyResponse(PropertyBase):
     """Returned to the client — includes DB-generated fields."""
+
     id: uuid.UUID
     created_at: datetime
     updated_at: datetime

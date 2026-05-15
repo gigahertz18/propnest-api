@@ -8,14 +8,13 @@ from app.db.session import Base
 from app.models.base import TimestampMixin
 
 
-
 class RentalType(str, enum.Enum):
-    long_term  = "long_term"
+    long_term = "long_term"
     short_term = "short_term"
 
 
 class PropertyStatus(str, enum.Enum):
-    vacant   = "vacant"
+    vacant = "vacant"
     occupied = "occupied"
 
 

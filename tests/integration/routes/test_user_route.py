@@ -7,10 +7,13 @@ from tests.factories import make_user, make_user_model, make_admin_model
 # ─── Helpers ──────────────────────────────────────────────
 def login(client, identifier: str, password: str = "password123") -> str:
     """Returns a bearer token for the given identifier."""
-    response = client.post("/api/v1/auth/login", json={
-        "identifier": identifier,
-        "password": password,
-    })
+    response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "identifier": identifier,
+            "password": password,
+        },
+    )
     return response.json()["access_token"]
 
 
@@ -65,7 +68,10 @@ class TestGetUserRoute:
     def test_returns_404_when_not_found(self, client, db):
         make_admin_model(db)
         token = login(client, "adminuser")
-        response = client.get(f"/api/v1/users/{uuid.uuid4()}", headers=auth_headers(token))
+        response = client.get(
+            f"/api/v1/users/{uuid.uuid4()}",
+            headers=auth_headers(token),
+        )
         assert response.status_code == 404
 
 

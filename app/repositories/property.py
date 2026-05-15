@@ -15,33 +15,21 @@ class PropertyRepository(BaseRepository[Property, PropertyCreate, PropertyUpdate
         db: Session,
         rental_type: RentalType,
     ) -> list[Property]:
-        return (
-            db.query(self.model)
-            .filter(self.model.rental_type == rental_type)
-            .all()
-        )
+        return db.query(self.model).filter(self.model.rental_type == rental_type).all()
 
     def get_by_status(
         self,
         db: Session,
         status: PropertyStatus,
     ) -> list[Property]:
-        return (
-            db.query(self.model)
-            .filter(self.model.status == status)
-            .all()
-        )
+        return db.query(self.model).filter(self.model.status == status).all()
 
     def get_by_platform(
         self,
         db: Session,
         listing_platform: str,
     ) -> list[Property]:
-        return (
-            db.query(self.model)
-            .filter(self.model.listing_platform == listing_platform)
-            .all()
-        )
+        return db.query(self.model).filter(self.model.listing_platform == listing_platform).all()
 
 
 # Instantiate once — import this instance everywhere

@@ -4,7 +4,7 @@ from app.db.session import Base
 
 from uuid import UUID
 
-ModelType   = TypeVar("ModelType", bound=Base)
+ModelType = TypeVar("ModelType", bound=Base)
 CreateSchema = TypeVar("CreateSchema")
 UpdateSchema = TypeVar("UpdateSchema")
 

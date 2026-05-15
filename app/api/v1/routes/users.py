@@ -45,7 +45,12 @@ def get_user(
     return user
 
 
-@router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin)])
+@router.post(
+    "/",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_admin)],
+)
 def create_user(
     payload: UserCreate,
     db: Session = Depends(get_db),

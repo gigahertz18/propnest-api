@@ -36,6 +36,7 @@ def make_property_model(db, **kwargs) -> Property:
     db.refresh(obj)
     return obj
 
+
 # User factory functions
 def make_user(
     username: str = "testuser",
@@ -43,7 +44,7 @@ def make_user(
     full_name: str = "Test User",
     password: str = "password123",
     role: UserRole = UserRole.USER,
-    is_active: bool = True, 
+    is_active: bool = True,
 ) -> dict:
     """Returns a dict matching UserCreate schema."""
     return {
@@ -54,6 +55,7 @@ def make_user(
         "role": role.value,
         "is_active": is_active,
     }
+
 
 def make_user_model(db, **kwargs) -> User:
     """Creates and persists a User directly in the test DB (with hashed password)."""

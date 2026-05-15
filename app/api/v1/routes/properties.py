@@ -35,7 +35,12 @@ def get_property(
     return property
 
 
-@router.post("/", response_model=PropertyResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin)])
+@router.post(
+    "/",
+    response_model=PropertyResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_admin)],
+)
 def create_property(
     payload: PropertyCreate,
     db: Session = Depends(get_db),

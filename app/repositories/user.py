@@ -32,7 +32,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         role: UserRole,
     ) -> list[User]:
         return db.query(self.model).filter(self.model.role == role).all()
-    
+
     def get_by_identifier(
         self,
         db: Session,
@@ -44,12 +44,12 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
             return self.get_by_email(db, identifier)
         else:
             return self.get_by_username(db, identifier)
-    
+
     def create(self, db: Session, payload: UserCreate) -> User:
         """Override create to handle password hashing."""
 
         # Hash the password before creating the user
-        
+
         data = payload.model_dump(exclude={"password"})
         obj = self.model(**data, password_hash=hash_password(payload.password))
 
@@ -57,25 +57,26 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         db.commit()
         db.refresh(obj)
         return obj
-    
+
     def update(self, db: Session, id: UUID, payload: UserUpdate) -> User | None:
         """Override update to handle password hashing if password is being updated."""
 
         obj = self.get_by_id(db, id)
         if not obj:
             return None
-        
+
         updates = payload.model_dump(exclude_unset=True)
-        
+
         if "password" in updates:
             updates["password_hash"] = hash_password(updates.pop("password"))
-            
+
         for field, value in updates.items():
             setattr(obj, field, value)
-            
+
         db.commit()
-        db.refresh(obj) 
+        db.refresh(obj)
         return obj
+
 
 # Instantiate once — import this instance everywhere
 user_repo = UserRepository(User)

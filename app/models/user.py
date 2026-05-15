@@ -1,4 +1,3 @@
-
 import enum
 import uuid
 
@@ -8,10 +7,12 @@ from app.models.base import TimestampMixin
 from sqlalchemy import String, Enum, Boolean, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
+
 class UserRole(str, enum.Enum):
     ADMIN = "admin"
     MANAGER = "manager"
     USER = "user"
+
 
 class User(Base, TimestampMixin):
     __tablename__ = "users"
@@ -21,10 +22,26 @@ class User(Base, TimestampMixin):
         primary_key=True,
         default=uuid.uuid4,
     )
-    username: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True,)
-    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True,)
-    full_name: Mapped[str] = mapped_column(String(255), nullable=False,)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False,)
+    username: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    email: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    full_name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+    password_hash: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
 
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole),

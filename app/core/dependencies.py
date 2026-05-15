@@ -74,6 +74,7 @@ def require_admin(
         )
     return current_user
 
+
 def require_manager_or_above(
     current_user: User = Depends(get_current_user),
 ) -> User:

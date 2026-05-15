@@ -8,7 +8,6 @@ from app.main import app
 from app.db.session import Base, get_db
 from app.core.config import settings
 
-
 # ─── Guard ────────────────────────────────────────────────────────────────────
 # Prevent tests from accidentally running against the real database.
 if not settings.is_test:
@@ -33,8 +32,7 @@ def _ensure_test_db_exists() -> None:
     Connects to the postgres maintenance database to issue CREATE DATABASE.
     """
     admin_url = (
-        f"postgresql://{settings.DB_USER}:{settings.DB_PASSWORD}"
-        f"@{settings.DB_HOST}:{settings.DB_PORT}/postgres"
+        f"postgresql://{settings.DB_USER}:{settings.DB_PASSWORD}" f"@{settings.DB_HOST}:{settings.DB_PORT}/postgres"
     )
     admin_engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
     with admin_engine.connect() as conn:
@@ -100,6 +98,7 @@ def client(db):
     FastAPI TestClient with the real get_db dependency
     replaced by the test session.
     """
+
     def override_get_db():
         yield db
 

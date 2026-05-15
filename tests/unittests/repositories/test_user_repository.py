@@ -106,7 +106,7 @@ class TestUserRepositoryCreate:
         payload = UserCreate(**data)
         result = user_repo.create(db, payload)
         assert result.role == UserRole.USER
-    
+
     def test_create_duplicate_email_raises(self, db):
         user_repo.create(db, UserCreate(**make_user()))
         with pytest.raises(Exception):  # IntegrityError

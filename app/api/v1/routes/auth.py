@@ -35,11 +35,13 @@ def login(
             detail="Account is inactive",
         )
 
-    access_token = create_access_token(data={
-        "sub": str(user.id),
-        "role": user.role.value,
-        "username": user.username,
-    })
+    access_token = create_access_token(
+        data={
+            "sub": str(user.id),
+            "role": user.role.value,
+            "username": user.username,
+        }
+    )
 
     return TokenResponse(access_token=access_token)
 
