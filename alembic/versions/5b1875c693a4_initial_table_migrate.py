@@ -1,8 +1,8 @@
-"""Initial models.
+"""Initial table migrate.
 
-Revision ID: 28bd1981d027
+Revision ID: 5b1875c693a4
 Revises: 
-Create Date: 2026-05-15 07:40:55.195588
+Create Date: 2026-05-16 01:37:30.086854
 
 """
 from typing import Sequence, Union
@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision: str = '28bd1981d027'
+revision: str = '5b1875c693a4'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -69,7 +69,7 @@ def upgrade() -> None:
     sa.Column('rent_amount', sa.Numeric(precision=12, scale=2), nullable=False),
     sa.Column('deposit', sa.Numeric(precision=12, scale=2), nullable=True),
     sa.Column('booking_source', sa.String(length=50), nullable=False),
-    sa.Column('status', sa.String(), nullable=False),
+    sa.Column('status', sa.String(length=10), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
     sa.CheckConstraint("booking_source IN ('direct', 'airbnb', 'booking', 'agoda')", name='ck_contract_booking_source'),
@@ -100,7 +100,7 @@ def upgrade() -> None:
     sa.Column('amount', sa.Numeric(precision=12, scale=2), nullable=False),
     sa.Column('paid_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('payment_method', sa.String(length=50), nullable=True),
-    sa.Column('status', sa.String(), nullable=False),
+    sa.Column('status', sa.String(length=10), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
     sa.CheckConstraint("payment_method IN ('cash', 'bank transfer', 'gcash', 'maya')", name='ck_payment_method'),
