@@ -6,8 +6,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.core.config import settings
+from app.core.logging import setup_logging
 from app.db.session import engine
 from app.api.v1.routes import properties, auth, users
+
+# ─── Logging must be configured before any module-level logger is used ────────
+setup_logging(env=settings.ENV)
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +23,7 @@ async def lifespan(app: FastAPI):
         max_retries=settings.DB_MAX_RETRIES,
         retry_interval=settings.DB_RETRY_INTERVAL,
     )
-    logger.info(f"{settings.APP_NAME} started in [{settings.ENV}] mode")
+    logger.info("%s started in [%s] mode", settings.APP_NAME, settings.ENV)
     yield
     engine.dispose()
     logger.info("Database connections closed")
@@ -38,11 +42,20 @@ def _wait_for_db(max_retries: int, retry_interval: int) -> None:
             return
         except Exception as e:
             if attempt == max_retries:
-                logger.error(f"Database not available after {max_retries} attempts. " f"Last error: {e}")
-                raise RuntimeError(f"Could not connect to the database after {max_retries} attempts.") from e
+                logger.error(
+                    "Database not available after %d attempts. Last error: %s",
+                    max_retries,
+                    e,
+                )
+                raise RuntimeError(
+                    f"Could not connect to the database after {max_retries} attempts."
+                ) from e
 
             logger.warning(
-                f"Database not ready " f"(attempt {attempt}/{max_retries}) — " f"retrying in {retry_interval}s..."
+                "Database not ready (attempt %d/%d) — retrying in %ds...",
+                attempt,
+                max_retries,
+                retry_interval,
             )
             time.sleep(retry_interval)
 
@@ -66,10 +79,9 @@ app.add_middleware(
 )
 
 # ─── Routers ──────────────────────────────────────────────
-app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
-app.include_router(users.router, prefix=settings.API_V1_PREFIX)
+app.include_router(auth.router,       prefix=settings.API_V1_PREFIX)
+app.include_router(users.router,      prefix=settings.API_V1_PREFIX)
 app.include_router(properties.router, prefix=settings.API_V1_PREFIX)
-
 
 # ─── Health Check ─────────────────────────────────────────
 @app.get("/health", tags=["Health"])

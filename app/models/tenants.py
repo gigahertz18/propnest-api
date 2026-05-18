@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import String, Text, Uuid, Boolean
+from sqlalchemy import String, Text, Uuid, Boolean, Date
 
 from sqlalchemy.orm import Mapped, mapped_column
 from app.db.session import Base
@@ -19,8 +19,9 @@ class Tenant(Base, TimestampMixin):
     full_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
 
     email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    phonenumber: Mapped[str] = mapped_column(String(20), nullable=False)
+    phone_number: Mapped[str] = mapped_column(String(20), nullable=False)
     current_address: Mapped[str] = mapped_column(String(500), nullable=False)
+    date_of_birth: Mapped[Date] = mapped_column(Date, nullable=False)
     occupation: Mapped[str] = mapped_column(String(255), nullable=True)
 
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

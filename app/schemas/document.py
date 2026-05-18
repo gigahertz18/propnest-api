@@ -3,37 +3,40 @@ import uuid
 from pydantic import BaseModel
 from datetime import datetime
 
-from app.models.property import PropertyStatus
 from app.schemas.base import BaseResponse
 
 
 # ─── Base ─────────────────────────────────────────────────
-class PropertyBase(BaseModel):
-    name: str
-    address: str
-    description: str | None = None
-    status: PropertyStatus = PropertyStatus.vacant
+class DocumentBase(BaseModel):
+    file_name: str
+    file_type: str
+    file_url: str
+    contract_id: uuid.UUID | None = None
+    property_id: uuid.UUID | None = None
+    tenant_id: uuid.UUID | None = None
 
 
 # ─── Create ───────────────────────────────────────────────
-class PropertyCreate(PropertyBase):
-    """Used when creating a new property — request body."""
+class DocumentCreate(DocumentBase):
+    """Used when creating a new document — request body."""
 
     pass
 
 
 # ─── Update ───────────────────────────────────────────────
-class PropertyUpdate(BaseModel):
+class DocumentUpdate(BaseModel):
     """All fields optional — only send what you want to change."""
 
-    name: str | None = None
-    address: str | None = None
-    description: str | None = None
-    status: PropertyStatus | None = None
+    file_name: str | None = None
+    file_type: str | None = None
+    file_url: str | None = None
+    contract_id: uuid.UUID | None = None
+    property_id: uuid.UUID | None = None
+    tenant_id: uuid.UUID | None = None
 
 
 # ─── Response ─────────────────────────────────────────────
-class PropertyResponse(PropertyBase, BaseResponse):
+class DocumentResponse(DocumentBase, BaseResponse):
     """Returned to the client — includes DB-generated fields."""
 
     id: uuid.UUID

@@ -3,6 +3,7 @@ import uuid
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from app.models.user import UserRole
+from app.schemas.base import BaseResponse
 
 
 # ─── Base ─────────────────────────────────────────────────
@@ -50,11 +51,9 @@ class TokenResponse(BaseModel):
 
 
 # ─── Response ─────────────────────────────────────────────
-class UserResponse(UserBase):
+class UserResponse(UserBase, BaseResponse):
     """Returned to the client — includes DB-generated fields."""
 
     id: uuid.UUID
     created_at: datetime
     updated_at: datetime
-
-    model_config = {"from_attributes": True}  # Allows reading from SQLAlchemy model

@@ -1,5 +1,8 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+
 from app.db.session import get_db
 from app.schemas.user import UserLogin, TokenResponse, UserResponse
 from app.services import auth_service
@@ -7,8 +10,9 @@ from app.services.exceptions import InvalidCredentialsError, AccountInactiveErro
 from app.core.dependencies import get_current_user
 from app.models.user import User
 
-router = APIRouter(prefix="/auth", tags=["Auth"])
+logger = logging.getLogger(__name__)
 
+router = APIRouter(prefix="/auth", tags=["Auth"])
 
 @router.post("/login", response_model=TokenResponse)
 def login(
@@ -22,12 +26,14 @@ def login(
     try:
         return auth_service.login(db, payload.identifier, payload.password)
     except InvalidCredentialsError:
+        logger.error("Failed login attempt for identifier: %s", payload.identifier)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
     except AccountInactiveError:
+        logger.error("Login attempt for inactive account: %s", payload.identifier)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is inactive",

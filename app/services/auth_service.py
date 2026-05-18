@@ -1,3 +1,5 @@
+import logging
+
 from sqlalchemy.orm import Session
 
 from app.core.security import verify_password, create_access_token
@@ -9,6 +11,8 @@ from app.services.exceptions import (
     AccountInactiveError,
 )
 
+
+logger = logging.getLogger(__name__)
 
 class AuthService:
     """
@@ -67,7 +71,7 @@ class AuthService:
         return create_access_token(
             data={
                 "sub": str(user.id),
-                "role": user.role,
+                "role": user.role.value,
                 "username": user.username,
             }
         )

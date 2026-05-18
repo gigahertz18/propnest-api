@@ -15,9 +15,9 @@ class Document(Base, TimestampMixin):
         default=uuid.uuid4,
     )
 
-    file_name: Mapped[str] = mapped_column(String)
-    file_url: Mapped[str] = mapped_column(String)
-    file_type: Mapped[str] = mapped_column(String)
+    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_url: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_type: Mapped[str] = mapped_column(String(100), nullable=False)
 
     contract_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("contracts.id"), nullable=True)
 

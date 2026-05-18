@@ -1,4 +1,4 @@
-import os
+import logging
 
 from datetime import datetime, timedelta, timezone
 
@@ -6,6 +6,8 @@ from jose import jwt, JWTError
 from passlib.context import CryptContext
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 pwd_context = CryptContext(
     schemes=["bcrypt"],
@@ -40,5 +42,5 @@ def decode_access_token(token: str) -> dict | None:
         )
         return payload
     except JWTError as e:
-        # TODO: log the error for debugging (e.g. expired, invalid signature, etc.)
+        logger.error("Error decoding access token: %s", e)
         return None
