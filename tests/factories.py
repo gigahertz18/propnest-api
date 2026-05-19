@@ -60,6 +60,8 @@ def make_user(
 def make_user_model(db, **kwargs) -> User:
     """Creates and persists a User directly in the test DB (with hashed password)."""
     data = make_user(**kwargs)
+    data["email"] = data["email"].strip().lower()
+    data["username"] = data["username"].strip().lower()
     plain_password = data.pop("password")
     obj = User(
         id=uuid.uuid4(),

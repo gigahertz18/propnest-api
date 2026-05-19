@@ -1,4 +1,4 @@
-import time
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # ─── Lifespan ─────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    _wait_for_db(
+    await _wait_for_db(
         max_retries=settings.DB_MAX_RETRIES,
         retry_interval=settings.DB_RETRY_INTERVAL,
     )
@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
     logger.info("Database connections closed")
 
 
-def _wait_for_db(max_retries: int, retry_interval: int) -> None:
+async def _wait_for_db(max_retries: int, retry_interval: int) -> None:
     """
     Retries the DB connection until PostgreSQL is ready or max retries exceeded.
     Values come from the active config class — tunable per environment.
@@ -57,7 +57,7 @@ def _wait_for_db(max_retries: int, retry_interval: int) -> None:
                 max_retries,
                 retry_interval,
             )
-            time.sleep(retry_interval)
+            await asyncio.sleep(retry_interval)
 
 
 # ─── App ──────────────────────────────────────────────────────────────────────

@@ -25,7 +25,13 @@ class BaseRepository(Generic[ModelType, CreateSchema, UpdateSchema]):
         skip: int = 0,
         limit: int = 100,
     ) -> list[ModelType]:
-        return db.query(self.model).offset(skip).limit(limit).all()
+        skip = max(0, skip)
+        limit = min(max(0, limit), 100)
+
+        query = db.query(self.model)
+        if hasattr(self.model, "created_at"):
+            query = query.order_by(self.model.created_at)
+        return query.offset(skip).limit(limit).all()
 
     def get_by_id(self, db: Session, id: UUID) -> ModelType | None:
         return db.query(self.model).filter(self.model.id == id).first()

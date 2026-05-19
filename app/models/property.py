@@ -38,4 +38,4 @@ class Property(Base, TimestampMixin):
     )
 
     def __repr__(self) -> str:
-        return f"<Property id={self.id} name={self.name} type={self.rental_type} status={self.status} is_active={self.is_active}>"
+        return f"<Property id={self.id} name={self.name} status={self.status} is_active={self.is_active}>"

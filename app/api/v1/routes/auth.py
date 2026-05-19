@@ -26,14 +26,14 @@ def login(
     try:
         return auth_service.login(db, payload.identifier, payload.password)
     except InvalidCredentialsError:
-        logger.error("Failed login attempt for identifier: %s", payload.identifier)
+        logger.warning("Failed login attempt")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
     except AccountInactiveError:
-        logger.error("Login attempt for inactive account: %s", payload.identifier)
+        logger.warning("Login attempt for inactive account")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is inactive",

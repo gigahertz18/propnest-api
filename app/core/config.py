@@ -31,6 +31,8 @@ class BaseConfig:
     SECRET_KEY: str = "dev-secret-key-to-the-universe-pwease-override"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    JWT_ISSUER: str = "propnest-api"
+    JWT_AUDIENCE: str = "propnest-users"
 
     # CORS
     CORS_ORIGINS: list[str] = field(default_factory=lambda: ["http://localhost:3000"])
@@ -162,7 +164,15 @@ class ProductionConfig(BaseConfig):
     DB_PASSWORD: str = field(default_factory=lambda: os.environ["DB_PASSWORD"])
     SECRET_KEY: str = field(default_factory=lambda: os.environ["SECRET_KEY"])
     MINIO_ROOT_PASSWORD: str = field(default_factory=lambda: os.environ["MINIO_ROOT_PASSWORD"])
-    CORS_ORIGINS: list[str] = field(default_factory=lambda: os.environ.get("CORS_ORIGINS", "").split(","))
+    JWT_ISSUER: str = field(default_factory=lambda: os.environ.get("JWT_ISSUER", "propnest-api"))
+    JWT_AUDIENCE: str = field(default_factory=lambda: os.environ.get("JWT_AUDIENCE", "propnest-users"))
+    CORS_ORIGINS: list[str] = field(
+        default_factory=lambda: [
+            origin.strip()
+            for origin in os.environ.get("CORS_ORIGINS", "").split(",")
+            if origin.strip()
+        ]
+    )
 
     @property
     def ENV(self) -> str:

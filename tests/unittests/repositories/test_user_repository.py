@@ -1,5 +1,12 @@
-import pytest
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import sessionmaker
+
+from app.core.config import settings
 from app.repositories.user import user_repo
 from app.schemas.user import UserCreate, UserUpdate
 from app.models.user import UserRole
@@ -112,6 +119,41 @@ class TestUserRepositoryCreate:
         with pytest.raises(Exception):  # IntegrityError
             user_repo.create(db, UserCreate(**make_user(username="other")))
 
+    def test_create_normalizes_username_and_email(self, db):
+        payload = UserCreate(**make_user(username="TestUser", email="Test@Example.COM"))
+        result = user_repo.create(db, payload)
+        assert result.username == "testuser"
+        assert result.email == "test@example.com"
+
+    def test_concurrent_create_with_same_email_fails_once(self, db):
+        engine = create_engine(settings.DATABASE_URL)
+        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+        def create_user():
+            with SessionLocal() as session:
+                return user_repo.create(session, UserCreate(**make_user(username="racer", email="racer@example.com")))
+
+        successes = 0
+        failures = 0
+        try:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                futures = [executor.submit(create_user) for _ in range(2)]
+                for future in as_completed(futures):
+                    try:
+                        future.result()
+                        successes += 1
+                    except IntegrityError:
+                        failures += 1
+        finally:
+            with SessionLocal() as cleanup_session:
+                user = user_repo.get_by_email(cleanup_session, "racer@example.com")
+                if user:
+                    cleanup_session.delete(user)
+                    cleanup_session.commit()
+
+        assert successes == 1
+        assert failures == 1
+
 
 class TestUserRepositoryUpdate:
     def test_updates_full_name(self, db):
@@ -131,6 +173,13 @@ class TestUserRepositoryUpdate:
         payload = UserUpdate(full_name="New Name")
         result = user_repo.update(db, user.id, payload)
         assert result.email == "original@example.com"
+
+    def test_update_normalizes_username_and_email(self, db):
+        user = make_user_model(db, username="OriginalUser", email="Original@Example.COM")
+        payload = UserUpdate(username="UpdatedUser", email="Updated@Example.COM")
+        result = user_repo.update(db, user.id, payload)
+        assert result.username == "updateduser"
+        assert result.email == "updated@example.com"
 
     def test_returns_none_when_not_found(self, db):
         payload = UserUpdate(full_name="New Name")

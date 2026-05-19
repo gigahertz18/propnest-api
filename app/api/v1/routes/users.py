@@ -93,6 +93,22 @@ def update_user(
             detail="You cannot change your own role",
         )
 
+    if payload.email is not None:
+        existing = user_repo.get_by_email(db, payload.email)
+        if existing and existing.id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A user with this email already exists",
+            )
+
+    if payload.username is not None:
+        existing = user_repo.get_by_username(db, payload.username)
+        if existing and existing.id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A user with this username already exists",
+            )
+
     user = user_repo.update(db, user_id, payload)
     if not user:
         raise HTTPException(

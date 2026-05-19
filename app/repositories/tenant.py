@@ -1,4 +1,4 @@
-import uuid
+from datetime import date
 
 from sqlalchemy.orm import Session
 
@@ -56,7 +56,7 @@ class TenantRepository(BaseRepository[Tenant, TenantCreate, TenantUpdate]):
     def get_by_date_of_birth(
         self,
         db: Session,
-        date_of_birth: str,
+        date_of_birth: date,
     ) -> list[Tenant]:
         return (
             db.query(self.model)

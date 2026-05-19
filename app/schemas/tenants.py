@@ -9,9 +9,9 @@ from app.schemas.base import BaseResponse
 class TenantBase(BaseModel):
     full_name: str
     email: str
-    phone_number: str | None = None
-    date_of_birth: date | None = None
-    current_address: str | None = None
+    phone_number: str
+    date_of_birth: date
+    current_address: str
     occupation: str | None = None
     notes: str | None = None
     is_active: bool = True

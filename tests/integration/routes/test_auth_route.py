@@ -1,3 +1,7 @@
+from datetime import datetime, timedelta, timezone
+
+from app.core.config import settings
+from jose import jwt
 from tests.factories import make_user_model, make_admin_model
 
 
@@ -48,6 +52,18 @@ class TestLogin:
             },
         )
         assert response.status_code == 401
+
+    def test_login_is_case_insensitive_and_strips_whitespace(self, client, db):
+        make_user_model(db, username="john", email="john@example.com", password="secret123")
+        response = client.post(
+            "/api/v1/auth/login",
+            json={
+                "identifier": " John@Example.Com ",
+                "password": "secret123",
+            },
+        )
+        assert response.status_code == 200
+        assert "access_token" in response.json()
 
     def test_login_with_inactive_account_fails(self, client, db):
         make_user_model(db, username="inactive", is_active=False)
@@ -117,5 +133,42 @@ class TestMe:
         response = client.get(
             "/api/v1/auth/me",
             headers={"Authorization": "Bearer invalidtoken"},
+        )
+        assert response.status_code == 401
+
+    def test_returns_401_for_token_with_invalid_sub_claim(self, client, db):
+        payload = {
+            "sub": "not-a-uuid",
+            "role": "user",
+            "username": "john",
+            "exp": datetime.now(timezone.utc) + timedelta(minutes=15),
+            "iat": datetime.now(timezone.utc),
+            "iss": settings.JWT_ISSUER,
+            "aud": settings.JWT_AUDIENCE,
+        }
+        token = jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+        response = client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 401
+        assert response.json()["detail"] == "Invalid token payload"
+
+    def test_returns_401_for_token_with_wrong_issuer(self, client, db):
+        payload = {
+            "sub": "00000000-0000-0000-0000-000000000000",
+            "role": "user",
+            "username": "john",
+            "exp": datetime.now(timezone.utc) + timedelta(minutes=15),
+            "iat": datetime.now(timezone.utc),
+            "iss": "bad-issuer",
+            "aud": settings.JWT_AUDIENCE,
+        }
+        token = jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+        response = client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
         )
         assert response.status_code == 401
