@@ -44,8 +44,11 @@ class TestContractRepositoryGetAll:
         assert len(result) == 2
 
     def test_skip_and_limit(self, db, property_, tenant):
-        for _ in range(5):
-            make_contract_model(db, property_id=property_.id, tenant_id=tenant.id)
+        # Create contracts across multiple properties to avoid DB-level
+        # uniqueness conflicts on active contracts.
+        for i in range(5):
+            p = make_property_model(db, name=f"Property {i}")
+            make_contract_model(db, property_id=p.id, tenant_id=tenant.id)
         result = contract_repo.get_all(db, skip=2, limit=2)
         assert len(result) == 2
 
@@ -295,7 +298,8 @@ class TestContractRepositoryGetByTenant:
         make_contract_model(db, property_id=property_.id, tenant_id=tenant.id)
         make_contract_model(db, property_id=property_.id, tenant_id=tenant.id, status="EXPIRED")
         other_tenant = make_tenant_model(db, email="other@example.com")
-        make_contract_model(db, property_id=property_.id, tenant_id=other_tenant.id)
+        other_property = make_property_model(db, name="Other Property")
+        make_contract_model(db, property_id=other_property.id, tenant_id=other_tenant.id)
 
         result = contract_repo.get_by_tenant(db, tenant.id)
         assert len(result) == 2
@@ -318,7 +322,8 @@ class TestContractRepositoryGetByTenant:
 class TestContractRepositoryGetByStatus:
     def test_returns_contracts_with_matching_status(self, db, property_, tenant):
         make_contract_model(db, property_id=property_.id, tenant_id=tenant.id, status="ACTIVE")
-        make_contract_model(db, property_id=property_.id, tenant_id=tenant.id, status="ACTIVE")
+        other_property = make_property_model(db, name="Other Property")
+        make_contract_model(db, property_id=other_property.id, tenant_id=tenant.id, status="ACTIVE")
         make_contract_model(db, property_id=property_.id, tenant_id=tenant.id, status="EXPIRED")
 
         result = contract_repo.get_by_status(db, "ACTIVE")
@@ -336,8 +341,11 @@ class TestContractRepositoryGetByStatus:
 class TestContractRepositoryGetByRentalType:
     def test_returns_contracts_with_matching_rental_type(self, db, property_, tenant):
         make_contract_model(db, property_id=property_.id, tenant_id=tenant.id, rental_type=RentalType.long_term)
-        make_contract_model(db, property_id=property_.id, tenant_id=tenant.id, rental_type=RentalType.long_term)
-        make_contract_model(db, property_id=property_.id, tenant_id=tenant.id, rental_type=RentalType.short_term)
+        other_property = make_property_model(db, name="Other Property")
+        make_contract_model(db, property_id=other_property.id, tenant_id=tenant.id, rental_type=RentalType.long_term)
+        # Place the non-matching short-term contract on a different property
+        third_property = make_property_model(db, name="Third Property")
+        make_contract_model(db, property_id=third_property.id, tenant_id=tenant.id, rental_type=RentalType.short_term)
 
         result = contract_repo.get_by_rental_type(db, RentalType.long_term)
         assert len(result) == 2
@@ -354,8 +362,11 @@ class TestContractRepositoryGetByRentalType:
 class TestContractRepositoryGetByBookingSource:
     def test_returns_contracts_with_matching_booking_source(self, db, property_, tenant):
         make_contract_model(db, property_id=property_.id, tenant_id=tenant.id, booking_source="airbnb")
-        make_contract_model(db, property_id=property_.id, tenant_id=tenant.id, booking_source="airbnb")
-        make_contract_model(db, property_id=property_.id, tenant_id=tenant.id, booking_source="direct")
+        other_property = make_property_model(db, name="Other Property")
+        make_contract_model(db, property_id=other_property.id, tenant_id=tenant.id, booking_source="airbnb")
+        # Ensure the non-matching direct booking is on a different property
+        third_property = make_property_model(db, name="Third Property")
+        make_contract_model(db, property_id=third_property.id, tenant_id=tenant.id, booking_source="direct")
 
         result = contract_repo.get_by_booking_source(db, "airbnb")
         assert len(result) == 2

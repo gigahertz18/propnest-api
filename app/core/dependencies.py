@@ -8,6 +8,16 @@ from app.core.security import decode_access_token
 from app.repositories.user import user_repo
 from app.models.user import User, UserRole
 from app.services.auth_service import AuthService
+from app.repositories.property import property_repo
+from app.repositories.contract import contract_repo
+from app.repositories.tenant import tenant_repo
+from app.repositories.document import document_repo
+
+from app.services.user_service import UserService
+from app.services.property_service import PropertyService
+from app.services.contract_service import ContractService
+from app.services.tenant_service import TenantService
+from app.services.document_service import DocumentService
 
 bearer_scheme = HTTPBearer()
 
@@ -109,3 +119,24 @@ def get_auth_service() -> AuthService:
     override this dependency if needed.
     """
     return AuthService(user_repo=user_repo)
+
+
+def get_user_service() -> UserService:
+    """Construct a `UserService` for FastAPI dependency injection."""
+    return UserService(user_repo=user_repo)
+
+
+def get_property_service() -> PropertyService:
+    return PropertyService(property_repo=property_repo)
+
+
+def get_contract_service() -> ContractService:
+    return ContractService(contract_repo=contract_repo)
+
+
+def get_tenant_service() -> TenantService:
+    return TenantService(tenant_repo=tenant_repo)
+
+
+def get_document_service() -> DocumentService:
+    return DocumentService(document_repo=document_repo)

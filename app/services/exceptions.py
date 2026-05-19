@@ -66,3 +66,17 @@ class ForbiddenError(ServiceException):
     """Raised when a user is authenticated but lacks the required role."""
 
     pass
+
+
+# ─── Contract / Document ────────────────────────────────────────────────
+class ContractActiveError(ServiceException):
+    """Raised when attempting to create an ACTIVE contract for a property
+    that already has an active contract."""
+
+    pass
+
+
+class DocumentUploadError(ServiceException):
+    """Raised when storing a document fails due to external storage errors."""
+
+    pass

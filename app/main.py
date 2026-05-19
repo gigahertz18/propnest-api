@@ -8,7 +8,7 @@ from sqlalchemy import text
 from app.core.config import settings
 from app.core.logging import setup_logging
 from app.db.session import engine
-from app.api.v1.routes import properties, auth, users
+from app.api.v1.routes import properties, auth, users, contracts, tenants, documents
 
 # ─── Logging must be configured before any module-level logger is used ────────
 setup_logging(env=settings.ENV)
@@ -82,6 +82,9 @@ app.add_middleware(
 app.include_router(auth.router,       prefix=settings.API_V1_PREFIX)
 app.include_router(users.router,      prefix=settings.API_V1_PREFIX)
 app.include_router(properties.router, prefix=settings.API_V1_PREFIX)
+app.include_router(contracts.router,  prefix=settings.API_V1_PREFIX)
+app.include_router(tenants.router,    prefix=settings.API_V1_PREFIX)
+app.include_router(documents.router,  prefix=settings.API_V1_PREFIX)
 
 # ─── Health Check ─────────────────────────────────────────
 @app.get("/health", tags=["Health"])

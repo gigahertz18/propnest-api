@@ -1,8 +1,8 @@
-"""Initial table migrate.
+"""Initial table migrations.
 
-Revision ID: 5b1875c693a4
+Revision ID: 821e90ed88e2
 Revises: 
-Create Date: 2026-05-16 01:37:30.086854
+Create Date: 2026-05-19 07:33:07.018244
 
 """
 from typing import Sequence, Union
@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision: str = '5b1875c693a4'
+revision: str = '821e90ed88e2'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -34,8 +34,9 @@ def upgrade() -> None:
     sa.Column('id', sa.Uuid(), nullable=False),
     sa.Column('full_name', sa.String(length=255), nullable=False),
     sa.Column('email', sa.String(length=255), nullable=False),
-    sa.Column('phonenumber', sa.String(length=20), nullable=False),
+    sa.Column('phone_number', sa.String(length=20), nullable=False),
     sa.Column('current_address', sa.String(length=500), nullable=False),
+    sa.Column('date_of_birth', sa.Date(), nullable=False),
     sa.Column('occupation', sa.String(length=255), nullable=True),
     sa.Column('notes', sa.Text(), nullable=True),
     sa.Column('is_active', sa.Boolean(), nullable=False),
@@ -79,11 +80,12 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_contracts_property_id'), 'contracts', ['property_id'], unique=False)
     op.create_index(op.f('ix_contracts_tenant_id'), 'contracts', ['tenant_id'], unique=False)
+    op.create_index('uq_active_contract_property', 'contracts', ['property_id'], unique=True, postgresql_where=sa.text("status = 'ACTIVE'"))
     op.create_table('documents',
     sa.Column('id', sa.Uuid(), nullable=False),
-    sa.Column('file_name', sa.String(), nullable=False),
-    sa.Column('file_url', sa.String(), nullable=False),
-    sa.Column('file_type', sa.String(), nullable=False),
+    sa.Column('file_name', sa.String(length=255), nullable=False),
+    sa.Column('file_url', sa.String(length=255), nullable=False),
+    sa.Column('file_type', sa.String(length=100), nullable=False),
     sa.Column('contract_id', sa.Uuid(), nullable=True),
     sa.Column('property_id', sa.Uuid(), nullable=True),
     sa.Column('tenant_id', sa.Uuid(), nullable=True),
@@ -116,6 +118,7 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_payments_contract_id'), table_name='payments')
     op.drop_table('payments')
     op.drop_table('documents')
+    op.drop_index('uq_active_contract_property', table_name='contracts', postgresql_where=sa.text("status = 'ACTIVE'"))
     op.drop_index(op.f('ix_contracts_tenant_id'), table_name='contracts')
     op.drop_index(op.f('ix_contracts_property_id'), table_name='contracts')
     op.drop_table('contracts')

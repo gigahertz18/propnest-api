@@ -2,9 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
-from app.repositories.user import user_repo
-from app.core.dependencies import require_admin, get_current_user
+from app.core.dependencies import require_admin, get_current_user, get_user_service
 from app.models.user import User, UserRole
+from app.services.user_service import UserService
+from app.services.exceptions import (
+    UserNotFoundError,
+    EmailAlreadyExistsError,
+    UsernameAlreadyExistsError,
+)
 from uuid import UUID
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -15,9 +20,10 @@ def list_users(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
+    user_service: UserService = Depends(get_user_service),
 ):
     """Get all users. Admin only."""
-    return user_repo.get_all(db, skip=skip, limit=limit)
+    return user_service.list_users(db, skip=skip, limit=limit)
 
 
 @router.get("/{user_id}", response_model=UserResponse)
@@ -25,6 +31,7 @@ def get_user(
     user_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service),
 ):
     """
     Get a user by ID.
@@ -36,13 +43,13 @@ def get_user(
             detail="You can only view your own profile",
         )
 
-    user = user_repo.get_by_id(db, user_id)
-    if not user:
+    try:
+        return user_service.get_user(db, user_id)
+    except UserNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User {user_id} not found",
         )
-    return user
 
 
 @router.post(
@@ -54,19 +61,21 @@ def get_user(
 def create_user(
     payload: UserCreate,
     db: Session = Depends(get_db),
+    user_service: UserService = Depends(get_user_service),
 ):
     """Create a new user. Admin only."""
-    if user_repo.get_by_email(db, payload.email):
+    try:
+        return user_service.create_user(db, payload)
+    except EmailAlreadyExistsError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="A user with this email already exists",
         )
-    if user_repo.get_by_username(db, payload.username):
+    except UsernameAlreadyExistsError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="A user with this username already exists",
         )
-    return user_repo.create(db, payload)
 
 
 @router.patch("/{user_id}", response_model=UserResponse)
@@ -75,6 +84,7 @@ def update_user(
     payload: UserUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service),
 ):
     """
     Update a user.
@@ -93,29 +103,23 @@ def update_user(
             detail="You cannot change your own role",
         )
 
-    if payload.email is not None:
-        existing = user_repo.get_by_email(db, payload.email)
-        if existing and existing.id != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="A user with this email already exists",
-            )
-
-    if payload.username is not None:
-        existing = user_repo.get_by_username(db, payload.username)
-        if existing and existing.id != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="A user with this username already exists",
-            )
-
-    user = user_repo.update(db, user_id, payload)
-    if not user:
+    try:
+        return user_service.update_user(db, user_id, payload)
+    except EmailAlreadyExistsError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A user with this email already exists",
+        )
+    except UsernameAlreadyExistsError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A user with this username already exists",
+        )
+    except UserNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User {user_id} not found",
         )
-    return user
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -123,6 +127,7 @@ def delete_user(
     user_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
+    user_service: UserService = Depends(get_user_service),
 ):
     """Delete a user. Admin only."""
     if current_user.id == user_id:
@@ -131,8 +136,9 @@ def delete_user(
             detail="You cannot delete your own account",
         )
 
-    user = user_repo.delete(db, user_id)
-    if not user:
+    try:
+        user_service.delete_user(db, user_id)
+    except UserNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User {user_id} not found",

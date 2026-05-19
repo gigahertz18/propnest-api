@@ -1,6 +1,6 @@
 import enum
 import uuid
-from sqlalchemy import String, ForeignKey, Date, Numeric, Uuid, Enum, CheckConstraint
+from sqlalchemy import String, ForeignKey, Date, Numeric, Uuid, Enum, CheckConstraint, Index, text
 from sqlalchemy.orm import Mapped, mapped_column
 from app.db.session import Base
 from app.models.base import TimestampMixin
@@ -53,6 +53,9 @@ class Contract(Base, TimestampMixin):
             f"booking_source IN {BOOKING_SOURCE}",
             name="ck_contract_booking_source",
         ),
+        # Ensure at most one ACTIVE contract exists per property at the DB level.
+        # This is a partial unique index on property_id where status = 'ACTIVE'.
+        Index("uq_active_contract_property", "property_id", unique=True, postgresql_where=text("status = 'ACTIVE'")),
     )
 
     def __repr__(self) -> str:
