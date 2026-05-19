@@ -74,7 +74,7 @@ class TestLogin:
                 "password": "password123",
             },
         )
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_error_message_is_generic(self, client, db):
         """Should not reveal whether the user exists."""

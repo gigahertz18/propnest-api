@@ -49,13 +49,14 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         identifier: str,
     ) -> User | None:
         """Get user by username or email."""
-        identifier = identifier.strip()
+        if not identifier:
+            return None
 
+        identifier = identifier.strip()
+        # If identifier contains '@', treat it strictly as an email.
+        # Avoid passing an email string into the username lookup.
         if "@" in identifier:
-            user = self.get_by_email(db, identifier)
-            if user:
-                return user
-            return self.get_by_username(db, identifier)
+            return self.get_by_email(db, identifier)
         return self.get_by_username(db, identifier)
 
     def create(self, db: Session, payload: UserCreate) -> User:

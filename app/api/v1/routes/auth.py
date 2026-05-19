@@ -5,9 +5,9 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.schemas.user import UserLogin, TokenResponse, UserResponse
-from app.services import auth_service
-from app.services.exceptions import InvalidCredentialsError, AccountInactiveError
-from app.core.dependencies import get_current_user
+from app.services.auth_service import AuthService
+from app.services.exceptions import InvalidCredentialsError
+from app.core.dependencies import get_current_user, get_auth_service
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -18,6 +18,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 def login(
     payload: UserLogin,
     db: Session = Depends(get_db),
+    auth_service: AuthService = Depends(get_auth_service),
 ):
     """
     Login with username or email + password.
@@ -32,15 +33,12 @@ def login(
             detail="Invalid credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    except AccountInactiveError:
-        logger.warning("Login attempt for inactive account")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is inactive",
-        )
 
 
 @router.get("/me", response_model=UserResponse)
-def me(current_user: User = Depends(get_current_user)):
+def me(
+    current_user: User = Depends(get_current_user),
+    auth_service: AuthService = Depends(get_auth_service),
+):
     """Returns the currently authenticated user's profile."""
     return auth_service.get_profile(current_user)

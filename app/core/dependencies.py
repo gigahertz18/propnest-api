@@ -7,6 +7,7 @@ from app.db.session import get_db
 from app.core.security import decode_access_token
 from app.repositories.user import user_repo
 from app.models.user import User, UserRole
+from app.services.auth_service import AuthService
 
 bearer_scheme = HTTPBearer()
 
@@ -100,3 +101,11 @@ def require_manager_or_above(
             detail="Manager access required",
         )
     return current_user
+
+
+def get_auth_service() -> AuthService:
+    """
+    FastAPI dependency to construct `AuthService`. Kept simple so tests can
+    override this dependency if needed.
+    """
+    return AuthService(user_repo=user_repo)

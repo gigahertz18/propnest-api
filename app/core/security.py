@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 from passlib.exc import UnknownHashError
+from typing import Optional
 
 from app.core.config import settings
 
@@ -22,11 +23,28 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    if not hashed_password:
-        return False
+    """
+    Verify a plaintext password against a stored hash.
+    Uses `pwd_context.dummy_verify()` when `hashed_password` is missing
+    or when an error occurs to mitigate timing-based user enumeration.
+    """
     try:
+        if not hashed_password:
+            # consume comparable time to a real verify to mitigate timing attacks
+            try:
+                pwd_context.dummy_verify()
+            except AttributeError:
+                # older passlib may not expose dummy_verify; fall back silently
+                pass
+            return False
+
         return pwd_context.verify(plain_password, hashed_password)
     except (UnknownHashError, TypeError, ValueError):
+        # ensure timing is similar on errors as well
+        try:
+            pwd_context.dummy_verify()
+        except Exception:
+            pass
         return False
 
 
@@ -36,7 +54,8 @@ def create_access_token(data: dict):
     now = datetime.now(timezone.utc)
     expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
-    payload.update({"exp": expire, "iat": now})
+    # Use integer epoch timestamps for exp/iat (JWT numeric date)
+    payload.update({"exp": int(expire.timestamp()), "iat": int(now.timestamp())})
     if settings.JWT_ISSUER:
         payload["iss"] = settings.JWT_ISSUER
     if settings.JWT_AUDIENCE:

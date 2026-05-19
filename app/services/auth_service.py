@@ -1,18 +1,10 @@
-import logging
-
 from sqlalchemy.orm import Session
 
 from app.core.security import verify_password, create_access_token
 from app.repositories.user import UserRepository
 from app.schemas.user import TokenResponse, UserResponse
 from app.models.user import User
-from app.services.exceptions import (
-    InvalidCredentialsError,
-    AccountInactiveError,
-)
-
-
-logger = logging.getLogger(__name__)
+from app.services.exceptions import InvalidCredentialsError
 
 class AuthService:
     """
@@ -43,12 +35,18 @@ class AuthService:
         """
         user = self.user_repo.get_by_identifier(db, identifier)
 
-        # Check credentials — generic check so we don't reveal if user exists
-        if not user or not verify_password(password, user.password_hash):
+        if not user:
+            # run a dummy verify to mitigate timing attacks for non-existent users
+            verify_password(password, None)
             raise InvalidCredentialsError("The identifier or password you entered is incorrect.")
 
+        # Verify password (will also use dummy_verify internally on error)
+        if not verify_password(password, user.password_hash):
+            raise InvalidCredentialsError("The identifier or password you entered is incorrect.")
+
+        # Do not return a distinct error for inactive accounts (avoid confirming password correctness).
         if not user.is_active:
-            raise AccountInactiveError("This account has been deactivated. Contact an administrator.")
+            raise InvalidCredentialsError("The identifier or password you entered is incorrect.")
 
         token = self._issue_token(user)
         return TokenResponse(access_token=token)
@@ -77,8 +75,5 @@ class AuthService:
         )
 
 
-# ─── Singleton ────────────────────────────────────────────
-# Import user_repo here to avoid circular imports at module level
-from app.repositories.user import user_repo  # noqa: E402
-
-auth_service = AuthService(user_repo=user_repo)
+# Note: no module-level AuthService singleton here. Use a FastAPI dependency
+# (`get_auth_service`) to construct/override in tests.
