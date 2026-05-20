@@ -5,7 +5,6 @@ from app.schemas.contract import ContractCreate, ContractUpdate, ContractRespons
 from app.schemas.document import DocumentCreate, DocumentUpdate, DocumentResponse
 from app.schemas.tenants import TenantCreate, TenantUpdate, TenantResponse
 
-
 __all__ = [
     "BaseResponse",
     "PropertyCreate",
@@ -24,5 +23,5 @@ __all__ = [
     "DocumentResponse",
     "TenantCreate",
     "TenantUpdate",
-    "TenantResponse"
+    "TenantResponse",
 ]

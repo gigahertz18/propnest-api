@@ -6,6 +6,7 @@ from app.schemas.user import TokenResponse, UserResponse
 from app.models.user import User
 from app.services.exceptions import InvalidCredentialsError
 
+
 class AuthService:
     """
     Handles all authentication business logic.

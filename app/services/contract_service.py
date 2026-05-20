@@ -21,12 +21,11 @@ class ContractService:
         return self.contract_repo.get_by_id(db, id)
 
     def create_contract(self, db: Session, payload: ContractCreate) -> Contract:
-        # Prevent creating multiple ACTIVE contracts for the same property.
-        if payload.status == "ACTIVE":
-            existing = self.contract_repo.get_active_contract_by_property(db, payload.property_id)
-            if existing:
-                raise ContractActiveError("An active contract already exists for this property")
-
+        # Rely on DB constraint to prevent race conditions where two concurrent
+        # requests attempt to create an ACTIVE contract for the same property.
+        # Attempt the insert and translate unique/constraint errors into the
+        # domain-specific `ContractActiveError` so callers get a consistent
+        # response without depending on a fragile pre-check.
         try:
             return self.contract_repo.create(db, payload)
         except IntegrityError as e:

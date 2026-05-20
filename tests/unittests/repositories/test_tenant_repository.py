@@ -70,25 +70,29 @@ class TestTenantRepositoryCreate:
         assert result.is_active is False
 
     def test_optional_fields_can_be_none(self, db):
-        payload = TenantCreate(**make_tenant(
-            occupation=None,
-            notes=None,
-        ))
+        payload = TenantCreate(
+            **make_tenant(
+                occupation=None,
+                notes=None,
+            )
+        )
         result = tenant_repo.create(db, payload)
         assert result.occupation is None
         assert result.notes is None
 
     def test_all_fields_are_stored(self, db):
         dob = date(1990, 6, 15)
-        payload = TenantCreate(**make_tenant(
-            full_name="Full Fields",
-            email="fullfields@example.com",
-            phone_number="09991234567",
-            date_of_birth=dob,
-            current_address="456 Real Ave",
-            occupation="Developer",
-            notes="Some notes here",
-        ))
+        payload = TenantCreate(
+            **make_tenant(
+                full_name="Full Fields",
+                email="fullfields@example.com",
+                phone_number="09991234567",
+                date_of_birth=dob,
+                current_address="456 Real Ave",
+                occupation="Developer",
+                notes="Some notes here",
+            )
+        )
         result = tenant_repo.create(db, payload)
         assert result.full_name == "Full Fields"
         assert result.phone_number == "09991234567"

@@ -3,8 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.repositories.base import BaseRepository
 from app.models.document import Document
-from app.schemas.document import DocumentCreate, DocumentUpdate 
-
+from app.schemas.document import DocumentCreate, DocumentUpdate
 
 
 class DocumentRepository(BaseRepository[Document, DocumentCreate, DocumentUpdate]):
@@ -19,11 +18,7 @@ class DocumentRepository(BaseRepository[Document, DocumentCreate, DocumentUpdate
         contract_id: uuid.UUID,
     ) -> list[Document]:
         """Return all documents linked to a given contract."""
-        return (
-            db.query(self.model)
-            .filter(self.model.contract_id == contract_id)
-            .all()
-        )
+        return db.query(self.model).filter(self.model.contract_id == contract_id).all()
 
     def get_by_property(
         self,
@@ -31,35 +26,23 @@ class DocumentRepository(BaseRepository[Document, DocumentCreate, DocumentUpdate
         property_id: uuid.UUID,
     ) -> list[Document]:
         """Return all documents linked to a given property."""
-        return (
-            db.query(self.model)
-            .filter(self.model.property_id == property_id)
-            .all()
-        )
-    
+        return db.query(self.model).filter(self.model.property_id == property_id).all()
+
     def get_by_tenant(
         self,
         db: Session,
         tenant_id: uuid.UUID,
     ) -> list[Document]:
         """Return all documents linked to a given tenant."""
-        return (
-            db.query(self.model)
-            .filter(self.model.tenant_id == tenant_id)
-            .all()
-        )
-    
+        return db.query(self.model).filter(self.model.tenant_id == tenant_id).all()
+
     def get_by_type(
         self,
         db: Session,
         file_type: str,
     ) -> list[Document]:
         """Return all documents of a given type (e.g. LEASE_AGREEMENT, ID_PROOF)."""
-        return (
-            db.query(self.model)
-            .filter(self.model.file_type == file_type)
-            .all()
-        )
+        return db.query(self.model).filter(self.model.file_type == file_type).all()
 
 
 # Instantiate once — import this instance everywhere

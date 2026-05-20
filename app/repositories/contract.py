@@ -18,11 +18,7 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
         property_id: uuid.UUID,
     ) -> list[Contract]:
         """Return all contracts linked to a given property."""
-        return (
-            db.query(self.model)
-            .filter(self.model.property_id == property_id)
-            .all()
-        )
+        return db.query(self.model).filter(self.model.property_id == property_id).all()
 
     def get_by_tenant(
         self,
@@ -30,11 +26,7 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
         tenant_id: uuid.UUID,
     ) -> list[Contract]:
         """Return all contracts linked to a given tenant."""
-        return (
-            db.query(self.model)
-            .filter(self.model.tenant_id == tenant_id)
-            .all()
-        )
+        return db.query(self.model).filter(self.model.tenant_id == tenant_id).all()
 
     def get_by_status(
         self,
@@ -42,11 +34,7 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
         status: str,
     ) -> list[Contract]:
         """Return all contracts with a given status (e.g. ACTIVE, EXPIRED)."""
-        return (
-            db.query(self.model)
-            .filter(self.model.status == status)
-            .all()
-        )
+        return db.query(self.model).filter(self.model.status == status).all()
 
     def get_by_rental_type(
         self,
@@ -54,11 +42,7 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
         rental_type: RentalType,
     ) -> list[Contract]:
         """Return all contracts of a given rental type."""
-        return (
-            db.query(self.model)
-            .filter(self.model.rental_type == rental_type)
-            .all()
-        )
+        return db.query(self.model).filter(self.model.rental_type == rental_type).all()
 
     def get_by_booking_source(
         self,
@@ -66,11 +50,7 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
         booking_source: str,
     ) -> list[Contract]:
         """Return all contracts originating from a given booking source."""
-        return (
-            db.query(self.model)
-            .filter(self.model.booking_source == booking_source)
-            .all()
-        )
+        return db.query(self.model).filter(self.model.booking_source == booking_source).all()
 
     def get_active_contract_by_property(
         self,

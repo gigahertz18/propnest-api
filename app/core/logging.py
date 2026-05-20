@@ -29,12 +29,11 @@ import os
 import sys
 from pathlib import Path
 
-
 # ─── Formatters ───────────────────────────────────────────────────────────────
 
 _CONSOLE_FMT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
-_FILE_FMT    = "%(asctime)s | %(levelname)-8s | %(name)s | %(funcName)s:%(lineno)d | %(message)s"
-_DATE_FMT    = "%Y-%m-%d %H:%M:%S"
+_FILE_FMT = "%(asctime)s | %(levelname)-8s | %(name)s | %(funcName)s:%(lineno)d | %(message)s"
+_DATE_FMT = "%Y-%m-%d %H:%M:%S"
 
 
 class _ColourFormatter(logging.Formatter):
@@ -44,11 +43,11 @@ class _ColourFormatter(logging.Formatter):
     """
 
     _COLOURS = {
-        logging.DEBUG:    "\033[36m",   # cyan
-        logging.INFO:     "\033[32m",   # green
-        logging.WARNING:  "\033[33m",   # yellow
-        logging.ERROR:    "\033[31m",   # red
-        logging.CRITICAL: "\033[35m",   # magenta
+        logging.DEBUG: "\033[36m",  # cyan
+        logging.INFO: "\033[32m",  # green
+        logging.WARNING: "\033[33m",  # yellow
+        logging.ERROR: "\033[31m",  # red
+        logging.CRITICAL: "\033[35m",  # magenta
     }
     _RESET = "\033[0m"
 
@@ -67,6 +66,7 @@ class _ColourFormatter(logging.Formatter):
 
 # ─── Public API ───────────────────────────────────────────────────────────────
 
+
 def setup_logging(env: str = "dev", log_dir: str = "logs") -> None:
     """
     Configure the root logger with a console handler and a rotating file handler.
@@ -79,11 +79,11 @@ def setup_logging(env: str = "dev", log_dir: str = "logs") -> None:
     # Resolve log levels per environment
     _LEVEL_MAP: dict[str, tuple[int, int]] = {
         # env          console level   file level
-        "dev":       (logging.DEBUG,   logging.DEBUG),
-        "test":      (logging.DEBUG,   logging.DEBUG),
-        "unittest":  (logging.DEBUG,   logging.DEBUG),
-        "staging":   (logging.INFO,    logging.INFO),
-        "prod":      (logging.WARNING, logging.INFO),
+        "dev": (logging.DEBUG, logging.DEBUG),
+        "test": (logging.DEBUG, logging.DEBUG),
+        "unittest": (logging.DEBUG, logging.DEBUG),
+        "staging": (logging.INFO, logging.INFO),
+        "prod": (logging.WARNING, logging.INFO),
     }
     console_level, file_level = _LEVEL_MAP.get(env, (logging.INFO, logging.INFO))
 
@@ -99,9 +99,7 @@ def setup_logging(env: str = "dev", log_dir: str = "logs") -> None:
     # ── Console handler ───────────────────────────────────────────────────────
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(console_level)
-    console_handler.setFormatter(
-        _ColourFormatter(fmt=_CONSOLE_FMT, datefmt=_DATE_FMT)
-    )
+    console_handler.setFormatter(_ColourFormatter(fmt=_CONSOLE_FMT, datefmt=_DATE_FMT))
     root.addHandler(console_handler)
 
     # ── File handler (rotating) ───────────────────────────────────────────────
@@ -110,26 +108,24 @@ def setup_logging(env: str = "dev", log_dir: str = "logs") -> None:
 
     file_handler = logging.handlers.RotatingFileHandler(
         filename=log_path / "propnest.log",
-        maxBytes=10 * 1024 * 1024,   # 10 MB per file
-        backupCount=5,                # keep propnest.log.1 … propnest.log.5
+        maxBytes=10 * 1024 * 1024,  # 10 MB per file
+        backupCount=5,  # keep propnest.log.1 … propnest.log.5
         encoding="utf-8",
     )
     file_handler.setLevel(file_level)
-    file_handler.setFormatter(
-        logging.Formatter(fmt=_FILE_FMT, datefmt=_DATE_FMT)
-    )
+    file_handler.setFormatter(logging.Formatter(fmt=_FILE_FMT, datefmt=_DATE_FMT))
     root.addHandler(file_handler)
 
     # ── Silence noisy third-party loggers ────────────────────────────────────
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
-    logging.getLogger("sqlalchemy.engine").setLevel(
-        logging.INFO if env in ("dev", "unittest") else logging.WARNING
-    )
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO if env in ("dev", "unittest") else logging.WARNING)
     logging.getLogger("passlib").setLevel(logging.WARNING)
 
     # Confirm logging is live
     log = logging.getLogger(__name__)
-    log.debug("Logging initialised [env=%s | console=%s | file=%s]",
-              env,
-              logging.getLevelName(console_level),
-              logging.getLevelName(file_level))
+    log.debug(
+        "Logging initialised [env=%s | console=%s | file=%s]",
+        env,
+        logging.getLevelName(console_level),
+        logging.getLevelName(file_level),
+    )

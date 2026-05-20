@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.schemas.contract import ContractCreate, ContractUpdate, ContractResponse
 from app.services.contract_service import ContractService
-from app.core.dependencies import get_contract_service
+from app.core.dependencies import get_contract_service, require_manager_or_above
 from app.services.exceptions import ContractActiveError
 
 router = APIRouter(prefix="/contracts", tags=["Contracts"])
@@ -34,7 +34,12 @@ def get_contract(
     return contract
 
 
-@router.post("/", response_model=ContractResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=ContractResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_manager_or_above)],
+)
 def create_contract(
     payload: ContractCreate,
     db: Session = Depends(get_db),
@@ -46,7 +51,11 @@ def create_contract(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Property already has an active contract")
 
 
-@router.patch("/{contract_id}", response_model=ContractResponse)
+@router.patch(
+    "/{contract_id}",
+    response_model=ContractResponse,
+    dependencies=[Depends(require_manager_or_above)],
+)
 def update_contract(
     contract_id: UUID,
     payload: ContractUpdate,
@@ -59,7 +68,11 @@ def update_contract(
     return contract
 
 
-@router.delete("/{contract_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{contract_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_manager_or_above)],
+)
 def delete_contract(
     contract_id: UUID,
     db: Session = Depends(get_db),

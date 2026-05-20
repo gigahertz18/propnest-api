@@ -168,9 +168,7 @@ class ProductionConfig(BaseConfig):
     JWT_AUDIENCE: str = field(default_factory=lambda: os.environ.get("JWT_AUDIENCE", "propnest-users"))
     CORS_ORIGINS: list[str] = field(
         default_factory=lambda: [
-            origin.strip()
-            for origin in os.environ.get("CORS_ORIGINS", "").split(",")
-            if origin.strip()
+            origin.strip() for origin in os.environ.get("CORS_ORIGINS", "").split(",") if origin.strip()
         ]
     )
 

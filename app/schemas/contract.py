@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 from pydantic import BaseModel, model_validator, Field
 
 from app.schemas.base import BaseResponse
@@ -13,8 +14,8 @@ class ContractBase(BaseModel):
     rental_type: RentalType
     start_date: date
     end_date: date | None = None
-    rent_amount: float = Field(gt=0, description="Must be greater than zero.")
-    deposit: float | None = Field(default=None, gt=0, description="Must be greater than 0 if provided.")
+    rent_amount: Decimal = Field(gt=0, description="Must be greater than zero.")
+    deposit: Decimal | None = Field(default=None, gt=0, description="Must be greater than 0 if provided.")
     booking_source: str = "direct"
     status: str = "ACTIVE"
 
@@ -41,8 +42,8 @@ class ContractUpdate(BaseModel):
     rental_type: RentalType | None = None
     start_date: date | None = None
     end_date: date | None = None
-    rent_amount: float | None = Field(default=None, gt=0, description="Must be greater than zero.")
-    deposit: float | None = Field(default=None, gt=0, description="Must be greater than zero if provided.")
+    rent_amount: Decimal | None = Field(default=None, gt=0, description="Must be greater than zero.")
+    deposit: Decimal | None = Field(default=None, gt=0, description="Must be greater than zero if provided.")
     booking_source: str | None = None
     status: str | None = None
 

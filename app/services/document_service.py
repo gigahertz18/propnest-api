@@ -5,6 +5,7 @@ from app.repositories.document import DocumentRepository
 from app.schemas.document import DocumentCreate, DocumentUpdate
 from app.models.document import Document
 from app.services.exceptions import DocumentUploadError
+from app.core.config import settings
 
 
 class DocumentService:
@@ -31,12 +32,16 @@ class DocumentService:
             try:
                 # Client contract varies; callers/tests should provide a
                 # minimal stub implementing the required methods (e.g., put_object).
-                # We don't assume a specific API shape here beyond callable methods.
+                # Use the configured bucket name (not payload.file_url) as the
+                # target bucket. Payloads are expected to provide a usable
+                # object name in `file_name` and either raw data or a URL in
+                # `file_url` depending on the caller's contract.
+                bucket = settings.MINIO_BUCKET_NAME
                 if hasattr(storage_client, "put_object"):
-                    # Minimal usage: caller provides object name and bytes in payload.file_url
-                    storage_client.put_object(payload.file_url, payload.file_name, payload.file_url)
+                    # Minimal call: (bucket_name, object_name, data)
+                    storage_client.put_object(bucket, payload.file_name, payload.file_url)
                 elif hasattr(storage_client, "stat_object"):
-                    storage_client.stat_object(payload.file_url, payload.file_name)
+                    storage_client.stat_object(bucket, payload.file_name)
             except Exception as e:
                 raise DocumentUploadError("Failed to store document") from e
 

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.schemas.document import DocumentCreate, DocumentUpdate, DocumentResponse
 from app.services.document_service import DocumentService
-from app.core.dependencies import get_document_service
+from app.core.dependencies import get_document_service, require_manager_or_above
 from app.services.exceptions import DocumentUploadError
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
@@ -34,7 +34,12 @@ def get_document(
     return document
 
 
-@router.post("/", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=DocumentResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_manager_or_above)],
+)
 def create_document(
     payload: DocumentCreate,
     db: Session = Depends(get_db),
@@ -48,7 +53,11 @@ def create_document(
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to store document")
 
 
-@router.patch("/{document_id}", response_model=DocumentResponse)
+@router.patch(
+    "/{document_id}",
+    response_model=DocumentResponse,
+    dependencies=[Depends(require_manager_or_above)],
+)
 def update_document(
     document_id: UUID,
     payload: DocumentUpdate,
@@ -61,7 +70,13 @@ def update_document(
     return document
 
 
-@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{document_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[
+        Depends(require_manager_or_above),
+    ],
+)
 def delete_document(
     document_id: UUID,
     db: Session = Depends(get_db),

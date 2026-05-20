@@ -9,8 +9,8 @@ from app.schemas.contract import ContractCreate, ContractUpdate
 from app.models.contract import RentalType
 from tests.factories import make_contract, make_contract_model, make_property_model, make_tenant_model
 
-
 # ─── Shared fixtures ──────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def property_(db):
@@ -31,6 +31,7 @@ def active_contract(db, property_, tenant):
 
 
 # ─── get_all ──────────────────────────────────────────────────────────────────
+
 
 class TestContractRepositoryGetAll:
     def test_returns_empty_list_when_no_contracts(self, db):
@@ -67,6 +68,7 @@ class TestContractRepositoryGetAll:
 
 # ─── get_by_id ────────────────────────────────────────────────────────────────
 
+
 class TestContractRepositoryGetById:
     def test_returns_contract_when_found(self, db, active_contract):
         result = contract_repo.get_by_id(db, active_contract.id)
@@ -80,12 +82,15 @@ class TestContractRepositoryGetById:
 
 # ─── create ───────────────────────────────────────────────────────────────────
 
+
 class TestContractRepositoryCreate:
     def test_creates_contract_successfully(self, db, property_, tenant):
-        payload = ContractCreate(**make_contract(
-            property_id=property_.id,
-            tenant_id=tenant.id,
-        ))
+        payload = ContractCreate(
+            **make_contract(
+                property_id=property_.id,
+                tenant_id=tenant.id,
+            )
+        )
         result = contract_repo.create(db, payload)
         assert result.id is not None
         assert result.property_id == property_.id
@@ -95,47 +100,57 @@ class TestContractRepositoryCreate:
         assert result.status == "ACTIVE"
 
     def test_created_contract_is_persisted(self, db, property_, tenant):
-        payload = ContractCreate(**make_contract(
-            property_id=property_.id,
-            tenant_id=tenant.id,
-            rent_amount=20000.00,
-        ))
+        payload = ContractCreate(
+            **make_contract(
+                property_id=property_.id,
+                tenant_id=tenant.id,
+                rent_amount=20000.00,
+            )
+        )
         created = contract_repo.create(db, payload)
         fetched = contract_repo.get_by_id(db, created.id)
         assert fetched is not None
         assert fetched.rent_amount == 20000.00
 
     def test_default_status_is_active(self, db, property_, tenant):
-        payload = ContractCreate(**make_contract(
-            property_id=property_.id,
-            tenant_id=tenant.id,
-        ))
+        payload = ContractCreate(
+            **make_contract(
+                property_id=property_.id,
+                tenant_id=tenant.id,
+            )
+        )
         result = contract_repo.create(db, payload)
         assert result.status == "ACTIVE"
 
     def test_default_booking_source_is_direct(self, db, property_, tenant):
-        payload = ContractCreate(**make_contract(
-            property_id=property_.id,
-            tenant_id=tenant.id,
-        ))
+        payload = ContractCreate(
+            **make_contract(
+                property_id=property_.id,
+                tenant_id=tenant.id,
+            )
+        )
         result = contract_repo.create(db, payload)
         assert result.booking_source == "direct"
 
     def test_end_date_is_optional(self, db, property_, tenant):
-        payload = ContractCreate(**make_contract(
-            property_id=property_.id,
-            tenant_id=tenant.id,
-            end_date=None,
-        ))
+        payload = ContractCreate(
+            **make_contract(
+                property_id=property_.id,
+                tenant_id=tenant.id,
+                end_date=None,
+            )
+        )
         result = contract_repo.create(db, payload)
         assert result.end_date is None
 
     def test_deposit_is_optional(self, db, property_, tenant):
-        payload = ContractCreate(**make_contract(
-            property_id=property_.id,
-            tenant_id=tenant.id,
-            deposit=None,
-        ))
+        payload = ContractCreate(
+            **make_contract(
+                property_id=property_.id,
+                tenant_id=tenant.id,
+                deposit=None,
+            )
+        )
         result = contract_repo.create(db, payload)
         assert result.deposit is None
 
@@ -143,50 +158,61 @@ class TestContractRepositoryCreate:
 
     def test_rent_amount_zero_raises_validation_error(self, db, property_, tenant):
         with pytest.raises(ValidationError):
-            ContractCreate(**make_contract(
-                property_id=property_.id,
-                tenant_id=tenant.id,
-                rent_amount=0,
-            ))
+            ContractCreate(
+                **make_contract(
+                    property_id=property_.id,
+                    tenant_id=tenant.id,
+                    rent_amount=0,
+                )
+            )
 
     def test_rent_amount_negative_raises_validation_error(self, db, property_, tenant):
         with pytest.raises(ValidationError):
-            ContractCreate(**make_contract(
-                property_id=property_.id,
-                tenant_id=tenant.id,
-                rent_amount=-500,
-            ))
+            ContractCreate(
+                **make_contract(
+                    property_id=property_.id,
+                    tenant_id=tenant.id,
+                    rent_amount=-500,
+                )
+            )
 
     def test_end_date_same_as_start_date_raises_validation_error(self, db, property_, tenant):
         today = date.today()
         with pytest.raises(ValidationError):
-            ContractCreate(**make_contract(
-                property_id=property_.id,
-                tenant_id=tenant.id,
-                start_date=today,
-                end_date=today,
-            ))
+            ContractCreate(
+                **make_contract(
+                    property_id=property_.id,
+                    tenant_id=tenant.id,
+                    start_date=today,
+                    end_date=today,
+                )
+            )
 
     def test_end_date_before_start_date_raises_validation_error(self, db, property_, tenant):
         today = date.today()
         with pytest.raises(ValidationError):
-            ContractCreate(**make_contract(
-                property_id=property_.id,
-                tenant_id=tenant.id,
-                start_date=today,
-                end_date=today - timedelta(days=1),
-            ))
+            ContractCreate(
+                **make_contract(
+                    property_id=property_.id,
+                    tenant_id=tenant.id,
+                    start_date=today,
+                    end_date=today - timedelta(days=1),
+                )
+            )
 
     def test_invalid_booking_source_raises_validation_error(self, db, property_, tenant):
         with pytest.raises(ValidationError):
-            ContractCreate(**make_contract(
-                property_id=property_.id,
-                tenant_id=tenant.id,
-                booking_source="invalid_platform",
-            ))
+            ContractCreate(
+                **make_contract(
+                    property_id=property_.id,
+                    tenant_id=tenant.id,
+                    booking_source="invalid_platform",
+                )
+            )
 
 
 # ─── update ───────────────────────────────────────────────────────────────────
+
 
 class TestContractRepositoryUpdate:
     def test_updates_specified_fields_only(self, db, active_contract):
@@ -254,6 +280,7 @@ class TestContractRepositoryUpdate:
 
 # ─── delete ───────────────────────────────────────────────────────────────────
 
+
 class TestContractRepositoryDelete:
     def test_deletes_contract_successfully(self, db, active_contract):
         contract_id = active_contract.id
@@ -267,6 +294,7 @@ class TestContractRepositoryDelete:
 
 
 # ─── get_by_property ──────────────────────────────────────────────────────────
+
 
 class TestContractRepositoryGetByProperty:
     def test_returns_contracts_for_property(self, db, property_, tenant):
@@ -292,6 +320,7 @@ class TestContractRepositoryGetByProperty:
 
 
 # ─── get_by_tenant ────────────────────────────────────────────────────────────
+
 
 class TestContractRepositoryGetByTenant:
     def test_returns_contracts_for_tenant(self, db, property_, tenant):
@@ -319,6 +348,7 @@ class TestContractRepositoryGetByTenant:
 
 # ─── get_by_status ────────────────────────────────────────────────────────────
 
+
 class TestContractRepositoryGetByStatus:
     def test_returns_contracts_with_matching_status(self, db, property_, tenant):
         make_contract_model(db, property_id=property_.id, tenant_id=tenant.id, status="ACTIVE")
@@ -337,6 +367,7 @@ class TestContractRepositoryGetByStatus:
 
 
 # ─── get_by_rental_type ───────────────────────────────────────────────────────
+
 
 class TestContractRepositoryGetByRentalType:
     def test_returns_contracts_with_matching_rental_type(self, db, property_, tenant):
@@ -359,6 +390,7 @@ class TestContractRepositoryGetByRentalType:
 
 # ─── get_by_booking_source ────────────────────────────────────────────────────
 
+
 class TestContractRepositoryGetByBookingSource:
     def test_returns_contracts_with_matching_booking_source(self, db, property_, tenant):
         make_contract_model(db, property_id=property_.id, tenant_id=tenant.id, booking_source="airbnb")
@@ -379,6 +411,7 @@ class TestContractRepositoryGetByBookingSource:
 
 
 # ─── get_active_contract_by_property ─────────────────────────────────────────
+
 
 class TestContractRepositoryGetActiveContractByProperty:
     def test_returns_active_contract_for_property(self, db, property_, tenant):

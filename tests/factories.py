@@ -85,8 +85,10 @@ def make_admin_model(db, **kwargs) -> User:
     defaults.update(kwargs)
     return make_user_model(db, **defaults)
 
+
 # ─── Tenant ───────────────────────────────────────────────────────────────────
- 
+
+
 def make_tenant(
     full_name: str = "Test Tenant",
     email: str = "tenant@example.com",
@@ -108,8 +110,8 @@ def make_tenant(
         "notes": notes,
         "is_active": is_active,
     }
- 
- 
+
+
 def make_tenant_model(db, **kwargs) -> Tenant:
     """Creates and persists a Tenant directly in the test DB."""
     data = make_tenant(**kwargs)
@@ -118,10 +120,11 @@ def make_tenant_model(db, **kwargs) -> Tenant:
     db.commit()
     db.refresh(obj)
     return obj
- 
- 
+
+
 # ─── Contract ─────────────────────────────────────────────────────────────────
- 
+
+
 def make_contract(
     property_id: uuid.UUID | None = None,
     tenant_id: uuid.UUID | None = None,
@@ -146,8 +149,8 @@ def make_contract(
         "booking_source": booking_source,
         "status": status,
     }
- 
- 
+
+
 def make_contract_model(db, property_id: uuid.UUID, tenant_id: uuid.UUID, **kwargs) -> Contract:
     """
     Creates and persists a Contract directly in the test DB.
@@ -159,6 +162,7 @@ def make_contract_model(db, property_id: uuid.UUID, tenant_id: uuid.UUID, **kwar
     db.commit()
     db.refresh(obj)
     return obj
+
 
 def make_document(
     file_name: str = "test_document.pdf",
@@ -177,6 +181,7 @@ def make_document(
         "property_id": property_id,
         "tenant_id": tenant_id,
     }
+
 
 def make_document_model(db, **kwargs) -> Document:
     """Creates and persists a Document directly in the test DB."""

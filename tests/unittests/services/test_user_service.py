@@ -18,7 +18,9 @@ class FakeRepoIntegrityEmail:
 
     def create(self, db, payload):
         # Simulate a DB unique constraint on email
-        raise IntegrityError("INSERT", {}, Exception('duplicate key value violates unique constraint "users_email_key"'))
+        raise IntegrityError(
+            "INSERT", {}, Exception('duplicate key value violates unique constraint "users_email_key"')
+        )
 
 
 def test_create_user_translates_integrity_error_to_email_conflict() -> None:
@@ -53,7 +55,9 @@ class RaceRepo:
                 u.id = "first"
                 return u
             # Second caller fails with DB IntegrityError
-            raise IntegrityError("INSERT", {}, Exception('duplicate key value violates unique constraint "users_email_key"'))
+            raise IntegrityError(
+                "INSERT", {}, Exception('duplicate key value violates unique constraint "users_email_key"')
+            )
 
 
 def test_concurrent_creates_one_fails_with_email_conflict() -> None:
@@ -92,7 +96,9 @@ def test_update_user_translates_integrity_error() -> None:
             return None
 
         def update(self, db, id, payload):
-            raise IntegrityError("UPDATE", {}, Exception('duplicate key value violates unique constraint "users_username_key"'))
+            raise IntegrityError(
+                "UPDATE", {}, Exception('duplicate key value violates unique constraint "users_username_key"')
+            )
 
     repo = UpdateRepo()
     svc = UserService(user_repo=repo)

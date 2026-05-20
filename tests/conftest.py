@@ -2,8 +2,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import NullPool
 
+from app.db.session import engine as app_engine
+
+import app.models as _models  # ensure all models are imported before creating test tables
 from app.main import app
 from app.db.session import Base, get_db
 from app.core.config import settings
@@ -19,9 +21,9 @@ if not settings.is_test:
 
 
 # ─── Engine ───────────────────────────────────────────────────────────────────
-# Points to propnest_test — set by TestConfig.DB_NAME.
-# NullPool ensures connections are never reused between tests.
-engine = create_engine(settings.DATABASE_URL, poolclass=NullPool)
+# Use the application's engine so table creation and test sessions
+# operate on the same connection pool and metadata.
+engine = app_engine
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -57,6 +59,12 @@ def setup_database():
     Safe to do because this only touches propnest_test, never propnest_db.
     """
     _ensure_test_db_exists()
+    # Debugging: show which DB and which tables SQLAlchemy knows about
+    try:
+        print("TEST DB URL:", engine.url)
+    except Exception:
+        print("TEST DB URL: <unavailable>")
+    print("METADATA TABLES:", list(Base.metadata.tables.keys()))
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     yield
