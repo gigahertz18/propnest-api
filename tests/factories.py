@@ -1,6 +1,6 @@
 import uuid
 
-from datetime import date, timedelta
+from datetime import date
 from app.models.property import Property, PropertyStatus
 from app.models.user import User, UserRole
 from app.models.contract import Contract, RentalType as ContractRentalType

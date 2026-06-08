@@ -25,7 +25,6 @@ Add  logs/  to .gitignore so log files are never committed.
 
 import logging
 import logging.handlers
-import os
 import sys
 from pathlib import Path
 

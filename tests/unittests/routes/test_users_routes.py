@@ -1,8 +1,3 @@
-from types import SimpleNamespace
-
-from app.models.user import UserRole
-
-
 class TestUsersRoutes:
     def test_create_user_conflict_returns_409(self, client, set_override, admin_user):
         from app.core.dependencies import get_user_service, require_admin
@@ -26,7 +21,6 @@ class TestUsersRoutes:
         assert response.status_code == 409
         assert "email" in response.json()["detail"].lower() or "duplicate" in response.json()["detail"].lower()
 
-
     def test_update_user_not_found_returns_404(self, client, set_override, admin_user):
         from app.core.dependencies import get_user_service, get_current_user
         from app.services.exceptions import UserNotFoundError
@@ -41,7 +35,6 @@ class TestUsersRoutes:
 
         response = client.patch(f"/api/v1/users/{uuid.uuid4()}", json={})
         assert response.status_code == 404
-
 
     def test_delete_user_not_found_returns_404(self, client, set_override, admin_user):
         from app.core.dependencies import get_user_service, require_admin

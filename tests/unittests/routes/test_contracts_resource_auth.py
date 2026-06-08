@@ -1,5 +1,3 @@
-from types import SimpleNamespace
-
 from app.core.dependencies import get_current_user
 from app.models.user import UserRole
 from tests.factories import make_user_model, make_tenant_model, make_property_model

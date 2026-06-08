@@ -1,6 +1,5 @@
 import uuid
 
-import pytest
 from tests.factories import make_user, make_user_model, make_admin_model
 
 
@@ -240,7 +239,7 @@ class TestUpdateUserRoute:
 
     def test_user_cannot_update_with_duplicate_email(self, client, db):
         user1 = make_user_model(db, username="user1", email="user1@example.com")
-        user2 = make_user_model(db, username="user2", email="user2@example.com")
+        make_user_model(db, username="user2", email="user2@example.com")
         token = login(client, "user1")
         response = client.patch(
             f"/api/v1/users/{user1.id}",

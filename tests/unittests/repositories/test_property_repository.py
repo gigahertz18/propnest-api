@@ -1,4 +1,3 @@
-import pytest
 import uuid
 from app.repositories.property import property_repo
 from app.schemas.property import PropertyCreate, PropertyUpdate

@@ -1,12 +1,11 @@
 import pytest
 
-from types import SimpleNamespace
 
 from app.services.document_service import DocumentService
 from app.services.exceptions import DocumentUploadError
 from app.repositories.document import document_repo
 from app.schemas.document import DocumentCreate
-from tests.factories import make_document_model, make_document
+from tests.factories import make_document
 
 
 def test_document_service_translates_storage_failures(db):

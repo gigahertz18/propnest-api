@@ -6,7 +6,6 @@ from tests.factories import (
     make_admin_model,
     make_user_model,
 )
-from app.models.property import PropertyStatus
 
 
 # ─── Helpers ──────────────────────────────────────────────
@@ -56,7 +55,7 @@ class TestGetPropertyRoute:
 class TestCreatePropertyRoute:
     def test_creates_property_successfully(self, client, db):
         make_admin_model(db)
-        user = make_user_model(db, username="user1", email="user1@example.com")
+        make_user_model(db, username="user1", email="user1@example.com")
         token = login(client, "adminuser")
         payload = make_property(name="New Unit")
         response = client.post(

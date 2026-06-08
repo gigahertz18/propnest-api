@@ -42,37 +42,47 @@ class TestContractsRoutes:
         response = client.get(f"/api/v1/contracts/{uuid.uuid4()}")
         assert response.status_code == 404
 
-
     def test_update_contract_forbidden_for_manager(self, client, set_override, simple_ns):
         from app.core.dependencies import get_contract_service, get_property_service, require_manager_or_above
 
         fake_contract = simple_ns(property_id=uuid.uuid4())
         set_override(get_contract_service, lambda: simple_ns(get_contract=lambda db, id: fake_contract))
         # property_service returns a property managed by someone else
-        set_override(get_property_service, lambda: simple_ns(get_property=lambda db, id: simple_ns(manager_id=uuid.uuid4())))
+        set_override(
+            get_property_service, lambda: simple_ns(get_property=lambda db, id: simple_ns(manager_id=uuid.uuid4()))
+        )
         # current user is a manager with a different id
         set_override(require_manager_or_above, lambda: simple_ns(id=uuid.uuid4(), role=UserRole.MANAGER))
 
         response = client.patch(f"/api/v1/contracts/{uuid.uuid4()}", json={})
         assert response.status_code == 403
 
-
     def test_update_contract_returns_404_when_update_not_found(self, client, set_override, simple_ns, admin_user):
         from app.core.dependencies import get_contract_service, require_manager_or_above
 
         # Admin bypasses manager check
         set_override(require_manager_or_above, lambda: admin_user)
-        set_override(get_contract_service, lambda: simple_ns(get_contract=lambda db, id: simple_ns(property_id=uuid.uuid4()), update_contract=lambda db, id, payload: None))
+        set_override(
+            get_contract_service,
+            lambda: simple_ns(
+                get_contract=lambda db, id: simple_ns(property_id=uuid.uuid4()),
+                update_contract=lambda db, id, payload: None,
+            ),
+        )
 
         response = client.patch(f"/api/v1/contracts/{uuid.uuid4()}", json={})
         assert response.status_code == 404
-
 
     def test_delete_contract_returns_404_when_delete_not_found(self, client, set_override, simple_ns, admin_user):
         from app.core.dependencies import get_contract_service, require_manager_or_above
 
         set_override(require_manager_or_above, lambda: admin_user)
-        set_override(get_contract_service, lambda: simple_ns(get_contract=lambda db, id: simple_ns(property_id=uuid.uuid4()), delete_contract=lambda db, id: None))
+        set_override(
+            get_contract_service,
+            lambda: simple_ns(
+                get_contract=lambda db, id: simple_ns(property_id=uuid.uuid4()), delete_contract=lambda db, id: None
+            ),
+        )
 
         response = client.delete(f"/api/v1/contracts/{uuid.uuid4()}")
         assert response.status_code == 404

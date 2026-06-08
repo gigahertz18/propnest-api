@@ -6,7 +6,13 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.schemas.document import DocumentCreate, DocumentUpdate, DocumentResponse
 from app.services.document_service import DocumentService
-from app.core.dependencies import get_document_service, require_manager_or_above, get_storage_client, get_current_user, get_property_service, get_contract_service
+from app.core.dependencies import (
+    get_document_service,
+    require_manager_or_above,
+    get_storage_client,
+    get_property_service,
+    get_contract_service,
+)
 from app.models.user import UserRole
 from app.services.property_service import PropertyService
 from app.services.contract_service import ContractService
@@ -53,8 +59,14 @@ def create_document(
         # Resource-level auth: managers may only create documents for properties
         # they are assigned to. Admins can create for any property.
         prop = property_service.get_property(db, payload.property_id)
-        if prop is not None and getattr(current_user, "role", None) == UserRole.MANAGER and prop.manager_id != current_user.id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property")
+        if (
+            prop is not None
+            and getattr(current_user, "role", None) == UserRole.MANAGER
+            and prop.manager_id != current_user.id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property"
+            )
 
         # Routes don't provide a storage client — services can be tested separately
         return document_service.create_document(db, payload)
@@ -91,8 +103,14 @@ def upload_document(
 
     try:
         prop = property_service.get_property(db, property_id)
-        if prop is not None and getattr(current_user, "role", None) == UserRole.MANAGER and prop.manager_id != current_user.id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property")
+        if (
+            prop is not None
+            and getattr(current_user, "role", None) == UserRole.MANAGER
+            and prop.manager_id != current_user.id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property"
+            )
 
         return document_service.create_document(db, payload, storage_client=storage_client, file_obj=file)
     except DocumentUploadError:
@@ -128,7 +146,9 @@ def update_document(
                 prop = property_service.get_property(db, contract.property_id)
 
         if not prop or prop.manager_id != current_user.id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property"
+            )
 
     updated = document_service.update_document(db, document_id, payload)
     if not updated:
@@ -163,7 +183,9 @@ def delete_document(
                 prop = property_service.get_property(db, contract.property_id)
 
         if not prop or prop.manager_id != current_user.id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property"
+            )
 
     deleted = document_service.delete_document(db, document_id)
     if not deleted:

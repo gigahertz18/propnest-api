@@ -1,7 +1,7 @@
 import enum
 import uuid
 
-from sqlalchemy import String, Text, Enum, CheckConstraint, Uuid, Boolean, ForeignKey
+from sqlalchemy import String, Text, Enum, Uuid, Boolean, ForeignKey
 
 from sqlalchemy.orm import Mapped, mapped_column
 from app.db.session import Base

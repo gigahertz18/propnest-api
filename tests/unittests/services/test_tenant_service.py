@@ -1,5 +1,3 @@
-from types import SimpleNamespace
-
 from app.services.tenant_service import TenantService
 
 

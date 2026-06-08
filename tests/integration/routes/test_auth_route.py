@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.core.config import settings
 from jose import jwt
-from tests.factories import make_user_model, make_admin_model
+from tests.factories import make_user_model
 
 
 class TestLogin:

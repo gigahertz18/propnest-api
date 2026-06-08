@@ -10,7 +10,6 @@ class TestTenantsRoutes:
         response = client.get(f"/api/v1/tenants/{uuid.uuid4()}")
         assert response.status_code == 404
 
-
     def test_tenants_direct_calls_cover_returns(self):
         """Directly call route functions to ensure return lines execute under full test run."""
         from app.api.v1.routes import tenants as tenants_module
@@ -32,7 +31,7 @@ class TestTenantsRoutes:
             "updated_at": now,
         }
 
-        svc = __import__('types').SimpleNamespace(
+        svc = __import__("types").SimpleNamespace(
             list_tenants=lambda db, skip, limit: [sample],
             get_tenant=lambda db, id: sample,
             create_tenant=lambda db, payload: sample,
@@ -64,18 +63,19 @@ class TestTenantsRoutes:
         res = tenants_module.delete_tenant(sample_id, db=None, tenant_service=svc)
         assert res is None
 
-
     def test_update_and_delete_tenant_not_found_returns_404(self, client, set_override, simple_ns):
         from app.core.dependencies import get_tenant_service
 
-        set_override(get_tenant_service, lambda: simple_ns(update_tenant=lambda db, id, payload: None, delete_tenant=lambda db, id: None))
+        set_override(
+            get_tenant_service,
+            lambda: simple_ns(update_tenant=lambda db, id, payload: None, delete_tenant=lambda db, id: None),
+        )
 
         response = client.patch(f"/api/v1/tenants/{uuid.uuid4()}", json={})
         assert response.status_code == 404
 
         response = client.delete(f"/api/v1/tenants/{uuid.uuid4()}")
         assert response.status_code == 404
-
 
     def test_tenants_success_paths(self, client, set_override, simple_ns):
         """Cover list/get/create/update/delete success branches for tenants routes."""
@@ -97,7 +97,7 @@ class TestTenantsRoutes:
             "updated_at": now,
         }
 
-        svc = __import__('types').SimpleNamespace(
+        svc = __import__("types").SimpleNamespace(
             list_tenants=lambda db, skip, limit: [sample],
             get_tenant=lambda db, id: sample,
             create_tenant=lambda db, payload: sample,
@@ -106,6 +106,7 @@ class TestTenantsRoutes:
         )
 
         from app.core.dependencies import get_tenant_service
+
         set_override(get_tenant_service, lambda: svc)
 
         # list

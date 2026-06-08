@@ -5,7 +5,6 @@ from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 from passlib.exc import UnknownHashError
-from typing import Optional
 
 from app.core.config import settings
 

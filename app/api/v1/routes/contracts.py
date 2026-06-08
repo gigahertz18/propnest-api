@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.schemas.contract import ContractCreate, ContractUpdate, ContractResponse
 from app.services.contract_service import ContractService
-from app.core.dependencies import get_contract_service, require_manager_or_above, get_current_user, get_property_service
+from app.core.dependencies import get_contract_service, require_manager_or_above, get_property_service
 from app.models.user import UserRole
 from app.services.property_service import PropertyService
 from app.services.exceptions import ContractActiveError
@@ -52,8 +52,14 @@ def create_contract(
         # Resource-level auth: managers may only create contracts for properties
         # they are assigned to. Admins can create for any property.
         prop = property_service.get_property(db, payload.property_id)
-        if prop is not None and getattr(current_user, "role", None) == UserRole.MANAGER and prop.manager_id != current_user.id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property")
+        if (
+            prop is not None
+            and getattr(current_user, "role", None) == UserRole.MANAGER
+            and prop.manager_id != current_user.id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property"
+            )
 
         return contract_service.create_contract(db, payload)
     except ContractActiveError:
@@ -80,7 +86,9 @@ def update_contract(
     if getattr(current_user, "role", None) == UserRole.MANAGER:
         prop = property_service.get_property(db, contract.property_id)
         if not prop or prop.manager_id != current_user.id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property"
+            )
 
     updated = contract_service.update_contract(db, contract_id, payload)
     if not updated:
@@ -106,7 +114,9 @@ def delete_contract(
     if getattr(current_user, "role", None) == UserRole.MANAGER:
         prop = property_service.get_property(db, contract.property_id)
         if not prop or prop.manager_id != current_user.id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property"
+            )
 
     deleted = contract_service.delete_contract(db, contract_id)
     if not deleted:

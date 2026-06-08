@@ -1,10 +1,8 @@
-import pytest
 import uuid
 from datetime import date
 
 from app.repositories.tenant import tenant_repo
 from app.schemas.tenants import TenantCreate, TenantUpdate
-from app.models.tenants import Tenant
 from tests.factories import make_tenant, make_tenant_model
 
 

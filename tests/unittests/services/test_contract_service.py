@@ -1,4 +1,3 @@
-from types import SimpleNamespace
 import pytest
 from sqlalchemy.exc import IntegrityError
 
@@ -9,7 +8,11 @@ from app.services.exceptions import ContractActiveError
 def test_create_contract_translates_integrity_error_with_uq():
     class Repo:
         def create(self, db, payload):
-            raise IntegrityError("INSERT", {}, Exception('pq: duplicate key value violates unique constraint "uq_active_contract_property"'))
+            raise IntegrityError(
+                "INSERT",
+                {},
+                Exception('pq: duplicate key value violates unique constraint "uq_active_contract_property"'),
+            )
 
     svc = ContractService(contract_repo=Repo())
 
@@ -20,7 +23,9 @@ def test_create_contract_translates_integrity_error_with_uq():
 def test_create_contract_translates_integrity_error_with_property_key():
     class Repo:
         def create(self, db, payload):
-            raise IntegrityError("INSERT", {}, Exception('duplicate key value violates unique constraint "whatever" for property_id'))
+            raise IntegrityError(
+                "INSERT", {}, Exception('duplicate key value violates unique constraint "whatever" for property_id')
+            )
 
     svc = ContractService(contract_repo=Repo())
 
@@ -31,7 +36,7 @@ def test_create_contract_translates_integrity_error_with_property_key():
 def test_create_contract_reraises_other_integrity_errors():
     class Repo:
         def create(self, db, payload):
-            raise IntegrityError("INSERT", {}, Exception('some other integrity problem'))
+            raise IntegrityError("INSERT", {}, Exception("some other integrity problem"))
 
     svc = ContractService(contract_repo=Repo())
 

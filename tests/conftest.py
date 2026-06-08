@@ -5,7 +5,6 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db.session import engine as app_engine
 
-import app.models as _models  # ensure all models are imported before creating test tables
 from app.main import app
 from app.db.session import Base, get_db
 from app.core.config import settings
