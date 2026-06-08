@@ -59,12 +59,6 @@ def setup_database():
     Safe to do because this only touches propnest_test, never propnest_db.
     """
     _ensure_test_db_exists()
-    # Debugging: show which DB and which tables SQLAlchemy knows about
-    try:
-        print("TEST DB URL:", engine.url)
-    except Exception:
-        print("TEST DB URL: <unavailable>")
-    print("METADATA TABLES:", list(Base.metadata.tables.keys()))
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     yield

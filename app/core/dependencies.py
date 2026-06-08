@@ -5,6 +5,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.core.security import decode_access_token
+from app.core.config import settings
 from app.repositories.user import user_repo
 from app.models.user import User, UserRole
 from app.services.auth_service import AuthService
@@ -18,6 +19,8 @@ from app.services.property_service import PropertyService
 from app.services.contract_service import ContractService
 from app.services.tenant_service import TenantService
 from app.services.document_service import DocumentService
+from minio import Minio
+from urllib.parse import urlparse
 
 bearer_scheme = HTTPBearer()
 
@@ -140,3 +143,15 @@ def get_tenant_service() -> TenantService:
 
 def get_document_service() -> DocumentService:
     return DocumentService(document_repo=document_repo)
+
+
+def get_storage_client() -> Minio:
+    """Constructs a MinIO client using settings.
+
+    Returns a fresh client instance. Tests can override this dependency.
+    """
+    parsed = urlparse(settings.MINIO_ENDPOINT)
+    # `parsed.netloc` will contain host:port for typical http(s) values.
+    endpoint = parsed.netloc or parsed.path
+    secure = parsed.scheme == "https"
+    return Minio(endpoint, access_key=settings.MINIO_ROOT_USER, secret_key=settings.MINIO_ROOT_PASSWORD, secure=secure)

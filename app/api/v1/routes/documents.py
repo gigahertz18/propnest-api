@@ -1,12 +1,15 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.schemas.document import DocumentCreate, DocumentUpdate, DocumentResponse
 from app.services.document_service import DocumentService
-from app.core.dependencies import get_document_service, require_manager_or_above
+from app.core.dependencies import get_document_service, require_manager_or_above, get_storage_client, get_current_user, get_property_service, get_contract_service
+from app.models.user import UserRole
+from app.services.property_service import PropertyService
+from app.services.contract_service import ContractService
 from app.services.exceptions import DocumentUploadError
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
@@ -38,14 +41,21 @@ def get_document(
     "/",
     response_model=DocumentResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_manager_or_above)],
 )
 def create_document(
     payload: DocumentCreate,
     db: Session = Depends(get_db),
+    current_user: object = Depends(require_manager_or_above),
+    property_service: PropertyService = Depends(get_property_service),
     document_service: DocumentService = Depends(get_document_service),
 ):
     try:
+        # Resource-level auth: managers may only create documents for properties
+        # they are assigned to. Admins can create for any property.
+        prop = property_service.get_property(db, payload.property_id)
+        if prop is not None and getattr(current_user, "role", None) == UserRole.MANAGER and prop.manager_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property")
+
         # Routes don't provide a storage client — services can be tested separately
         return document_service.create_document(db, payload)
     except DocumentUploadError:
@@ -53,35 +63,108 @@ def create_document(
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to store document")
 
 
+@router.post(
+    "/upload",
+    response_model=DocumentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def upload_document(
+    file: UploadFile = File(...),
+    file_type: str = Form(...),
+    contract_id: UUID | None = Form(None),
+    property_id: UUID | None = Form(None),
+    tenant_id: UUID | None = Form(None),
+    db: Session = Depends(get_db),
+    storage_client=Depends(get_storage_client),
+    current_user: object = Depends(require_manager_or_above),
+    property_service: PropertyService = Depends(get_property_service),
+    document_service: DocumentService = Depends(get_document_service),
+):
+    """Accept multipart/form uploads and stream directly to storage.
+
+    This endpoint keeps metadata in sync with the storage object.
+    """
+    payload = DocumentCreate(file_name=file.filename, file_type=file_type, file_url="")
+    payload.contract_id = contract_id
+    payload.property_id = property_id
+    payload.tenant_id = tenant_id
+
+    try:
+        prop = property_service.get_property(db, property_id)
+        if prop is not None and getattr(current_user, "role", None) == UserRole.MANAGER and prop.manager_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property")
+
+        return document_service.create_document(db, payload, storage_client=storage_client, file_obj=file)
+    except DocumentUploadError:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to store document")
+
+
 @router.patch(
     "/{document_id}",
     response_model=DocumentResponse,
-    dependencies=[Depends(require_manager_or_above)],
+    dependencies=[],
 )
 def update_document(
     document_id: UUID,
     payload: DocumentUpdate,
     db: Session = Depends(get_db),
+    current_user: object = Depends(require_manager_or_above),
+    property_service: PropertyService = Depends(get_property_service),
+    contract_service: ContractService = Depends(get_contract_service),
     document_service: DocumentService = Depends(get_document_service),
 ):
-    document = document_service.update_document(db, document_id, payload)
+    # Fetch document first to perform resource-level authorization
+    document = document_service.get_document(db, document_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Document {document_id} not found")
-    return document
+
+    if getattr(current_user, "role", None) == UserRole.MANAGER:
+        prop = None
+        if getattr(document, "property_id", None):
+            prop = property_service.get_property(db, document.property_id)
+        elif getattr(document, "contract_id", None):
+            contract = contract_service.get_contract(db, document.contract_id)
+            if contract:
+                prop = property_service.get_property(db, contract.property_id)
+
+        if not prop or prop.manager_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property")
+
+    updated = document_service.update_document(db, document_id, payload)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Document {document_id} not found")
+    return updated
 
 
 @router.delete(
     "/{document_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[
-        Depends(require_manager_or_above),
-    ],
+    dependencies=[],
 )
 def delete_document(
     document_id: UUID,
     db: Session = Depends(get_db),
+    current_user: object = Depends(require_manager_or_above),
+    property_service: PropertyService = Depends(get_property_service),
+    contract_service: ContractService = Depends(get_contract_service),
     document_service: DocumentService = Depends(get_document_service),
 ):
-    document = document_service.delete_document(db, document_id)
+    document = document_service.get_document(db, document_id)
     if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Document {document_id} not found")
+
+    if getattr(current_user, "role", None) == UserRole.MANAGER:
+        prop = None
+        if getattr(document, "property_id", None):
+            prop = property_service.get_property(db, document.property_id)
+        elif getattr(document, "contract_id", None):
+            contract = contract_service.get_contract(db, document.contract_id)
+            if contract:
+                prop = property_service.get_property(db, contract.property_id)
+
+        if not prop or prop.manager_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property")
+
+    deleted = document_service.delete_document(db, document_id)
+    if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Document {document_id} not found")

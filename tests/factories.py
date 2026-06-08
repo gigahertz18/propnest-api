@@ -14,6 +14,7 @@ def make_property(
     address: str = "123 Test Street",
     description: str | None = "A test property",
     status: PropertyStatus = PropertyStatus.vacant,
+    manager_id: uuid.UUID | None = None,
 ) -> dict:
     """Returns a dict matching PropertyCreate schema."""
     return {
@@ -21,6 +22,7 @@ def make_property(
         "address": address,
         "description": description,
         "status": status.value,
+        "manager_id": manager_id,
     }
 
 

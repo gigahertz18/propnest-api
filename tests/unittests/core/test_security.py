@@ -25,12 +25,13 @@ def test_create_and_decode_access_token_returns_payload_with_correct_aud_iss() -
 
 
 def test_decode_access_token_rejects_wrong_issuer() -> None:
+    now = datetime.now(timezone.utc)
     payload = {
         "sub": "123",
         "role": "user",
         "username": "testuser",
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=15),
-        "iat": datetime.now(timezone.utc),
+        "exp": now + timedelta(minutes=15),
+        "iat": now,
         "iss": "invalid-issuer",
         "aud": settings.JWT_AUDIENCE,
     }
@@ -40,12 +41,13 @@ def test_decode_access_token_rejects_wrong_issuer() -> None:
 
 
 def test_decode_access_token_rejects_wrong_audience() -> None:
+    now = datetime.now(timezone.utc)
     payload = {
         "sub": "123",
         "role": "user",
         "username": "testuser",
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=15),
-        "iat": datetime.now(timezone.utc),
+        "exp": now + timedelta(minutes=15),
+        "iat": now,
         "iss": settings.JWT_ISSUER,
         "aud": "invalid-audience",
     }

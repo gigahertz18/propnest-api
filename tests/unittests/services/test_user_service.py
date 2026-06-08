@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.services.user_service import UserService
 from app.schemas.user import UserCreate, UserUpdate
-from app.services.exceptions import EmailAlreadyExistsError, UsernameAlreadyExistsError
+from app.services.exceptions import EmailAlreadyExistsError, UsernameAlreadyExistsError, UserNotFoundError
 
 
 class FakeRepoIntegrityEmail:
@@ -105,3 +105,70 @@ def test_update_user_translates_integrity_error() -> None:
 
     with pytest.raises(UsernameAlreadyExistsError):
         svc.update_user(db=None, id="id", payload=UserUpdate(username="collision"))
+
+
+def test_get_user_not_found_raises():
+    class Repo:
+        def get_by_id(self, db, id):
+            return None
+
+    svc = UserService(user_repo=Repo())
+
+    with pytest.raises(UserNotFoundError):
+        svc.get_user(db=None, id="nope")
+
+
+def test_update_user_precheck_email_collision():
+    class Repo:
+        def get_by_email(self, db, email):
+            return SimpleNamespace(id="other")
+
+        def get_by_username(self, db, username):
+            return None
+
+    svc = UserService(user_repo=Repo())
+
+    with pytest.raises(EmailAlreadyExistsError):
+        svc.update_user(db=None, id="me", payload=UserUpdate(email="e@x.com"))
+
+
+def test_update_user_precheck_username_collision():
+    class Repo:
+        def get_by_email(self, db, email):
+            return None
+
+        def get_by_username(self, db, username):
+            return SimpleNamespace(id="other")
+
+    svc = UserService(user_repo=Repo())
+
+    with pytest.raises(UsernameAlreadyExistsError):
+        svc.update_user(db=None, id="me", payload=UserUpdate(username="u"))
+
+
+def test_update_user_not_found_raises():
+    class Repo:
+        def get_by_email(self, db, email):
+            return None
+
+        def get_by_username(self, db, username):
+            return None
+
+        def update(self, db, id, payload):
+            return None
+
+    svc = UserService(user_repo=Repo())
+
+    with pytest.raises(UserNotFoundError):
+        svc.update_user(db=None, id="me", payload=UserUpdate())
+
+
+def test_delete_user_not_found_raises():
+    class Repo:
+        def delete(self, db, id):
+            return None
+
+    svc = UserService(user_repo=Repo())
+
+    with pytest.raises(UserNotFoundError):
+        svc.delete_user(db=None, id="me")
