@@ -7,7 +7,7 @@ from tests.factories import make_admin_model, make_user_model, make_property_mod
 
 class TestDocumentsRoutes:
     def test_list_documents_calls_service(self, client, set_override, simple_ns):
-        from app.core.dependencies import get_document_service
+        from app.core.dependencies import get_document_service, get_current_user
 
         now = datetime.datetime.utcnow()
         doc_id = uuid.uuid4()
@@ -24,6 +24,7 @@ class TestDocumentsRoutes:
         }
 
         set_override(get_document_service, lambda: simple_ns(list_documents=lambda db, skip, limit: [doc]))
+        set_override(get_current_user, lambda: simple_ns(id=uuid.uuid4(), role=UserRole.USER))
 
         response = client.get("/api/v1/documents/?skip=0&limit=10")
         assert response.status_code == 200
@@ -31,7 +32,7 @@ class TestDocumentsRoutes:
         assert isinstance(body, list) and body[0]["id"] == str(doc_id)
 
     def test_get_document_returns_document(self, client, set_override, simple_ns):
-        from app.core.dependencies import get_document_service
+        from app.core.dependencies import get_document_service, get_current_user
 
         now = datetime.datetime.utcnow()
         doc_id = uuid.uuid4()
@@ -48,6 +49,7 @@ class TestDocumentsRoutes:
         }
 
         set_override(get_document_service, lambda: simple_ns(get_document=lambda db, id: doc))
+        set_override(get_current_user, lambda: simple_ns(id=uuid.uuid4(), role=UserRole.USER))
 
         response = client.get(f"/api/v1/documents/{doc_id}")
         assert response.status_code == 200
@@ -218,12 +220,13 @@ class TestDocumentsRoutes:
 
     def test_get_document_not_found_404(self, client, set_override, simple_ns):
         """Ensure GET /documents/{id} raises 404 when service returns None."""
-        from app.core.dependencies import get_document_service
+        from app.core.dependencies import get_document_service, get_current_user
 
         set_override(
             get_document_service,
             lambda: simple_ns(get_document=lambda db, id: None),
         )
+        set_override(get_current_user, lambda: simple_ns(id=uuid.uuid4(), role=UserRole.USER))
 
         response = client.get(f"/api/v1/documents/{uuid.uuid4()}")
         assert response.status_code == 404
