@@ -14,7 +14,11 @@ from app.services.exceptions import ContractActiveError
 router = APIRouter(prefix="/contracts", tags=["Contracts"])
 
 
-@router.get("/", response_model=list[ContractResponse])
+@router.get(
+    "/",
+    response_model=list[ContractResponse],
+    dependencies=[Depends(require_manager_or_above)],
+)
 def list_contracts(
     skip: int = 0,
     limit: int = 100,
@@ -24,7 +28,11 @@ def list_contracts(
     return contract_service.list_contracts(db, skip=skip, limit=limit)
 
 
-@router.get("/{contract_id}", response_model=ContractResponse)
+@router.get(
+    "/{contract_id}",
+    response_model=ContractResponse,
+    dependencies=[Depends(require_manager_or_above)],
+)
 def get_contract(
     contract_id: UUID,
     db: Session = Depends(get_db),

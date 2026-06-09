@@ -26,28 +26,36 @@ def auth_headers(token: str) -> dict:
 
 
 class TestListPropertiesRoute:
-    def test_returns_empty_list(self, client):
-        response = client.get("/api/v1/properties/")
+    def test_returns_empty_list(self, client, db):
+        make_user_model(db, username="user1", email="user1@example.com")
+        token = login(client, "user1")
+        response = client.get("/api/v1/properties/", headers=auth_headers(token))
         assert response.status_code == 200
         assert response.json() == []
 
     def test_returns_all_properties(self, client, db):
         make_property_model(db, name="Unit A")
         make_property_model(db, name="Unit B")
-        response = client.get("/api/v1/properties/")
+        make_user_model(db, username="user1", email="user1@example.com")
+        token = login(client, "user1")
+        response = client.get("/api/v1/properties/", headers=auth_headers(token))
         assert response.status_code == 200
         assert len(response.json()) == 2
 
 
 class TestGetPropertyRoute:
     def test_returns_property_by_id(self, client, db):
+        make_user_model(db, username="user1", email="user1@example.com")
+        token = login(client, "user1")
         prop = make_property_model(db)
-        response = client.get(f"/api/v1/properties/{prop.id}")
+        response = client.get(f"/api/v1/properties/{prop.id}", headers=auth_headers(token))
         assert response.status_code == 200
         assert response.json()["id"] == str(prop.id)
 
-    def test_returns_404_when_not_found(self, client):
-        response = client.get(f"/api/v1/properties/{uuid.uuid4()}")
+    def test_returns_404_when_not_found(self, client, db):
+        make_user_model(db, username="user1", email="user1@example.com")
+        token = login(client, "user1")
+        response = client.get(f"/api/v1/properties/{uuid.uuid4()}", headers=auth_headers(token))
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]
 
@@ -147,7 +155,7 @@ class TestDeletePropertyRoute:
         prop = make_property_model(db)
         property_id = prop.id
         client.delete(f"/api/v1/properties/{property_id}", headers=auth_headers(token))
-        response = client.get(f"/api/v1/properties/{property_id}")
+        response = client.get(f"/api/v1/properties/{property_id}", headers=auth_headers(token))
         assert response.status_code == 404
 
     def test_returns_404_when_not_found(self, client, db):

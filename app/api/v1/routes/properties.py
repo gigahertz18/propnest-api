@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from app.core.dependencies import require_admin, get_property_service
+from app.core.dependencies import require_admin, get_property_service, get_current_user
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
@@ -10,7 +10,11 @@ from app.services.property_service import PropertyService
 router = APIRouter(prefix="/properties", tags=["Properties"])
 
 
-@router.get("/", response_model=list[PropertyResponse])
+@router.get(
+    "/",
+    response_model=list[PropertyResponse],
+    dependencies=[Depends(get_current_user)],
+)
 def list_properties(
     skip: int = 0,
     limit: int = 100,
@@ -21,20 +25,24 @@ def list_properties(
     return property_service.list_properties(db, skip=skip, limit=limit)
 
 
-@router.get("/{property_id}", response_model=PropertyResponse)
+@router.get(
+    "/{property_id}",
+    response_model=PropertyResponse,
+    dependencies=[Depends(get_current_user)],
+)
 def get_property(
     property_id: UUID,
     db: Session = Depends(get_db),
     property_service: PropertyService = Depends(get_property_service),
 ):
     """Get a single property by ID."""
-    property = property_service.get_property(db, property_id)
-    if not property:
+    prop = property_service.get_property(db, property_id)
+    if not prop:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Property {property_id} not found",
         )
-    return property
+    return prop
 
 
 @router.post(
@@ -60,13 +68,13 @@ def update_property(
     property_service: PropertyService = Depends(get_property_service),
 ):
     """Partially update a property — only send fields you want to change."""
-    property = property_service.update_property(db, property_id, payload)
-    if not property:
+    prop = property_service.update_property(db, property_id, payload)
+    if not prop:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Property {property_id} not found",
         )
-    return property
+    return prop
 
 
 @router.delete("/{property_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)])
@@ -76,8 +84,8 @@ def delete_property(
     property_service: PropertyService = Depends(get_property_service),
 ):
     """Delete a property."""
-    property = property_service.delete_property(db, property_id)
-    if not property:
+    prop = property_service.delete_property(db, property_id)
+    if not prop:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Property {property_id} not found",

@@ -1,11 +1,13 @@
 import uuid
+from app.models.user import UserRole
 
 
 class TestTenantsRoutes:
     def test_get_tenant_returns_404_when_not_found(self, client, set_override, simple_ns):
-        from app.core.dependencies import get_tenant_service
+        from app.core.dependencies import get_tenant_service, get_current_user
 
         set_override(get_tenant_service, lambda: simple_ns(get_tenant=lambda db, id: None))
+        set_override(get_current_user, lambda: simple_ns(id=uuid.uuid4(), role=UserRole.USER))
 
         response = client.get(f"/api/v1/tenants/{uuid.uuid4()}")
         assert response.status_code == 404
@@ -64,12 +66,14 @@ class TestTenantsRoutes:
         assert res is None
 
     def test_update_and_delete_tenant_not_found_returns_404(self, client, set_override, simple_ns):
-        from app.core.dependencies import get_tenant_service
+        from app.core.dependencies import get_tenant_service, get_current_user, require_manager_or_above
 
         set_override(
             get_tenant_service,
             lambda: simple_ns(update_tenant=lambda db, id, payload: None, delete_tenant=lambda db, id: None),
         )
+        set_override(get_current_user, lambda: simple_ns(id=uuid.uuid4(), role=UserRole.USER))
+        set_override(require_manager_or_above, lambda: simple_ns(id=uuid.uuid4(), role=UserRole.MANAGER))
 
         response = client.patch(f"/api/v1/tenants/{uuid.uuid4()}", json={})
         assert response.status_code == 404
@@ -105,9 +109,11 @@ class TestTenantsRoutes:
             delete_tenant=lambda db, id: True,
         )
 
-        from app.core.dependencies import get_tenant_service
+        from app.core.dependencies import get_tenant_service, get_current_user, require_manager_or_above
 
         set_override(get_tenant_service, lambda: svc)
+        set_override(get_current_user, lambda: simple_ns(id=uuid.uuid4(), role=UserRole.USER))
+        set_override(require_manager_or_above, lambda: simple_ns(id=uuid.uuid4(), role=UserRole.MANAGER))
 
         # list
         r = client.get("/api/v1/tenants/")

@@ -35,9 +35,11 @@ class TestContractsRoutes:
         assert response.status_code == 409
 
     def test_get_contract_returns_404_when_not_found(self, client, set_override, simple_ns):
-        from app.core.dependencies import get_contract_service
+        from app.core.dependencies import get_contract_service, require_manager_or_above
 
         set_override(get_contract_service, lambda: simple_ns(get_contract=lambda db, id: None))
+        # Provide a fake manager principal so the route-level auth dependency passes
+        set_override(require_manager_or_above, lambda: simple_ns(id=uuid.uuid4(), role=UserRole.MANAGER))
 
         response = client.get(f"/api/v1/contracts/{uuid.uuid4()}")
         assert response.status_code == 404
