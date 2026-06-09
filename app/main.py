@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 # ─── Lifespan ─────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    settings.validate()  # fail fast if config is unsafe for the current environment
     await _wait_for_db(
         max_retries=settings.DB_MAX_RETRIES,
         retry_interval=settings.DB_RETRY_INTERVAL,

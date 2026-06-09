@@ -1,6 +1,11 @@
 import os
 from dataclasses import dataclass, field
 
+_KNOWN_INSECURE = {
+    "dev-secret-key-to-the-universe-pwease-override",
+    "propnest_secret",
+}
+
 
 # ─── Base ─────────────────────────────────────────────────────────────────────
 @dataclass
@@ -9,6 +14,7 @@ class BaseConfig:
     APP_NAME: str = "PropNest API"
     API_V1_PREFIX: str = "/api/v1"
     DEBUG: bool = False
+    ENV: str = "base"
 
     # Database
     DB_HOST: str = "db"
@@ -42,24 +48,27 @@ class BaseConfig:
         return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
     @property
-    def ENV(self) -> str:
-        return "base"
-
-    @property
     def is_dev(self) -> bool:
-        return False
+        return self.ENV in ("dev", "unittest", "test")  # treat test envs as dev-like (enables Swagger, etc.)
 
     @property
     def is_staging(self) -> bool:
-        return False
+        return self.ENV == "staging"
 
     @property
     def is_prod(self) -> bool:
-        return False
+        return self.ENV == "prod"
 
     @property
     def is_test(self) -> bool:
-        return False
+        return self.ENV in ("unittest", "test")
+
+    def validate(self) -> None:
+        """
+        Call once at startup. Raises RuntimeError if config is unsafe for the current environment.
+        No-ops for dev/test configs, but prevents production configs from accidentally running with unsafe defaults.
+        """
+        pass  # override in production config to check for secrets from environment variables
 
 
 # ─── Development ──────────────────────────────────────────────────────────────
@@ -67,18 +76,11 @@ class BaseConfig:
 class DevelopmentConfig(BaseConfig):
     DEBUG: bool = True
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 120
+    ENV: str = "dev"
 
     # More retries in dev — local Docker can be slow to start
     DB_MAX_RETRIES: int = 15
     DB_RETRY_INTERVAL: int = 2
-
-    @property
-    def ENV(self) -> str:
-        return "dev"
-
-    @property
-    def is_dev(self) -> bool:
-        return True
 
 
 # ─── Unittest ─────────────────────────────────────────────────────────────────────
@@ -93,21 +95,11 @@ class UnittestConfig(BaseConfig):
     DB_NAME: str = "propnest_unittest_db"
     DEBUG: bool = True
 
+    ENV: str = "unittest"
+
     # DB should already be running when tests execute — retry fast
     DB_MAX_RETRIES: int = 5
     DB_RETRY_INTERVAL: int = 1
-
-    @property
-    def ENV(self) -> str:
-        return "unittest"
-
-    @property
-    def is_dev(self) -> bool:
-        return True  # treat test as dev-like (enables Swagger, etc.)
-
-    @property
-    def is_test(self) -> bool:
-        return True
 
 
 # ─── Test ─────────────────────────────────────────────────────────────────────
@@ -115,22 +107,11 @@ class UnittestConfig(BaseConfig):
 class TestConfig(BaseConfig):
 
     DEBUG: bool = True
+    ENV: str = "test"
 
     # DB should already be running when tests execute — retry fast
     DB_MAX_RETRIES: int = 5
     DB_RETRY_INTERVAL: int = 1
-
-    @property
-    def ENV(self) -> str:
-        return "test"
-
-    @property
-    def is_dev(self) -> bool:
-        return True  # treat test as dev-like (enables Swagger, etc.)
-
-    @property
-    def is_test(self) -> bool:
-        return True
 
 
 # ─── Staging ──────────────────────────────────────────────────────────────────
@@ -139,14 +120,7 @@ class StagingConfig(BaseConfig):
 
     DB_MAX_RETRIES: int = 10
     DB_RETRY_INTERVAL: int = 3
-
-    @property
-    def ENV(self) -> str:
-        return "staging"
-
-    @property
-    def is_staging(self) -> bool:
-        return True
+    ENV: str = "staging"
 
 
 # ─── Production ───────────────────────────────────────────────────────────────
@@ -154,6 +128,7 @@ class StagingConfig(BaseConfig):
 class ProductionConfig(BaseConfig):
     DEBUG: bool = False
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ENV: str = "prod"
 
     # Production DB may take longer to accept connections
     # after a deploy or failover — give it more room
@@ -172,13 +147,36 @@ class ProductionConfig(BaseConfig):
         ]
     )
 
-    @property
-    def ENV(self) -> str:
-        return "prod"
+    def validate(self) -> None:
+        errors = []
 
-    @property
-    def is_prod(self) -> bool:
-        return True
+        if not self.SECRET_KEY or self.SECRET_KEY in _KNOWN_INSECURE:
+            errors.append(
+                "SECRET_KEY is not set or is using a known insecure default. "
+                "Set the SECRET_KEY environment variable."
+            )
+        if len(self.SECRET_KEY) < 32:
+            errors.append("SECRET_KEY must be at least 32 characters.")
+
+        if not self.DB_PASSWORD or self.DB_PASSWORD in _KNOWN_INSECURE:
+            errors.append(
+                "DB_PASSWORD is not set or is using a known insecure default. "
+                "Set the DB_PASSWORD environment variable."
+            )
+
+        if not self.MINIO_ROOT_PASSWORD or self.MINIO_ROOT_PASSWORD in _KNOWN_INSECURE:
+            errors.append(
+                "MINIO_ROOT_PASSWORD is not set or is using a known insecure default. "
+                "Set the MINIO_ROOT_PASSWORD environment variable."
+            )
+
+        if self.ACCESS_TOKEN_EXPIRE_MINUTES > 30:
+            errors.append(
+                f"ACCESS_TOKEN_EXPIRE_MINUTES is {self.ACCESS_TOKEN_EXPIRE_MINUTES}. " "Must be ≤ 30 in production."
+            )
+
+        if errors:
+            raise RuntimeError("Production config validation failed:\n" + "\n".join(f"  - {e}" for e in errors))
 
 
 # ─── Factory ──────────────────────────────────────────────────────────────────
