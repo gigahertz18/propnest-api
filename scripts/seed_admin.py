@@ -33,13 +33,12 @@ from app.models.user import User, UserRole
 from app.core.security import hash_password
 from app.models import Property, Contract, Tenant, Document  # noqa: F401 — register all models
 
-
 # ── Credentials from environment ──────────────────────────────────────────────
 
-USERNAME  = os.environ.get("SEED_USERNAME",  "admin")
-EMAIL     = os.environ.get("SEED_EMAIL",     "admin@propnest.com")
+USERNAME = os.environ.get("SEED_USERNAME", "admin")
+EMAIL = os.environ.get("SEED_EMAIL", "admin@propnest.com")
 FULL_NAME = os.environ.get("SEED_FULL_NAME", "PropNest Admin")
-PASSWORD  = os.environ.get("SEED_PASSWORD",  "")
+PASSWORD = os.environ.get("SEED_PASSWORD", "")
 
 
 def _validate() -> None:
@@ -63,12 +62,8 @@ def seed() -> None:
 
     try:
         # ── Check for existing user ────────────────────────────────────────────
-        existing_username = (
-            db.query(User).filter(User.username == USERNAME).first()
-        )
-        existing_email = (
-            db.query(User).filter(User.email == EMAIL).first()
-        )
+        existing_username = db.query(User).filter(User.username == USERNAME).first()
+        existing_email = db.query(User).filter(User.email == EMAIL).first()
 
         if existing_username:
             print(
