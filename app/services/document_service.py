@@ -55,7 +55,7 @@ class DocumentService:
         if storage_client is not None and file_obj is not None:
             try:
                 self._upload_to_storage(storage_client, payload, file_obj)
-            except:
+            except Exception:
                 raise  # let route handle this - no DB record created
 
         # Step 2: write DB record only after upload succeeds
@@ -64,7 +64,7 @@ class DocumentService:
             return self.document_repo.create(db, payload)
         except Exception:
             if storage_client is not None and file_obj is not None:
-                self._delete_from_storage(storage_client.payload.file_name)
+                self._delete_from_storage(storage_client, payload.file_name)
             raise
 
     def update_document(self, db: Session, id: UUID, payload: DocumentUpdate) -> Document | None:

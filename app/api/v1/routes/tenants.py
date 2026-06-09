@@ -44,7 +44,6 @@ def create_tenant(
     payload: TenantCreate,
     db: Session = Depends(get_db),
     tenant_service: TenantService = Depends(get_tenant_service),
-    _: User = Depends(get_current_user),
 ):
     return tenant_service.create_tenant(db, payload)
 

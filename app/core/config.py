@@ -136,6 +136,10 @@ class ProductionConfig(BaseConfig):
     DB_RETRY_INTERVAL: int = 5
 
     # Secrets from environment only in production
+    DB_HOST: str = field(default_factory=lambda: os.environ.get("DB_HOST", "db"))
+    DB_PORT: int = field(default_factory=lambda: int(os.environ.get("DB_PORT", "5432")))
+    DB_NAME: str = field(default_factory=lambda: os.environ.get("DB_NAME", "propnest_db"))
+    DB_USER: str = field(default_factory=lambda: os.environ.get("DB_USER", "propnest"))
     DB_PASSWORD: str = field(default_factory=lambda: os.environ["DB_PASSWORD"])
     SECRET_KEY: str = field(default_factory=lambda: os.environ["SECRET_KEY"])
     MINIO_ROOT_PASSWORD: str = field(default_factory=lambda: os.environ["MINIO_ROOT_PASSWORD"])

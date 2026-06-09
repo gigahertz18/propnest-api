@@ -12,6 +12,7 @@ from app.core.dependencies import (
     get_storage_client,
     get_property_service,
     get_contract_service,
+    get_current_user,
 )
 from app.models.user import UserRole
 from app.services.property_service import PropertyService
@@ -21,7 +22,7 @@ from app.services.exceptions import DocumentUploadError
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
 
-@router.get("/", response_model=list[DocumentResponse])
+@router.get("/", response_model=list[DocumentResponse], dependencies=[Depends(get_current_user)],)
 def list_documents(
     skip: int = 0,
     limit: int = 100,
@@ -31,7 +32,7 @@ def list_documents(
     return document_service.list_documents(db, skip=skip, limit=limit)
 
 
-@router.get("/{document_id}", response_model=DocumentResponse)
+@router.get("/{document_id}", response_model=DocumentResponse, dependencies=[Depends(get_current_user)])
 def get_document(
     document_id: UUID,
     db: Session = Depends(get_db),
@@ -133,7 +134,6 @@ def upload_document(
 @router.patch(
     "/{document_id}",
     response_model=DocumentResponse,
-    dependencies=[],
 )
 def update_document(
     document_id: UUID,
@@ -172,7 +172,6 @@ def update_document(
 @router.delete(
     "/{document_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[],
 )
 def delete_document(
     document_id: UUID,
