@@ -27,7 +27,7 @@ import uuid
 # ── make sure the app package is importable when run from /app ────────────────
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.db.session import SessionLocal, engine
+from app.db.session import SessionLocal
 from app.models.base import TimestampMixin  # noqa: F401 — ensure TimestampMixin is loaded
 from app.models.user import User, UserRole
 from app.core.security import hash_password
