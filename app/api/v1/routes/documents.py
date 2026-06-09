@@ -22,7 +22,11 @@ from app.services.exceptions import DocumentUploadError
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
 
-@router.get("/", response_model=list[DocumentResponse], dependencies=[Depends(get_current_user)],)
+@router.get(
+    "/",
+    response_model=list[DocumentResponse],
+    dependencies=[Depends(get_current_user)],
+)
 def list_documents(
     skip: int = 0,
     limit: int = 100,

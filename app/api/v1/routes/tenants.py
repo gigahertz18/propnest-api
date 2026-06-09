@@ -7,7 +7,6 @@ from app.db.session import get_db
 from app.schemas.tenants import TenantCreate, TenantUpdate, TenantResponse
 from app.services.tenant_service import TenantService
 from app.core.dependencies import get_tenant_service, require_manager_or_above, get_current_user
-from app.models.user import User
 
 router = APIRouter(prefix="/tenants", tags=["Tenants"])
 
