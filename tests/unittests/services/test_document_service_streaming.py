@@ -63,7 +63,7 @@ class ThreeArgStorage:
     def __init__(self):
         self.calls = []
 
-    def put_object(self, bucket, name, stream):
+    def put_object(self, bucket, name, stream, length=None, content_type=None):
         data = stream.read()
         self.calls.append({"bucket": bucket, "name": name, "data": data})
 
@@ -141,7 +141,12 @@ def test_handles_non_seekable_stream(db, service):
     assert storage.calls[0]["data"] == content
 
 
-def test_put_object_falls_back_to_three_arg_signature(db, service):
+def test_put_object_called_with_correct_signature(db, service):
+    """
+    Replaces test_put_object_falls_back_to_three_arg_signature.
+    Verifies put_object is called with the full correct signature,
+    not a degraded fallback.
+    """
     content = b"FALLBACK-DATA"
     payload = make_payload("fallback.pdf", "application/pdf")
     upload = make_upload(content, payload.file_name, payload.file_type)

@@ -96,12 +96,11 @@ def upload_document(
 
     This endpoint keeps metadata in sync with the storage object.
     """
-    payload = DocumentCreate(file_name=file.filename, file_type=file_type, file_url="")
-    payload.contract_id = contract_id
-    payload.property_id = property_id
-    payload.tenant_id = tenant_id
 
-    try:
+    if not file.filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file must have a filename")
+
+    if property_id is not None:
         prop = property_service.get_property(db, property_id)
         if (
             prop is not None
@@ -112,6 +111,20 @@ def upload_document(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property"
             )
 
+    # Resolve the object URL before touching the DB —
+    # if the upload fails, no orphaned DB record is created.
+    object_url = document_service._build_object_url(file.filename)
+
+    payload = DocumentCreate(
+        file_name=file.filename,
+        file_type=file_type,
+        file_url=object_url,
+        contract_id=contract_id,
+        property_id=property_id,
+        tenant_id=tenant_id,
+    )
+
+    try:
         return document_service.create_document(db, payload, storage_client=storage_client, file_obj=file)
     except DocumentUploadError:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to store document")
