@@ -30,6 +30,7 @@ class PropertyUpdate(BaseModel):
     address: str | None = None
     description: str | None = None
     status: PropertyStatus | None = None
+    is_active: bool | None = None
 
 
 # ─── Response ─────────────────────────────────────────────
@@ -37,5 +38,7 @@ class PropertyResponse(PropertyBase, BaseResponse):
     """Returned to the client — includes DB-generated fields."""
 
     id: uuid.UUID
+    is_active: bool
+    manager_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
