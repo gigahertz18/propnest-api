@@ -222,6 +222,6 @@ __marimo__/
 
 repomix*
 
-apps/backend/tests/coverage
+tests/coverage
 
 logs
