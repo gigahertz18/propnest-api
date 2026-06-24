@@ -1,61 +1,130 @@
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import asyncio
+import pytest
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
-from app.repositories.contract import contract_repo
 from app.models.property import Property
 from app.models.tenant import Tenant
-from tests.factories import make_property_model, make_tenant_model, make_contract
+from app.repositories.contract import contract_repo
+from tests.factories import (
+    make_property_model,
+    make_tenant_model,
+    make_contract,
+)
 
+# @pytest.mark.asyncio
+# async def test_concurrent_create_active_contracts_fails_once(db):
+#     # Create an engine/session local for concurrent workers. Also create the
+#     # property and tenant using that same session so other connections can see
+#     # the rows (the test `db` fixture uses a nested transaction that is NOT
+#     # visible to separate connections).
+#     engine = create_async_engine(settings.DATABASE_URL)
+#     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, class_=AsyncSession, expire_on_commit=False,)
 
-def test_concurrent_create_active_contracts_fails_once(db):
-    # Create an engine/session local for concurrent workers. Also create the
-    # property and tenant using that same session so other connections can see
-    # the rows (the test `db` fixture uses a nested transaction that is NOT
-    # visible to separate connections).
-    engine = create_engine(settings.DATABASE_URL)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+#     async with SessionLocal() as setup_session:
+#         prop = await make_property_model(setup_session)
+#         tenant = await make_tenant_model(setup_session)
+#         # capture scalar IDs immediately to avoid DetachedInstance issues
+#         prop_id = prop.id
+#         tenant_id = tenant.id
 
-    with SessionLocal() as setup_session:
-        prop = make_property_model(setup_session)
-        tenant = make_tenant_model(setup_session)
-        # capture scalar IDs immediately to avoid DetachedInstance issues
+#     async def create_contract():
+#         async with SessionLocal() as session:
+#             return await contract_repo.create(session, make_contract(property_id=prop_id, tenant_id=tenant_id))
+
+#     successes = 0
+#     failures = 0
+#     try:
+#         with ThreadPoolExecutor(max_workers=2) as executor:
+#             futures = [executor.submit(create_contract) for _ in range(2)]
+#             for future in as_completed(futures):
+#                 try:
+#                     await future.result()
+#                     successes += 1
+#                 except IntegrityError:
+#                     failures += 1
+#     finally:
+#         # cleanup created contracts, property, and tenant so subsequent tests
+#         # are not affected by rows inserted outside the test transaction.
+#         async with SessionLocal() as cleanup_session:
+#             contracts = await contract_repo.get_by_property(cleanup_session, prop_id)
+#             for c in contracts:
+#                 cleanup_session.delete(c)
+#             # Remove property and tenant created for the concurrency test
+#             p = cleanup_session.get(Property, prop_id)
+#             if p:
+#                 cleanup_session.delete(p)
+#             t = cleanup_session.get(Tenant, tenant_id)
+#             if t:
+#                 cleanup_session.delete(t)
+#             cleanup_session.commit()
+
+#     assert successes == 1
+#     assert failures == 1
+
+@pytest.mark.asyncio
+async def test_concurrent_create_active_contracts_fails_once():
+    
+    engine = create_async_engine(settings.DATABASE_URL)
+    
+    SessionLocal = sessionmaker(
+        bind=engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+    successes = failures = 0
+    async with SessionLocal() as setup_session:
+        prop = await make_property_model(setup_session)
+        tenant = await make_tenant_model(setup_session)
+        
+        await setup_session.commit()
+        
         prop_id = prop.id
         tenant_id = tenant.id
-
-    def create_contract():
-        with SessionLocal() as session:
-            return contract_repo.create(session, make_contract(property_id=prop_id, tenant_id=tenant_id))
-
-    successes = 0
-    failures = 0
+        
+    async def create_contract():
+        async with SessionLocal() as session:
+            try:
+                await contract_repo.create(
+                    session,
+                    make_contract(
+                        property_id=prop_id,
+                        tenant_id=tenant_id,
+                    ),
+                )
+                await session.commit()
+                return True
+            except IntegrityError:
+                await session.rollback()
+                return False
+    
     try:
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            futures = [executor.submit(create_contract) for _ in range(2)]
-            for future in as_completed(futures):
-                try:
-                    future.result()
-                    successes += 1
-                except IntegrityError:
-                    failures += 1
+        results = await asyncio.gather(
+            create_contract(),
+            create_contract(),
+        )
+        
+        successes = sum(results)
+        failures = len(results) - successes
+        
     finally:
         # cleanup created contracts, property, and tenant so subsequent tests
         # are not affected by rows inserted outside the test transaction.
-        with SessionLocal() as cleanup_session:
-            contracts = contract_repo.get_by_property(cleanup_session, prop_id)
+        async with SessionLocal() as cleanup_session:
+            contracts = await contract_repo.get_by_property(cleanup_session, prop_id)
             for c in contracts:
-                cleanup_session.delete(c)
+                await cleanup_session.delete(c)
             # Remove property and tenant created for the concurrency test
-            p = cleanup_session.get(Property, prop_id)
+            p = await cleanup_session.get(Property, prop_id)
             if p:
-                cleanup_session.delete(p)
-            t = cleanup_session.get(Tenant, tenant_id)
+                await cleanup_session.delete(p)
+            t = await cleanup_session.get(Tenant, tenant_id)
             if t:
-                cleanup_session.delete(t)
-            cleanup_session.commit()
-
+                await cleanup_session.delete(t)
+            await cleanup_session.commit()
+    
     assert successes == 1
     assert failures == 1
