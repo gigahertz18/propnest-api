@@ -3,8 +3,8 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.repositories.tenant import TenantRepository
-from app.schemas.tenants import TenantCreate, TenantUpdate
-from app.models.tenants import Tenant
+from app.schemas.tenant import TenantCreate, TenantUpdate
+from app.models.tenant import Tenant
 
 
 class TenantService:

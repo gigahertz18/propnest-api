@@ -3,8 +3,8 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from app.repositories.base import BaseRepository
-from app.models.tenants import Tenant
-from app.schemas.tenants import TenantCreate, TenantUpdate
+from app.models.tenant import Tenant
+from app.schemas.tenant import TenantCreate, TenantUpdate
 
 
 class TenantRepository(BaseRepository[Tenant, TenantCreate, TenantUpdate]):

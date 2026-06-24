@@ -4,7 +4,7 @@ from datetime import date
 from app.models.property import Property, PropertyStatus
 from app.models.user import User, UserRole
 from app.models.contract import Contract, RentalType as ContractRentalType
-from app.models.tenants import Tenant
+from app.models.tenant import Tenant
 from app.models.document import Document
 from app.core.security import hash_password
 

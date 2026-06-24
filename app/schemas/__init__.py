@@ -3,7 +3,7 @@ from app.schemas.property import PropertyCreate, PropertyUpdate, PropertyRespons
 from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserLogin, TokenResponse
 from app.schemas.contract import ContractCreate, ContractUpdate, ContractResponse
 from app.schemas.document import DocumentCreate, DocumentUpdate, DocumentResponse
-from app.schemas.tenants import TenantCreate, TenantUpdate, TenantResponse
+from app.schemas.tenant import TenantCreate, TenantUpdate, TenantResponse
 
 __all__ = [
     "BaseResponse",

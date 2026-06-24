@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from app.core.config import settings
 from app.repositories.contract import contract_repo
 from app.models.property import Property
-from app.models.tenants import Tenant
+from app.models.tenant import Tenant
 from tests.factories import make_property_model, make_tenant_model, make_contract
 
 

@@ -3,7 +3,7 @@ from app.models.user import UserRole, User
 from app.models.contract import Contract, RentalType
 from app.models.document import Document
 from app.models.payment import Payment
-from app.models.tenants import Tenant
+from app.models.tenant import Tenant
 
 __all__ = [
     "Property",
