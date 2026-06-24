@@ -1,5 +1,6 @@
 import uuid
 from sqlalchemy import select
+
 # from sqlalchemy.orm import AsyncSession
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,7 +22,7 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
     # ) -> list[Contract]:
     #     """Return all contracts linked to a given property."""
     #     return db.query(self.model).filter(self.model.property_id == property_id).all()
-    
+
     async def get_by_property(
         self,
         db: AsyncSession,
@@ -30,7 +31,7 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
         """Return all contracts linked to a given property."""
         statement = select(self.model).where(self.model.property_id == property_id)
         result = await db.execute(statement)
-        
+
         return result.scalars().all()
 
     # def get_by_tenant(
@@ -40,7 +41,7 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
     # ) -> list[Contract]:
     #     """Return all contracts linked to a given tenant."""
     #     return db.query(self.model).filter(self.model.tenant_id == tenant_id).all()
-    
+
     async def get_by_tenant(
         self,
         db: AsyncSession,
@@ -66,7 +67,7 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
         """Return all contracts with a given status (e.g. ACTIVE, EXPIRED)."""
         statement = select(self.model).where(self.model.status == status)
         result = await db.execute(statement)
-        
+
         return result.scalars().all()
 
     # def get_by_rental_type(
@@ -84,7 +85,7 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
         """Return all contracts of a given rental type."""
         statement = select(self.model).where(self.model.rental_type == rental_type)
         result = await db.execute(statement)
-        
+
         return result.scalars().all()
 
     # def get_by_booking_source(
@@ -94,7 +95,7 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
     # ) -> list[Contract]:
     #     """Return all contracts originating from a given booking source."""
     #     return db.query(self.model).filter(self.model.booking_source == booking_source).all()
-    
+
     async def get_by_booking_source(
         self,
         db: AsyncSession,
@@ -103,7 +104,7 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
         """Return all contracts originating from a given booking source."""
         statement = select(self.model).where(self.model.booking_source == booking_source)
         result = await db.execute(statement)
-        
+
         return result.scalars().all()
 
     # def get_active_contract_by_property(
@@ -123,7 +124,7 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
     #         )
     #         .first()
     #     )
-    
+
     async def get_active_contract_by_property(
         self,
         db: AsyncSession,
@@ -133,16 +134,16 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
         Return the single active contract for a property, if one exists.
         Useful for checking occupancy before creating a new contract.
         """
-        
+
         statement = select(self.model).where(
             self.model.property_id == property_id,
             self.model.status == "ACTIVE",
         )
-        
+
         result = await db.execute(statement)
-        
+
         return result.scalars().first()
-        
+
 
 # Instantiate once — import this instance everywhere
 contract_repo = ContractRepository(Contract)

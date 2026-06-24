@@ -32,9 +32,9 @@ class BaseRepository(Generic[ModelType, CreateSchema, UpdateSchema]):
         query = select(self.model)
         if hasattr(self.model, "created_at"):
             query = query.order_by(self.model.created_at)
-        
+
         query = query.offset(skip).limit(limit)
-        
+
         result = await db.execute(query)
         return result.scalars().all()
 

@@ -7,7 +7,7 @@ if settings.is_test:
     engine = create_async_engine(
         settings.DATABASE_URL,
         pool_pre_ping=False,  # Checks connection health before using it from the pool
-        poolclass=NullPool
+        poolclass=NullPool,
     )
 else:
     engine = create_async_engine(
@@ -50,6 +50,6 @@ async def get_db():
     #     raise
     # finally:
     #     db.close()
-    
+
     async with AsyncSessionLocal() as session:
         yield session
