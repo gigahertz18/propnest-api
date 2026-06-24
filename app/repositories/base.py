@@ -1,5 +1,6 @@
 from typing import Generic, TypeVar, Type
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import Base
 
 from uuid import UUID
@@ -19,24 +20,30 @@ class BaseRepository(Generic[ModelType, CreateSchema, UpdateSchema]):
     def __init__(self, model: Type[ModelType]):
         self.model = model
 
-    def get_all(
+    async def get_all(
         self,
-        db: Session,
+        db: AsyncSession,
         skip: int = 0,
         limit: int = 100,
     ) -> list[ModelType]:
         skip = max(0, skip)
         limit = min(max(0, limit), 100)
 
-        query = db.query(self.model)
+        query = select(self.model)
         if hasattr(self.model, "created_at"):
             query = query.order_by(self.model.created_at)
-        return query.offset(skip).limit(limit).all()
+        
+        query = query.offset(skip).limit(limit)
+        
+        result = await db.execute(query)
+        return result.scalars().all()
 
-    def get_by_id(self, db: Session, id: UUID) -> ModelType | None:
-        return db.query(self.model).filter(self.model.id == id).first()
+    async def get_by_id(self, db: AsyncSession, id: UUID) -> ModelType | None:
+        statement = select(self.model).where(self.model.id == id)
+        result = await db.execute(statement)
+        return result.scalars().first()
 
-    def create(self, db: Session, payload: CreateSchema) -> ModelType:
+    async def create(self, db: AsyncSession, payload: CreateSchema) -> ModelType:
         # Accept either a Pydantic model (with `model_dump`) or a plain dict
         if hasattr(payload, "model_dump"):
             data = payload.model_dump()
@@ -51,17 +58,17 @@ class BaseRepository(Generic[ModelType, CreateSchema, UpdateSchema]):
 
         obj = self.model(**data)
         db.add(obj)
-        db.commit()
-        db.refresh(obj)
+        await db.flush()
+        await db.refresh(obj)
         return obj
 
-    def update(
+    async def update(
         self,
-        db: Session,
+        db: AsyncSession,
         id: UUID,
         payload: UpdateSchema,
     ) -> ModelType | None:
-        obj = self.get_by_id(db, id)
+        obj = await self.get_by_id(db, id)
         if not obj:
             return None
         # Support Pydantic models and plain dicts for updates
@@ -77,14 +84,14 @@ class BaseRepository(Generic[ModelType, CreateSchema, UpdateSchema]):
 
         for field, value in updates.items():
             setattr(obj, field, value)
-        db.commit()
-        db.refresh(obj)
+        await db.flush()
+        await db.refresh(obj)
         return obj
 
-    def delete(self, db: Session, id: UUID) -> ModelType | None:
-        obj = self.get_by_id(db, id)
+    async def delete(self, db: AsyncSession, id: UUID) -> ModelType | None:
+        obj = await self.get_by_id(db, id)
         if not obj:
             return None
-        db.delete(obj)
-        db.commit()
+        await db.delete(obj)
+        await db.commit()
         return obj

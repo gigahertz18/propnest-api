@@ -1,6 +1,9 @@
 import pytest
+import pytest_asyncio
+
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, text
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import sessionmaker
 
 from app.db.session import engine as app_engine
@@ -23,7 +26,18 @@ if not settings.is_test:
 # Use the application's engine so table creation and test sessions
 # operate on the same connection pool and metadata.
 engine = app_engine
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+sync_engine = create_engine(
+    settings.DATABASE_URL.replace("postgresql+asyncpg", "postgresql+psycopg2"),
+    pool_pre_ping=True,  # Checks connection health before using it from the pool
+    pool_size=10,  # Max number of persistent connections
+    max_overflow=20,  # Extra connections allowed beyond pool_size under load
+)
+# TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+TestingSessionLocal = sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
 
 
 # ─── Test DB Setup ────────────────────────────────────────────────────────────
@@ -33,7 +47,7 @@ def _ensure_test_db_exists() -> None:
     Connects to the postgres maintenance database to issue CREATE DATABASE.
     """
     admin_url = (
-        f"postgresql://{settings.DB_USER}:{settings.DB_PASSWORD}" f"@{settings.DB_HOST}:{settings.DB_PORT}/postgres"
+        f"postgresql+psycopg2://{settings.DB_USER}:{settings.DB_PASSWORD}" f"@{settings.DB_HOST}:{settings.DB_PORT}/postgres"
     )
     admin_engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
     with admin_engine.connect() as conn:
@@ -58,39 +72,57 @@ def setup_database():
     Safe to do because this only touches propnest_test, never propnest_db.
     """
     _ensure_test_db_exists()
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.drop_all(bind=sync_engine)
+    Base.metadata.create_all(bind=sync_engine)
     yield
-    Base.metadata.drop_all(bind=engine)
+    Base.metadata.drop_all(bind=sync_engine)
+
+# @pytest_asyncio.fixture(scope="session", autouse=True)
+# async def setup_database():
+#     _ensure_test_db_exists()
+    
+#     async with engine.begin() as conn:
+#         await conn.run_sync(Base.metadata.drop_all)
+#         await conn.run_sync(Base.metadata.create_all)
+    
+#     yield
+    
+#     async with engine.begin() as conn:
+#         await conn.run_sync(Base.metadata.drop_all)
 
 
 # ─── DB Fixture ───────────────────────────────────────────────────────────────
-@pytest.fixture(scope="function")
-def db():
-    """
-    Each test function gets a DB session wrapped in a transaction.
-    After the test, the outer transaction is rolled back — keeping the DB
-    clean even though repository code internally calls db.commit().
+# @pytest.fixture(scope="function")
+# def db():
+#     """
+#     Each test function gets a DB session wrapped in a transaction.
+#     After the test, the outer transaction is rolled back — keeping the DB
+#     clean even though repository code internally calls db.commit().
 
-    Savepoints (nested transactions) ensure inner commits don't break isolation.
-    """
-    connection = engine.connect()
-    transaction = connection.begin()
-    session = TestingSessionLocal(bind=connection)
-    nested = connection.begin_nested()
+#     Savepoints (nested transactions) ensure inner commits don't break isolation.
+#     """
+#     connection = engine.connect()
+#     transaction = connection.begin()
+#     session = TestingSessionLocal(bind=connection)
+#     nested = connection.begin_nested()
 
-    @event.listens_for(session, "after_transaction_end")
-    def restart_savepoint(session, transaction):
-        nonlocal nested
-        if not nested.is_active:
-            nested = connection.begin_nested()
+#     @event.listens_for(session, "after_transaction_end")
+#     def restart_savepoint(session, transaction):
+#         nonlocal nested
+#         if not nested.is_active:
+#             nested = connection.begin_nested()
 
-    yield session
+#     yield session
 
-    session.close()
-    transaction.rollback()
-    connection.close()
-
+#     session.close()
+#     transaction.rollback()
+#     connection.close()
+@pytest_asyncio.fixture
+async def db():
+    async with TestingSessionLocal() as session:
+        yield session
+        
+        await session.rollback()
 
 # ─── Client Fixture ───────────────────────────────────────────────────────────
 @pytest.fixture(scope="function")
@@ -100,7 +132,7 @@ def client(db):
     replaced by the test session.
     """
 
-    def override_get_db():
+    async def override_get_db():
         yield db
 
     app.dependency_overrides[get_db] = override_get_db

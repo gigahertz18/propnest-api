@@ -1,18 +1,31 @@
-from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from sqlalchemy.pool import NullPool
 from app.core.config import settings
 
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_pre_ping=True,  # Checks connection health before using it from the pool
-    pool_size=10,  # Max number of persistent connections
-    max_overflow=20,  # Extra connections allowed beyond pool_size under load
-)
+if settings.is_test:
+    engine = create_async_engine(
+        settings.DATABASE_URL,
+        pool_pre_ping=False,  # Checks connection health before using it from the pool
+        poolclass=NullPool
+    )
+else:
+    engine = create_async_engine(
+        settings.DATABASE_URL,
+        pool_pre_ping=True,  # Checks connection health before using it from the pool
+        pool_size=10,  # Max number of persistent connections
+        max_overflow=20,  # Extra connections allowed beyond pool_size under load
+    )
 
-SessionLocal = sessionmaker(
+# SessionLocal = sessionmaker(
+#     bind=engine,
+#     autocommit=False,
+#     autoflush=False,
+# )
+AsyncSessionLocal = sessionmaker(
     bind=engine,
-    autocommit=False,
-    autoflush=False,
+    class_=AsyncSession,
+    expire_on_commit=False,
 )
 
 
@@ -22,19 +35,21 @@ class Base(DeclarativeBase):
     pass
 
 
-def get_db():
+async def get_db():
     """
-    FastAPI dependency — yields a DB session per request
-    and ensures it's closed afterward.
+    FastAPI dependency — yields a DB async session per request
 
     Usage in a route:
         def my_route(db: Session = Depends(get_db)):
     """
-    db = SessionLocal()
-    try:
-        yield db
-    except Exception:
-        db.rollback()  # Roll back any uncommitted transactions on error
-        raise
-    finally:
-        db.close()
+    # db = SessionLocal()
+    # try:
+    #     yield db
+    # except Exception:
+    #     db.rollback()  # Roll back any uncommitted transactions on error
+    #     raise
+    # finally:
+    #     db.close()
+    
+    async with AsyncSessionLocal() as session:
+        yield session

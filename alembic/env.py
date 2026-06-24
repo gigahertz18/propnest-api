@@ -9,6 +9,8 @@ from app.db.session import Base
 # Import all models here so Alembic detects them for autogenerate
 from app.models import Property  # noqa: F401 — must be imported to be detected
 
+POSTGRESQL_DB_URL = settings.DATABASE_URL.replace("postgresql+asyncpg", "postgresql+psycopg2")
+
 config = context.config
 
 # Load logging config from alembic.ini
@@ -22,7 +24,7 @@ target_metadata = Base.metadata
 def run_migrations_offline() -> None:
     """Run migrations without a live DB connection (generates SQL only)."""
     context.configure(
-        url=settings.DATABASE_URL,
+        url=POSTGRESQL_DB_URL,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -34,7 +36,7 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     """Run migrations against a live DB connection."""
     configuration = config.get_section(config.config_ini_section, {})
-    configuration["sqlalchemy.url"] = settings.DATABASE_URL
+    configuration["sqlalchemy.url"] = POSTGRESQL_DB_URL
 
     connectable = engine_from_config(
         configuration,
