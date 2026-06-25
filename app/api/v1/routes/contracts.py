@@ -2,6 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.schemas.contract import ContractCreate, ContractUpdate, ContractResponse
@@ -19,13 +20,13 @@ router = APIRouter(prefix="/contracts", tags=["Contracts"])
     response_model=list[ContractResponse],
     dependencies=[Depends(require_manager_or_above)],
 )
-def list_contracts(
+async def list_contracts(
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     contract_service: ContractService = Depends(get_contract_service),
 ):
-    return contract_service.list_contracts(db, skip=skip, limit=limit)
+    return await contract_service.list_contracts(db, skip=skip, limit=limit)
 
 
 @router.get(
@@ -33,12 +34,12 @@ def list_contracts(
     response_model=ContractResponse,
     dependencies=[Depends(require_manager_or_above)],
 )
-def get_contract(
+async def get_contract(
     contract_id: UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     contract_service: ContractService = Depends(get_contract_service),
 ):
-    contract = contract_service.get_contract(db, contract_id)
+    contract = await contract_service.get_contract(db, contract_id)
     if not contract:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Contract {contract_id} not found")
     return contract
@@ -49,7 +50,7 @@ def get_contract(
     response_model=ContractResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def create_contract(
+async def create_contract(
     payload: ContractCreate,
     db: Session = Depends(get_db),
     current_user: object = Depends(require_manager_or_above),
@@ -59,7 +60,7 @@ def create_contract(
     try:
         # Resource-level auth: managers may only create contracts for properties
         # they are assigned to. Admins can create for any property.
-        prop = property_service.get_property(db, payload.property_id)
+        prop = await property_service.get_property(db, payload.property_id)
         if (
             prop is not None
             and getattr(current_user, "role", None) == UserRole.MANAGER
@@ -69,7 +70,7 @@ def create_contract(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property"
             )
 
-        return contract_service.create_contract(db, payload)
+        return await contract_service.create_contract(db, payload)
     except ContractActiveError:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Property already has an active contract")
 
@@ -78,27 +79,27 @@ def create_contract(
     "/{contract_id}",
     response_model=ContractResponse,
 )
-def update_contract(
+async def update_contract(
     contract_id: UUID,
     payload: ContractUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: object = Depends(require_manager_or_above),
     property_service: PropertyService = Depends(get_property_service),
     contract_service: ContractService = Depends(get_contract_service),
 ):
     # Fetch contract to perform resource-level authorization check first
-    contract = contract_service.get_contract(db, contract_id)
+    contract = await contract_service.get_contract(db, contract_id)
     if not contract:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Contract {contract_id} not found")
 
     if getattr(current_user, "role", None) == UserRole.MANAGER:
-        prop = property_service.get_property(db, contract.property_id)
+        prop = await property_service.get_property(db, contract.property_id)
         if not prop or prop.manager_id != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property"
             )
 
-    updated = contract_service.update_contract(db, contract_id, payload)
+    updated = await contract_service.update_contract(db, contract_id, payload)
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Contract {contract_id} not found")
     return updated
@@ -108,24 +109,24 @@ def update_contract(
     "/{contract_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def delete_contract(
+async def delete_contract(
     contract_id: UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: object = Depends(require_manager_or_above),
     property_service: PropertyService = Depends(get_property_service),
     contract_service: ContractService = Depends(get_contract_service),
 ):
-    contract = contract_service.get_contract(db, contract_id)
+    contract = await contract_service.get_contract(db, contract_id)
     if not contract:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Contract {contract_id} not found")
 
     if getattr(current_user, "role", None) == UserRole.MANAGER:
-        prop = property_service.get_property(db, contract.property_id)
+        prop = await property_service.get_property(db, contract.property_id)
         if not prop or prop.manager_id != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property"
             )
 
-    deleted = contract_service.delete_contract(db, contract_id)
+    deleted = await contract_service.delete_contract(db, contract_id)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Contract {contract_id} not found")

@@ -6,6 +6,8 @@ from sqlalchemy import create_engine, event, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import sessionmaker
 
+from httpx import AsyncClient, ASGITransport
+
 from app.db.session import engine as app_engine
 
 from app.main import app
@@ -125,17 +127,36 @@ async def db():
         await session.rollback()
 
 # ─── Client Fixture ───────────────────────────────────────────────────────────
-@pytest.fixture(scope="function")
-def client(db):
-    """
-    FastAPI TestClient with the real get_db dependency
-    replaced by the test session.
-    """
+# @pytest.fixture(scope="function")
+# def client(db):
+#     """
+#     FastAPI TestClient with the real get_db dependency
+#     replaced by the test session.
+#     """
+
+#     async def override_get_db():
+#         async with TestingSessionLocal() as session:
+#             yield session
+
+#     app.dependency_overrides[get_db] = override_get_db
+#     with TestClient(app) as c:
+#         yield c
+#     app.dependency_overrides.clear()
+@pytest_asyncio.fixture
+async def client():
 
     async def override_get_db():
-        yield db
+        async with TestingSessionLocal() as session:
+            yield session
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as c:
-        yield c
+
+    transport = ASGITransport(app=app)
+
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test"
+    ) as client:
+        yield client
+
     app.dependency_overrides.clear()

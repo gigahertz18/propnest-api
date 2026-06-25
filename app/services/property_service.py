@@ -1,5 +1,5 @@
 from uuid import UUID
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.property import PropertyRepository
 from app.schemas.property import PropertyCreate, PropertyUpdate
@@ -12,20 +12,20 @@ class PropertyService:
     def __init__(self, property_repo: PropertyRepository) -> None:
         self.property_repo = property_repo
 
-    def list_properties(self, db: Session, skip: int = 0, limit: int = 100) -> list[Property]:
-        return self.property_repo.get_all(db, skip=skip, limit=limit)
+    async def list_properties(self, db: AsyncSession, skip: int = 0, limit: int = 100) -> list[Property]:
+        return await self.property_repo.get_all(db, skip=skip, limit=limit)
 
-    def get_property(self, db: Session, id: UUID) -> Property | None:
-        return self.property_repo.get_by_id(db, id)
+    async def get_property(self, db: AsyncSession, id: UUID) -> Property | None:
+        return await self.property_repo.get_by_id(db, id)
 
-    def create_property(self, db: Session, payload: PropertyCreate) -> Property:
-        return self.property_repo.create(db, payload)
+    async def create_property(self, db: AsyncSession, payload: PropertyCreate) -> Property:
+        return await self.property_repo.create(db, payload)
 
-    def update_property(self, db: Session, id: UUID, payload: PropertyUpdate) -> Property | None:
-        return self.property_repo.update(db, id, payload)
+    async def update_property(self, db: AsyncSession, id: UUID, payload: PropertyUpdate) -> Property | None:
+        return await self.property_repo.update(db, id, payload)
 
-    def delete_property(self, db: Session, id: UUID) -> Property | None:
-        return self.property_repo.delete(db, id)
+    async def delete_property(self, db: AsyncSession, id: UUID) -> Property | None:
+        return await self.property_repo.delete(db, id)
 
-    def get_by_status(self, db: Session, status: PropertyStatus) -> list[Property]:
-        return self.property_repo.get_by_status(db, status)
+    async def get_by_status(self, db: AsyncSession, status: PropertyStatus) -> list[Property]:
+        return await self.property_repo.get_by_status(db, status)
