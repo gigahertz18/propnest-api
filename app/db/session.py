@@ -17,11 +17,6 @@ else:
         max_overflow=20,  # Extra connections allowed beyond pool_size under load
     )
 
-# SessionLocal = sessionmaker(
-#     bind=engine,
-#     autocommit=False,
-#     autoflush=False,
-# )
 AsyncSessionLocal = sessionmaker(
     bind=engine,
     class_=AsyncSession,
@@ -42,14 +37,10 @@ async def get_db():
     Usage in a route:
         def my_route(db: Session = Depends(get_db)):
     """
-    # db = SessionLocal()
-    # try:
-    #     yield db
-    # except Exception:
-    #     db.rollback()  # Roll back any uncommitted transactions on error
-    #     raise
-    # finally:
-    #     db.close()
-
     async with AsyncSessionLocal() as session:
-        yield session
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise

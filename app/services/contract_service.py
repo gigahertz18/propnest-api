@@ -27,7 +27,9 @@ class ContractService:
         # domain-specific `ContractActiveError` so callers get a consistent
         # response without depending on a fragile pre-check.
         try:
-            return await self.contract_repo.create(db, payload)
+            contract = await self.contract_repo.create(db, payload)
+            await db.commit()
+            return contract
         except IntegrityError as e:
             msg = str(e.orig) if getattr(e, "orig", None) is not None else str(e)
             if "uq_active_contract_property" in msg or ("duplicate key value" in msg and "property_id" in msg):
@@ -35,10 +37,14 @@ class ContractService:
             raise
 
     async def update_contract(self, db: AsyncSession, id: UUID, payload: ContractUpdate) -> Contract | None:
-        return await self.contract_repo.update(db, id, payload)
+        contract = await self.contract_repo.update(db, id, payload)
+        await db.commit()
+        return contract
 
     async def delete_contract(self, db: AsyncSession, id: UUID) -> Contract | None:
-        return await self.contract_repo.delete(db, id)
+        contract = await self.contract_repo.delete(db, id)
+        await db.commit()
+        return contract
 
     async def get_by_property(self, db: AsyncSession, property_id: UUID) -> list[Contract]:
         return await self.contract_repo.get_by_property(db, property_id)

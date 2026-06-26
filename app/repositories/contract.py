@@ -1,7 +1,5 @@
 import uuid
-from sqlalchemy import select
 
-# from sqlalchemy.orm import AsyncSession
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.base import BaseRepository
@@ -21,11 +19,8 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
         property_id: uuid.UUID,
     ) -> list[Contract]:
         """Return all contracts linked to a given property."""
-        
-        return await self._all(
-            db,
-            self.model.property_id == property_id
-        )
+
+        return await self._all(db, self.model.property_id == property_id)
 
     async def get_by_tenant(
         self,
@@ -33,10 +28,7 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
         tenant_id: uuid.UUID,
     ) -> list[Contract]:
         """Return all contracts linked to a given tenant."""
-        return await self._all(
-            db,
-            self.model.tenant_id == tenant_id
-        )
+        return await self._all(db, self.model.tenant_id == tenant_id)
 
     async def get_by_status(
         self,
@@ -45,10 +37,7 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
     ) -> list[Contract]:
         """Return all contracts with a given status (e.g. ACTIVE, EXPIRED)."""
 
-        return await self._all(
-            db,
-            self.model.status == status
-        )
+        return await self._all(db, self.model.status == status)
 
     async def get_by_rental_type(
         self,
@@ -57,10 +46,7 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
     ) -> list[Contract]:
         """Return all contracts of a given rental type."""
 
-        return await self._all(
-            db,
-            self.model.rental_type == rental_type
-        )
+        return await self._all(db, self.model.rental_type == rental_type)
 
     async def get_by_booking_source(
         self,
@@ -68,11 +54,8 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
         booking_source: str,
     ) -> list[Contract]:
         """Return all contracts originating from a given booking source."""
-        
-        return await self._all(
-            db,
-            self.model.booking_source == booking_source
-        )
+
+        return await self._all(db, self.model.booking_source == booking_source)
 
     async def get_active_contract_by_property(
         self,
@@ -84,11 +67,7 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
         Useful for checking occupancy before creating a new contract.
         """
 
-        return await self._first(
-            db,
-            self.model.property_id == property_id,
-            self.model.status == "ACTIVE"
-        )
+        return await self._first(db, self.model.property_id == property_id, self.model.status == "ACTIVE")
 
 
 # Instantiate once — import this instance everywhere

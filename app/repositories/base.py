@@ -19,30 +19,30 @@ class BaseRepository(Generic[ModelType, CreateSchema, UpdateSchema]):
 
     def __init__(self, model: Type[ModelType]):
         self.model = model
-        
+
     def _build_query(
         self,
         *criteria,
         order_by=None,
         offset: int | None = None,
-        limit: int | None = None, 
-    ) -> Select : 
+        limit: int | None = None,
+    ) -> Select:
         statement = select(self.model)
-        
+
         if criteria:
             statement = statement.where(*criteria)
-        
+
         if order_by is not None:
             statement = statement.order_by(order_by)
         elif hasattr(self.model, "created_at"):
             statement = statement.order_by(self.model.created_at)
-        
+
         if offset is not None:
             statement = statement.offset(offset)
-        
+
         if limit is not None:
             statement = statement.limit(limit)
-        
+
         return statement
 
     async def _first(
@@ -52,9 +52,9 @@ class BaseRepository(Generic[ModelType, CreateSchema, UpdateSchema]):
         **kwargs,
     ) -> ModelType | None:
         result = await db.execute(self._build_query(*criteria, **kwargs))
-        
+
         return result.scalars().first()
-    
+
     async def _all(
         self,
         db: AsyncSession,
@@ -62,10 +62,9 @@ class BaseRepository(Generic[ModelType, CreateSchema, UpdateSchema]):
         **kwargs,
     ) -> ModelType | None:
         result = await db.execute(self._build_query(*criteria, **kwargs))
-        
+
         return result.scalars().all()
-    
-    
+
     async def get_all(
         self,
         db: AsyncSession,
@@ -137,5 +136,4 @@ class BaseRepository(Generic[ModelType, CreateSchema, UpdateSchema]):
         if not obj:
             return None
         await db.delete(obj)
-        await db.commit()
         return obj

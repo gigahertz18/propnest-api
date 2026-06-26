@@ -1,7 +1,6 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -52,7 +51,7 @@ async def get_contract(
 )
 async def create_contract(
     payload: ContractCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: object = Depends(require_manager_or_above),
     property_service: PropertyService = Depends(get_property_service),
     contract_service: ContractService = Depends(get_contract_service),

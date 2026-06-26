@@ -16,8 +16,6 @@ class TestContractsResourceAuth:
 
         # Create a property assigned to manager2
         prop = await make_property_model(db, manager_id=manager2.id)
-        
-        await db.commit()
 
         # Ensure request from manager1 is forbidden for this property
         set_override(get_current_user, lambda: manager1)
@@ -40,7 +38,6 @@ class TestContractsResourceAuth:
         # Assign the property to manager1 and retry — should succeed
         prop.manager_id = manager1.id
         db.add(prop)
-        await db.commit()
 
         response = await client.post("/api/v1/contracts/", json=payload)
         assert response.status_code == 201

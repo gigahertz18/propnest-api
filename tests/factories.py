@@ -76,7 +76,7 @@ async def make_user_model(db, **kwargs) -> User:
     return obj
 
 
-def make_admin_model(db, **kwargs) -> User:
+async def make_admin_model(db, **kwargs) -> User:
     """Shortcut to create an admin user in the test DB."""
     defaults = {
         "full_name": "Admin User",
@@ -85,7 +85,7 @@ def make_admin_model(db, **kwargs) -> User:
         "role": UserRole.ADMIN,
     }
     defaults.update(kwargs)
-    return make_user_model(db, **defaults)
+    return await make_user_model(db, **defaults)
 
 
 # ─── Tenant ───────────────────────────────────────────────────────────────────

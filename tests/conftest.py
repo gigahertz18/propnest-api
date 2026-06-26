@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import sessionmaker
 
 from httpx import AsyncClient, ASGITransport
+from unittest.mock import AsyncMock
 
 from app.db.session import engine as app_engine
 
@@ -34,7 +35,7 @@ sync_engine = create_engine(
     pool_size=10,  # Max number of persistent connections
     max_overflow=20,  # Extra connections allowed beyond pool_size under load
 )
-# TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 TestingSessionLocal = sessionmaker(
     bind=engine,
     class_=AsyncSession,
@@ -79,75 +80,50 @@ def setup_database():
     yield
     Base.metadata.drop_all(bind=sync_engine)
 
-# @pytest_asyncio.fixture(scope="session", autouse=True)
-# async def setup_database():
-#     _ensure_test_db_exists()
-    
-#     async with engine.begin() as conn:
-#         await conn.run_sync(Base.metadata.drop_all)
-#         await conn.run_sync(Base.metadata.create_all)
-    
-#     yield
-    
-#     async with engine.begin() as conn:
-#         await conn.run_sync(Base.metadata.drop_all)
-
 
 # ─── DB Fixture ───────────────────────────────────────────────────────────────
-# @pytest.fixture(scope="function")
-# def db():
-#     """
-#     Each test function gets a DB session wrapped in a transaction.
-#     After the test, the outer transaction is rolled back — keeping the DB
-#     clean even though repository code internally calls db.commit().
 
-#     Savepoints (nested transactions) ensure inner commits don't break isolation.
-#     """
-#     connection = engine.connect()
-#     transaction = connection.begin()
-#     session = TestingSessionLocal(bind=connection)
-#     nested = connection.begin_nested()
 
-#     @event.listens_for(session, "after_transaction_end")
-#     def restart_savepoint(session, transaction):
-#         nonlocal nested
-#         if not nested.is_active:
-#             nested = connection.begin_nested()
-
-#     yield session
-
-#     session.close()
-#     transaction.rollback()
-#     connection.close()
 @pytest_asyncio.fixture
 async def db():
-    async with TestingSessionLocal() as session:
+    connection = await engine.connect()
+    
+    #Outer transaction
+    txn = await connection.begin()
+    
+    session = AsyncSession(
+        bind=connection,
+        expire_on_commit=False,
+    )
+
+    # First savepoint
+    await session.begin_nested()
+    
+    @event.listens_for(session.sync_session, "after_transaction_end")
+    def restart_savepoint(session_, trans):
+        """
+        Whenever production code calls session.commit(),
+        SQLAlchemy releases the SAVEPOINT.
+
+        Automatically start another SAVEPOINT so the
+        remainder of the test is still isolated.
+        """
+        if txn.is_active and not session_.in_nested_transaction():
+            session_.begin_nested()
+    
+    try:
         yield session
-        
-        await session.rollback()
-
+    finally:
+        await session.close()
+        await txn.rollback()
+        await connection.close()
 # ─── Client Fixture ───────────────────────────────────────────────────────────
-# @pytest.fixture(scope="function")
-# def client(db):
-#     """
-#     FastAPI TestClient with the real get_db dependency
-#     replaced by the test session.
-#     """
 
-#     async def override_get_db():
-#         async with TestingSessionLocal() as session:
-#             yield session
-
-#     app.dependency_overrides[get_db] = override_get_db
-#     with TestClient(app) as c:
-#         yield c
-#     app.dependency_overrides.clear()
 @pytest_asyncio.fixture
-async def client():
+async def client(db):
 
     async def override_get_db():
-        async with TestingSessionLocal() as session:
-            yield session
+        yield db
 
     app.dependency_overrides[get_db] = override_get_db
 
@@ -160,3 +136,9 @@ async def client():
         yield client
 
     app.dependency_overrides.clear()
+
+
+# ─── Mock DB Fixture ───────────────────────────────────────────────────────────
+@pytest.fixture
+def mock_db():
+    return AsyncMock(spec=AsyncSession)
