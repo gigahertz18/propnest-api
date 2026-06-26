@@ -1,4 +1,3 @@
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.base import BaseRepository
 from app.models.property import Property, PropertyStatus
@@ -16,10 +15,9 @@ class PropertyRepository(BaseRepository[Property, PropertyCreate, PropertyUpdate
         db: AsyncSession,
         status: PropertyStatus,
     ) -> list[Property]:
-        
-        statement = select(self.model).where(self.model.status == status)
-        result = await db.execute(statement)
-        return result.scalars().all()
+
+        return await self._all(db, self.model.status == status)
+
 
 # Instantiate once — import this instance everywhere
 property_repo = PropertyRepository(Property)

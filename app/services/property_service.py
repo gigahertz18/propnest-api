@@ -19,13 +19,19 @@ class PropertyService:
         return await self.property_repo.get_by_id(db, id)
 
     async def create_property(self, db: AsyncSession, payload: PropertyCreate) -> Property:
-        return await self.property_repo.create(db, payload)
+        prop = await self.property_repo.create(db, payload)
+        await db.commit()
+        return prop
 
     async def update_property(self, db: AsyncSession, id: UUID, payload: PropertyUpdate) -> Property | None:
-        return await self.property_repo.update(db, id, payload)
+        prop = await self.property_repo.update(db, id, payload)
+        await db.commit()
+        return prop
 
     async def delete_property(self, db: AsyncSession, id: UUID) -> Property | None:
-        return await self.property_repo.delete(db, id)
+        prop = await self.property_repo.delete(db, id)
+        await db.commit()
+        return prop
 
     async def get_by_status(self, db: AsyncSession, status: PropertyStatus) -> list[Property]:
         return await self.property_repo.get_by_status(db, status)
