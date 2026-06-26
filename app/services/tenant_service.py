@@ -1,6 +1,6 @@
 from datetime import date
 from uuid import UUID
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.tenant import TenantRepository
 from app.schemas.tenant import TenantCreate, TenantUpdate
@@ -13,32 +13,38 @@ class TenantService:
     def __init__(self, tenant_repo: TenantRepository) -> None:
         self.tenant_repo = tenant_repo
 
-    def list_tenants(self, db: Session, skip: int = 0, limit: int = 100) -> list[Tenant]:
-        return self.tenant_repo.get_all(db, skip=skip, limit=limit)
+    async def list_tenants(self, db: AsyncSession, skip: int = 0, limit: int = 100) -> list[Tenant]:
+        return await self.tenant_repo.get_all(db, skip=skip, limit=limit)
 
-    def get_tenant(self, db: Session, id: UUID) -> Tenant | None:
-        return self.tenant_repo.get_by_id(db, id)
+    async def get_tenant(self, db: AsyncSession, id: UUID) -> Tenant | None:
+        return await self.tenant_repo.get_by_id(db, id)
 
-    def create_tenant(self, db: Session, payload: TenantCreate) -> Tenant:
-        return self.tenant_repo.create(db, payload)
+    async def create_tenant(self, db: AsyncSession, payload: TenantCreate) -> Tenant:
+        tenant = await self.tenant_repo.create(db, payload)
+        await db.commit()
+        return tenant
 
-    def update_tenant(self, db: Session, id: UUID, payload: TenantUpdate) -> Tenant | None:
-        return self.tenant_repo.update(db, id, payload)
+    async def update_tenant(self, db: AsyncSession, id: UUID, payload: TenantUpdate) -> Tenant | None:
+        tenant = await self.tenant_repo.update(db, id, payload)
+        await db.commit()
+        return tenant
 
-    def delete_tenant(self, db: Session, id: UUID) -> Tenant | None:
-        return self.tenant_repo.delete(db, id)
+    async def delete_tenant(self, db: AsyncSession, id: UUID) -> Tenant | None:
+        tenant = await self.tenant_repo.delete(db, id)
+        await db.commit()
+        return tenant
 
-    def get_by_email(self, db: Session, email: str) -> Tenant | None:
-        return self.tenant_repo.get_by_email(db, email)
+    async def get_by_email(self, db: AsyncSession, email: str) -> Tenant | None:
+        return await self.tenant_repo.get_by_email(db, email)
 
-    def get_by_phone_number(self, db: Session, phone_number: str) -> Tenant | None:
-        return self.tenant_repo.get_by_phone_number(db, phone_number)
+    async def get_by_phone_number(self, db: AsyncSession, phone_number: str) -> Tenant | None:
+        return await self.tenant_repo.get_by_phone_number(db, phone_number)
 
-    def get_by_full_name(self, db: Session, full_name: str) -> list[Tenant]:
-        return self.tenant_repo.get_by_full_name(db, full_name)
+    async def get_by_full_name(self, db: AsyncSession, full_name: str) -> list[Tenant]:
+        return await self.tenant_repo.get_by_full_name(db, full_name)
 
-    def get_by_occupation(self, db: Session, occupation: str) -> list[Tenant]:
-        return self.tenant_repo.get_by_occupation(db, occupation)
+    async def get_by_occupation(self, db: AsyncSession, occupation: str) -> list[Tenant]:
+        return await self.tenant_repo.get_by_occupation(db, occupation)
 
-    def get_by_date_of_birth(self, db: Session, date_of_birth: date) -> list[Tenant]:
-        return self.tenant_repo.get_by_date_of_birth(db, date_of_birth)
+    async def get_by_date_of_birth(self, db: AsyncSession, date_of_birth: date) -> list[Tenant]:
+        return await self.tenant_repo.get_by_date_of_birth(db, date_of_birth)

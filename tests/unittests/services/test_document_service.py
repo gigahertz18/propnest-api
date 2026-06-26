@@ -10,7 +10,7 @@ from app.schemas.document import DocumentCreate
 from tests.factories import make_document
 
 
-def test_document_service_translate_storage_failures(db):
+async def test_document_service_translate_storage_failures(db):
     """
     Storage failures during upload must surface as DocumentUploadError.
     file_obj is required - without it, no upload is attempted.
@@ -28,7 +28,7 @@ def test_document_service_translate_storage_failures(db):
     file_obj = SimpleNamespace(content_type="application/pdf", file=BytesIO(b"fake pdf content"))
 
     with pytest.raises(DocumentUploadError):
-        doc_service.create_document(
+        await doc_service.create_document(
             db,
             payload,
             storage_client=FailingStorage(),

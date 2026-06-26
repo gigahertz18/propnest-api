@@ -1,7 +1,7 @@
 import logging
 
 from uuid import UUID
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from io import BytesIO
 
 from app.repositories.document import DocumentRepository
@@ -37,13 +37,15 @@ class DocumentService:
     def __init__(self, document_repo: DocumentRepository) -> None:
         self.document_repo = document_repo
 
-    def list_documents(self, db: Session, skip: int = 0, limit: int = 100) -> list[Document]:
-        return self.document_repo.get_all(db, skip=skip, limit=limit)
+    async def list_documents(self, db: AsyncSession, skip: int = 0, limit: int = 100) -> list[Document]:
+        return await self.document_repo.get_all(db, skip=skip, limit=limit)
 
-    def get_document(self, db: Session, id: UUID) -> Document | None:
-        return self.document_repo.get_by_id(db, id)
+    async def get_document(self, db: AsyncSession, id: UUID) -> Document | None:
+        return await self.document_repo.get_by_id(db, id)
 
-    def create_document(self, db: Session, payload: DocumentCreate, storage_client=None, file_obj=None) -> Document:
+    async def create_document(
+        self, db: AsyncSession, payload: DocumentCreate, storage_client=None, file_obj=None
+    ) -> Document:
         """Create a document record and optionally store the file in external storage.
 
         - `storage_client` is an optional MinIO/S3-like client. Tests may pass
@@ -61,29 +63,35 @@ class DocumentService:
         # Step 2: write DB record only after upload succeeds
         # If this failes, attempt to clean up the orphaned storage object
         try:
-            return self.document_repo.create(db, payload)
+            document = await self.document_repo.create(db, payload)
+            await db.commit()
+            return document
         except Exception:
             if storage_client is not None and file_obj is not None:
                 self._delete_from_storage(storage_client, payload.file_name)
             raise
 
-    def update_document(self, db: Session, id: UUID, payload: DocumentUpdate) -> Document | None:
-        return self.document_repo.update(db, id, payload)
+    async def update_document(self, db: AsyncSession, id: UUID, payload: DocumentUpdate) -> Document | None:
+        doc = await self.document_repo.update(db, id, payload)
+        await db.commit()
+        return doc
 
-    def delete_document(self, db: Session, id: UUID) -> Document | None:
-        return self.document_repo.delete(db, id)
+    async def delete_document(self, db: AsyncSession, id: UUID) -> Document | None:
+        doc = await self.document_repo.delete(db, id)
+        await db.commit()
+        return doc
 
-    def get_by_contract(self, db: Session, contract_id: UUID) -> list[Document]:
-        return self.document_repo.get_by_contract(db, contract_id)
+    async def get_by_contract(self, db: AsyncSession, contract_id: UUID) -> list[Document]:
+        return await self.document_repo.get_by_contract(db, contract_id)
 
-    def get_by_property(self, db: Session, property_id: UUID) -> list[Document]:
-        return self.document_repo.get_by_property(db, property_id)
+    async def get_by_property(self, db: AsyncSession, property_id: UUID) -> list[Document]:
+        return await self.document_repo.get_by_property(db, property_id)
 
-    def get_by_tenant(self, db: Session, tenant_id: UUID) -> list[Document]:
-        return self.document_repo.get_by_tenant(db, tenant_id)
+    async def get_by_tenant(self, db: AsyncSession, tenant_id: UUID) -> list[Document]:
+        return await self.document_repo.get_by_tenant(db, tenant_id)
 
-    def get_by_type(self, db: Session, file_type: str) -> list[Document]:
-        return self.document_repo.get_by_type(db, file_type)
+    async def get_by_type(self, db: AsyncSession, file_type: str) -> list[Document]:
+        return await self.document_repo.get_by_type(db, file_type)
 
     def _build_object_url(self, file_name: str) -> str:
         """

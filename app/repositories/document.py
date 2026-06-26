@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.base import BaseRepository
 from app.models.document import Document
@@ -12,37 +12,37 @@ class DocumentRepository(BaseRepository[Document, DocumentCreate, DocumentUpdate
     get_all, get_by_id, create, update, delete are inherited — don't repeat them.
     """
 
-    def get_by_contract(
+    async def get_by_contract(
         self,
-        db: Session,
+        db: AsyncSession,
         contract_id: uuid.UUID,
     ) -> list[Document]:
         """Return all documents linked to a given contract."""
-        return db.query(self.model).filter(self.model.contract_id == contract_id).all()
+        return await self._all(db, self.model.contract_id == contract_id)
 
-    def get_by_property(
+    async def get_by_property(
         self,
-        db: Session,
+        db: AsyncSession,
         property_id: uuid.UUID,
     ) -> list[Document]:
         """Return all documents linked to a given property."""
-        return db.query(self.model).filter(self.model.property_id == property_id).all()
+        return await self._all(db, self.model.property_id == property_id)
 
-    def get_by_tenant(
+    async def get_by_tenant(
         self,
-        db: Session,
+        db: AsyncSession,
         tenant_id: uuid.UUID,
     ) -> list[Document]:
         """Return all documents linked to a given tenant."""
-        return db.query(self.model).filter(self.model.tenant_id == tenant_id).all()
+        return await self._all(db, self.model.tenant_id == tenant_id)
 
-    def get_by_type(
+    async def get_by_type(
         self,
-        db: Session,
+        db: AsyncSession,
         file_type: str,
     ) -> list[Document]:
         """Return all documents of a given type (e.g. LEASE_AGREEMENT, ID_PROOF)."""
-        return db.query(self.model).filter(self.model.file_type == file_type).all()
+        return await self._all(db, self.model.file_type == file_type)
 
 
 # Instantiate once — import this instance everywhere

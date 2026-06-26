@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.schemas.tenant import TenantCreate, TenantUpdate, TenantResponse
@@ -12,22 +12,22 @@ router = APIRouter(prefix="/tenants", tags=["Tenants"])
 
 
 @router.get("/", response_model=list[TenantResponse], dependencies=[Depends(get_current_user)])
-def list_tenants(
+async def list_tenants(
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     tenant_service: TenantService = Depends(get_tenant_service),
 ):
-    return tenant_service.list_tenants(db, skip=skip, limit=limit)
+    return await tenant_service.list_tenants(db, skip=skip, limit=limit)
 
 
 @router.get("/{tenant_id}", response_model=TenantResponse, dependencies=[Depends(get_current_user)])
-def get_tenant(
+async def get_tenant(
     tenant_id: UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     tenant_service: TenantService = Depends(get_tenant_service),
 ):
-    tenant = tenant_service.get_tenant(db, tenant_id)
+    tenant = await tenant_service.get_tenant(db, tenant_id)
     if not tenant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Tenant {tenant_id} not found")
     return tenant
@@ -39,12 +39,12 @@ def get_tenant(
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(get_current_user)],
 )
-def create_tenant(
+async def create_tenant(
     payload: TenantCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     tenant_service: TenantService = Depends(get_tenant_service),
 ):
-    return tenant_service.create_tenant(db, payload)
+    return await tenant_service.create_tenant(db, payload)
 
 
 @router.patch(
@@ -52,13 +52,13 @@ def create_tenant(
     response_model=TenantResponse,
     dependencies=[Depends(get_current_user)],
 )
-def update_tenant(
+async def update_tenant(
     tenant_id: UUID,
     payload: TenantUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     tenant_service: TenantService = Depends(get_tenant_service),
 ):
-    tenant = tenant_service.update_tenant(db, tenant_id, payload)
+    tenant = await tenant_service.update_tenant(db, tenant_id, payload)
     if not tenant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Tenant {tenant_id} not found")
     return tenant
@@ -69,11 +69,11 @@ def update_tenant(
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(require_manager_or_above)],
 )
-def delete_tenant(
+async def delete_tenant(
     tenant_id: UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     tenant_service: TenantService = Depends(get_tenant_service),
 ):
-    tenant = tenant_service.delete_tenant(db, tenant_id)
+    tenant = await tenant_service.delete_tenant(db, tenant_id)
     if not tenant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Tenant {tenant_id} not found")

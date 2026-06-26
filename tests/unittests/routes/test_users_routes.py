@@ -1,6 +1,5 @@
 import pytest
 import uuid
-from unittest.mock import AsyncMock
 from app.core.dependencies import get_user_service, get_current_user,  require_admin
 from app.services.exceptions import EmailAlreadyExistsError, UserNotFoundError
 class FakeService:

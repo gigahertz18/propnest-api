@@ -1,50 +1,50 @@
+from datetime import date
 from app.services.tenant_service import TenantService
 
 
-def test_tenant_service_delegates_to_repo_methods():
+async def test_tenant_service_delegates_to_repo_methods(mock_db):
     class Repo:
-        def get_all(self, db, skip=0, limit=100):
+        async def get_all(self, db, skip=0, limit=100):
             return ["t1"]
 
-        def get_by_id(self, db, id):
+        async def get_by_id(self, db, id):
             return "byid"
 
-        def create(self, db, payload):
+        async def create(self, db, payload):
             return "created"
 
-        def update(self, db, id, payload):
+        async def update(self, db, id, payload):
             return "updated"
 
-        def delete(self, db, id):
+        async def delete(self, db, id):
             return "deleted"
 
-        def get_by_email(self, db, email):
+        async def get_by_email(self, db, email):
             return "email"
 
-        def get_by_phone_number(self, db, phone_number):
+        async def get_by_phone_number(self, db, phone_number):
             return "phone"
 
-        def get_by_full_name(self, db, full_name):
+        async def get_by_full_name(self, db, full_name):
             return ["name"]
 
-        def get_by_occupation(self, db, occupation):
+        async def get_by_occupation(self, db, occupation):
             return ["occ"]
 
-        def get_by_date_of_birth(self, db, dob):
+        async def get_by_date_of_birth(self, db, dob):
             return ["dob"]
 
     repo = Repo()
     svc = TenantService(tenant_repo=repo)
 
-    assert svc.list_tenants(db=None) == ["t1"]
-    assert svc.get_tenant(db=None, id=1) == "byid"
-    assert svc.create_tenant(db=None, payload=None) == "created"
-    assert svc.update_tenant(db=None, id=1, payload=None) == "updated"
-    assert svc.delete_tenant(db=None, id=1) == "deleted"
-    assert svc.get_by_email(db=None, email="e") == "email"
-    assert svc.get_by_phone_number(db=None, phone_number="p") == "phone"
-    assert svc.get_by_full_name(db=None, full_name="n") == ["name"]
-    assert svc.get_by_occupation(db=None, occupation="o") == ["occ"]
-    from datetime import date
+    assert await svc.list_tenants(db=mock_db) == ["t1"]
+    assert await svc.get_tenant(db=mock_db, id=1) == "byid"
+    assert await svc.create_tenant(db=mock_db, payload=None) == "created"
+    assert await svc.update_tenant(db=mock_db, id=1, payload=None) == "updated"
+    assert await svc.delete_tenant(db=mock_db, id=1) == "deleted"
+    assert await svc.get_by_email(db=mock_db, email="e") == "email"
+    assert await svc.get_by_phone_number(db=mock_db, phone_number="p") == "phone"
+    assert await svc.get_by_full_name(db=mock_db, full_name="n") == ["name"]
+    assert await svc.get_by_occupation(db=mock_db, occupation="o") == ["occ"]
 
-    assert svc.get_by_date_of_birth(db=None, date_of_birth=date(2000, 1, 1)) == ["dob"]
+    assert await svc.get_by_date_of_birth(db=mock_db, date_of_birth=date(2000, 1, 1)) == ["dob"]
