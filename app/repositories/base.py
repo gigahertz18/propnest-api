@@ -1,5 +1,6 @@
 from typing import Generic, TypeVar, Type
-from sqlalchemy.orm import Session
+from sqlalchemy import select, Select
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import Base
 
 from uuid import UUID
@@ -19,24 +20,73 @@ class BaseRepository(Generic[ModelType, CreateSchema, UpdateSchema]):
     def __init__(self, model: Type[ModelType]):
         self.model = model
 
-    def get_all(
+    def _build_query(
         self,
-        db: Session,
+        *criteria,
+        order_by=None,
+        offset: int | None = None,
+        limit: int | None = None,
+    ) -> Select:
+        statement = select(self.model)
+
+        if criteria:
+            statement = statement.where(*criteria)
+
+        if order_by is not None:
+            statement = statement.order_by(order_by)
+        elif hasattr(self.model, "created_at"):
+            statement = statement.order_by(self.model.created_at)
+
+        if offset is not None:
+            statement = statement.offset(offset)
+
+        if limit is not None:
+            statement = statement.limit(limit)
+
+        return statement
+
+    async def _first(
+        self,
+        db: AsyncSession,
+        *criteria,
+        **kwargs,
+    ) -> ModelType | None:
+        result = await db.execute(self._build_query(*criteria, **kwargs))
+
+        return result.scalars().first()
+
+    async def _all(
+        self,
+        db: AsyncSession,
+        *criteria,
+        **kwargs,
+    ) -> ModelType | None:
+        result = await db.execute(self._build_query(*criteria, **kwargs))
+
+        return result.scalars().all()
+
+    async def get_all(
+        self,
+        db: AsyncSession,
         skip: int = 0,
         limit: int = 100,
     ) -> list[ModelType]:
         skip = max(0, skip)
         limit = min(max(0, limit), 100)
 
-        query = db.query(self.model)
-        if hasattr(self.model, "created_at"):
-            query = query.order_by(self.model.created_at)
-        return query.offset(skip).limit(limit).all()
+        return await self._all(
+            db,
+            offset=skip,
+            limit=limit,
+        )
 
-    def get_by_id(self, db: Session, id: UUID) -> ModelType | None:
-        return db.query(self.model).filter(self.model.id == id).first()
+    async def get_by_id(self, db: AsyncSession, id: UUID) -> ModelType | None:
+        return await self._first(
+            db,
+            self.model.id == id,
+        )
 
-    def create(self, db: Session, payload: CreateSchema) -> ModelType:
+    async def create(self, db: AsyncSession, payload: CreateSchema) -> ModelType:
         # Accept either a Pydantic model (with `model_dump`) or a plain dict
         if hasattr(payload, "model_dump"):
             data = payload.model_dump()
@@ -51,17 +101,17 @@ class BaseRepository(Generic[ModelType, CreateSchema, UpdateSchema]):
 
         obj = self.model(**data)
         db.add(obj)
-        db.commit()
-        db.refresh(obj)
+        await db.flush()
+        await db.refresh(obj)
         return obj
 
-    def update(
+    async def update(
         self,
-        db: Session,
+        db: AsyncSession,
         id: UUID,
         payload: UpdateSchema,
     ) -> ModelType | None:
-        obj = self.get_by_id(db, id)
+        obj = await self.get_by_id(db, id)
         if not obj:
             return None
         # Support Pydantic models and plain dicts for updates
@@ -77,14 +127,13 @@ class BaseRepository(Generic[ModelType, CreateSchema, UpdateSchema]):
 
         for field, value in updates.items():
             setattr(obj, field, value)
-        db.commit()
-        db.refresh(obj)
+        await db.flush()
+        await db.refresh(obj)
         return obj
 
-    def delete(self, db: Session, id: UUID) -> ModelType | None:
-        obj = self.get_by_id(db, id)
+    async def delete(self, db: AsyncSession, id: UUID) -> ModelType | None:
+        obj = await self.get_by_id(db, id)
         if not obj:
             return None
-        db.delete(obj)
-        db.commit()
+        await db.delete(obj)
         return obj

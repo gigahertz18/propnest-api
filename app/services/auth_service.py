@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import verify_password, create_access_token
 from app.repositories.user import UserRepository
@@ -23,7 +23,7 @@ class AuthService:
     def __init__(self, user_repo: UserRepository) -> None:
         self.user_repo = user_repo
 
-    def login(self, db: Session, identifier: str, password: str) -> TokenResponse:
+    async def login(self, db: AsyncSession, identifier: str, password: str) -> TokenResponse:
         """
         Authenticate a user by username or email + password.
 
@@ -34,7 +34,7 @@ class AuthService:
         Returns:
             TokenResponse with a signed JWT access token.
         """
-        user = self.user_repo.get_by_identifier(db, identifier)
+        user = await self.user_repo.get_by_identifier(db, identifier)
 
         if not user:
             # run a dummy verify to mitigate timing attacks for non-existent users

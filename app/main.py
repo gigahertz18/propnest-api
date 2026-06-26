@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI):
     )
     logger.info("%s started in [%s] mode", settings.APP_NAME, settings.ENV)
     yield
-    engine.dispose()
+    await engine.dispose()
     logger.info("Database connections closed")
 
 
@@ -37,8 +37,8 @@ async def _wait_for_db(max_retries: int, retry_interval: int) -> None:
     """
     for attempt in range(1, max_retries + 1):
         try:
-            with engine.connect() as conn:
-                conn.execute(text("SELECT 1"))
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
             logger.info("Database is ready")
             return
         except Exception as e:

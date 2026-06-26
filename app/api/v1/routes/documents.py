@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.schemas.document import DocumentCreate, DocumentUpdate, DocumentResponse
@@ -27,22 +27,22 @@ router = APIRouter(prefix="/documents", tags=["Documents"])
     response_model=list[DocumentResponse],
     dependencies=[Depends(get_current_user)],
 )
-def list_documents(
+async def list_documents(
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     document_service: DocumentService = Depends(get_document_service),
 ):
-    return document_service.list_documents(db, skip=skip, limit=limit)
+    return await document_service.list_documents(db, skip=skip, limit=limit)
 
 
 @router.get("/{document_id}", response_model=DocumentResponse, dependencies=[Depends(get_current_user)])
-def get_document(
+async def get_document(
     document_id: UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     document_service: DocumentService = Depends(get_document_service),
 ):
-    document = document_service.get_document(db, document_id)
+    document = await document_service.get_document(db, document_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Document {document_id} not found")
     return document
@@ -53,9 +53,9 @@ def get_document(
     response_model=DocumentResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def create_document(
+async def create_document(
     payload: DocumentCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: object = Depends(require_manager_or_above),
     property_service: PropertyService = Depends(get_property_service),
     document_service: DocumentService = Depends(get_document_service),
@@ -63,7 +63,7 @@ def create_document(
     try:
         # Resource-level auth: managers may only create documents for properties
         # they are assigned to. Admins can create for any property.
-        prop = property_service.get_property(db, payload.property_id)
+        prop = await property_service.get_property(db, payload.property_id)
         if (
             prop is not None
             and getattr(current_user, "role", None) == UserRole.MANAGER
@@ -74,7 +74,7 @@ def create_document(
             )
 
         # Routes don't provide a storage client — services can be tested separately
-        return document_service.create_document(db, payload)
+        return await document_service.create_document(db, payload)
     except DocumentUploadError:
         # External storage failures are transient — surface as 503
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to store document")
@@ -85,13 +85,13 @@ def create_document(
     response_model=DocumentResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def upload_document(
+async def upload_document(
     file: UploadFile = File(...),
     file_type: str = Form(...),
     contract_id: UUID | None = Form(None),
     property_id: UUID | None = Form(None),
     tenant_id: UUID | None = Form(None),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     storage_client=Depends(get_storage_client),
     current_user: object = Depends(require_manager_or_above),
     property_service: PropertyService = Depends(get_property_service),
@@ -106,7 +106,7 @@ def upload_document(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file must have a filename")
 
     if property_id is not None:
-        prop = property_service.get_property(db, property_id)
+        prop = await property_service.get_property(db, property_id)
         if (
             prop is not None
             and getattr(current_user, "role", None) == UserRole.MANAGER
@@ -130,7 +130,7 @@ def upload_document(
     )
 
     try:
-        return document_service.create_document(db, payload, storage_client=storage_client, file_obj=file)
+        return await document_service.create_document(db, payload, storage_client=storage_client, file_obj=file)
     except DocumentUploadError:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to store document")
 
@@ -139,35 +139,35 @@ def upload_document(
     "/{document_id}",
     response_model=DocumentResponse,
 )
-def update_document(
+async def update_document(
     document_id: UUID,
     payload: DocumentUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: object = Depends(require_manager_or_above),
     property_service: PropertyService = Depends(get_property_service),
     contract_service: ContractService = Depends(get_contract_service),
     document_service: DocumentService = Depends(get_document_service),
 ):
     # Fetch document first to perform resource-level authorization
-    document = document_service.get_document(db, document_id)
+    document = await document_service.get_document(db, document_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Document {document_id} not found")
 
     if getattr(current_user, "role", None) == UserRole.MANAGER:
         prop = None
         if getattr(document, "property_id", None):
-            prop = property_service.get_property(db, document.property_id)
+            prop = await property_service.get_property(db, document.property_id)
         elif getattr(document, "contract_id", None):
-            contract = contract_service.get_contract(db, document.contract_id)
+            contract = await contract_service.get_contract(db, document.contract_id)
             if contract:
-                prop = property_service.get_property(db, contract.property_id)
+                prop = await property_service.get_property(db, contract.property_id)
 
         if not prop or prop.manager_id != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property"
             )
 
-    updated = document_service.update_document(db, document_id, payload)
+    updated = await document_service.update_document(db, document_id, payload)
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Document {document_id} not found")
     return updated
@@ -177,32 +177,32 @@ def update_document(
     "/{document_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def delete_document(
+async def delete_document(
     document_id: UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: object = Depends(require_manager_or_above),
     property_service: PropertyService = Depends(get_property_service),
     contract_service: ContractService = Depends(get_contract_service),
     document_service: DocumentService = Depends(get_document_service),
 ):
-    document = document_service.get_document(db, document_id)
+    document = await document_service.get_document(db, document_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Document {document_id} not found")
 
     if getattr(current_user, "role", None) == UserRole.MANAGER:
         prop = None
         if getattr(document, "property_id", None):
-            prop = property_service.get_property(db, document.property_id)
+            prop = await property_service.get_property(db, document.property_id)
         elif getattr(document, "contract_id", None):
-            contract = contract_service.get_contract(db, document.contract_id)
+            contract = await contract_service.get_contract(db, document.contract_id)
             if contract:
-                prop = property_service.get_property(db, contract.property_id)
+                prop = await property_service.get_property(db, contract.property_id)
 
         if not prop or prop.manager_id != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property"
             )
 
-    deleted = document_service.delete_document(db, document_id)
+    deleted = await document_service.delete_document(db, document_id)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Document {document_id} not found")

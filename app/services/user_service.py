@@ -1,5 +1,5 @@
 from uuid import UUID
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
 from app.repositories.user import UserRepository
@@ -24,26 +24,28 @@ class UserService:
     def __init__(self, user_repo: UserRepository) -> None:
         self.user_repo = user_repo
 
-    def list_users(self, db: Session, skip: int = 0, limit: int = 100) -> list[User]:
-        return self.user_repo.get_all(db, skip=skip, limit=limit)
+    async def list_users(self, db: AsyncSession, skip: int = 0, limit: int = 100) -> list[User]:
+        return await self.user_repo.get_all(db, skip=skip, limit=limit)
 
-    def get_user(self, db: Session, id: UUID) -> User:
-        user = self.user_repo.get_by_id(db, id)
+    async def get_user(self, db: AsyncSession, id: UUID) -> User:
+        user = await self.user_repo.get_by_id(db, id)
         if not user:
             raise UserNotFoundError("User not found")
         return user
 
-    def create_user(self, db: Session, payload: UserCreate) -> User:
+    async def create_user(self, db: AsyncSession, payload: UserCreate) -> User:
         # Pre-check to provide fast feedback in the common case
-        if self.user_repo.get_by_email(db, payload.email):
+        if await self.user_repo.get_by_email(db, payload.email):
             raise EmailAlreadyExistsError("A user with this email already exists")
-        if self.user_repo.get_by_username(db, payload.username):
+        if await self.user_repo.get_by_username(db, payload.username):
             raise UsernameAlreadyExistsError("A user with this username already exists")
 
         # Create may still fail under concurrent requests due to DB unique
         # constraints. Translate IntegrityError into domain exceptions.
         try:
-            return self.user_repo.create(db, payload)
+            user = await self.user_repo.create(db, payload)
+            await db.commit()
+            return user
         except IntegrityError as e:
             # Inspect DB driver's error message to determine which unique
             # constraint was violated. This is defensive and intentionally
@@ -57,19 +59,19 @@ class UserService:
             # collision to avoid leaking DB details to route layer.
             raise EmailAlreadyExistsError("A user with this email or username already exists")
 
-    def update_user(self, db: Session, id: UUID, payload: UserUpdate) -> User:
+    async def update_user(self, db: AsyncSession, id: UUID, payload: UserUpdate) -> User:
         if payload.email is not None:
-            existing = self.user_repo.get_by_email(db, payload.email)
+            existing = await self.user_repo.get_by_email(db, payload.email)
             if existing and existing.id != id:
                 raise EmailAlreadyExistsError("A user with this email already exists")
 
         if payload.username is not None:
-            existing = self.user_repo.get_by_username(db, payload.username)
+            existing = await self.user_repo.get_by_username(db, payload.username)
             if existing and existing.id != id:
                 raise UsernameAlreadyExistsError("A user with this username already exists")
 
         try:
-            user = self.user_repo.update(db, id, payload)
+            user = await self.user_repo.update(db, id, payload)
         except IntegrityError as e:
             msg = str(e.orig) if getattr(e, "orig", None) is not None else str(e)
             if "email" in msg or "users_email" in msg:
@@ -80,10 +82,13 @@ class UserService:
 
         if not user:
             raise UserNotFoundError("User not found")
+        await db.commit()
         return user
 
-    def delete_user(self, db: Session, id: UUID) -> User:
-        user = self.user_repo.delete(db, id)
+    async def delete_user(self, db: AsyncSession, id: UUID) -> User:
+        user = await self.user_repo.delete(db, id)
+
         if not user:
             raise UserNotFoundError("User not found")
+        await db.commit()
         return user

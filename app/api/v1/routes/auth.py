@@ -1,8 +1,7 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.schemas.user import UserLogin, TokenResponse, UserResponse
 from app.services.auth_service import AuthService
@@ -16,9 +15,9 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(
+async def login(
     payload: UserLogin,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     auth_service: AuthService = Depends(get_auth_service),
 ):
     """
@@ -26,7 +25,7 @@ def login(
     Returns a JWT access token on success.
     """
     try:
-        return auth_service.login(db, payload.identifier, payload.password)
+        return await auth_service.login(db, payload.identifier, payload.password)
     except InvalidCredentialsError:
         logger.warning("Failed login attempt")
         raise HTTPException(
@@ -37,7 +36,7 @@ def login(
 
 
 @router.get("/me", response_model=UserResponse)
-def me(
+async def me(
     current_user: User = Depends(get_current_user),
     auth_service: AuthService = Depends(get_auth_service),
 ):

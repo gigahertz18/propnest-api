@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
 from app.core.dependencies import require_admin, get_current_user, get_user_service
@@ -16,20 +16,20 @@ router = APIRouter(prefix="/users", tags=["Users"])
 
 
 @router.get("/", response_model=list[UserResponse], dependencies=[Depends(require_admin)])
-def list_users(
+async def list_users(
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user_service: UserService = Depends(get_user_service),
 ):
     """Get all users. Admin only."""
-    return user_service.list_users(db, skip=skip, limit=limit)
+    return await user_service.list_users(db, skip=skip, limit=limit)
 
 
 @router.get("/{user_id}", response_model=UserResponse)
-def get_user(
+async def get_user(
     user_id: UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     user_service: UserService = Depends(get_user_service),
 ):
@@ -44,7 +44,7 @@ def get_user(
         )
 
     try:
-        return user_service.get_user(db, user_id)
+        return await user_service.get_user(db, user_id)
     except UserNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -58,14 +58,14 @@ def get_user(
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_admin)],
 )
-def create_user(
+async def create_user(
     payload: UserCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user_service: UserService = Depends(get_user_service),
 ):
     """Create a new user. Admin only."""
     try:
-        return user_service.create_user(db, payload)
+        return await user_service.create_user(db, payload)
     except EmailAlreadyExistsError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -79,10 +79,10 @@ def create_user(
 
 
 @router.patch("/{user_id}", response_model=UserResponse)
-def update_user(
+async def update_user(
     user_id: UUID,
     payload: UserUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     user_service: UserService = Depends(get_user_service),
 ):
@@ -104,7 +104,7 @@ def update_user(
         )
 
     try:
-        return user_service.update_user(db, user_id, payload)
+        return await user_service.update_user(db, user_id, payload)
     except EmailAlreadyExistsError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -123,9 +123,9 @@ def update_user(
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_user(
+async def delete_user(
     user_id: UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
     user_service: UserService = Depends(get_user_service),
 ):
@@ -137,7 +137,7 @@ def delete_user(
         )
 
     try:
-        user_service.delete_user(db, user_id)
+        await user_service.delete_user(db, user_id)
     except UserNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -1,5 +1,6 @@
 import uuid
-from sqlalchemy.orm import Session
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.base import BaseRepository
 from app.models.contract import Contract, RentalType
@@ -12,63 +13,61 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
     get_all, get_by_id, create, update, delete are inherited — don't repeat them.
     """
 
-    def get_by_property(
+    async def get_by_property(
         self,
-        db: Session,
+        db: AsyncSession,
         property_id: uuid.UUID,
     ) -> list[Contract]:
         """Return all contracts linked to a given property."""
-        return db.query(self.model).filter(self.model.property_id == property_id).all()
 
-    def get_by_tenant(
+        return await self._all(db, self.model.property_id == property_id)
+
+    async def get_by_tenant(
         self,
-        db: Session,
+        db: AsyncSession,
         tenant_id: uuid.UUID,
     ) -> list[Contract]:
         """Return all contracts linked to a given tenant."""
-        return db.query(self.model).filter(self.model.tenant_id == tenant_id).all()
+        return await self._all(db, self.model.tenant_id == tenant_id)
 
-    def get_by_status(
+    async def get_by_status(
         self,
-        db: Session,
+        db: AsyncSession,
         status: str,
     ) -> list[Contract]:
         """Return all contracts with a given status (e.g. ACTIVE, EXPIRED)."""
-        return db.query(self.model).filter(self.model.status == status).all()
 
-    def get_by_rental_type(
+        return await self._all(db, self.model.status == status)
+
+    async def get_by_rental_type(
         self,
-        db: Session,
+        db: AsyncSession,
         rental_type: RentalType,
     ) -> list[Contract]:
         """Return all contracts of a given rental type."""
-        return db.query(self.model).filter(self.model.rental_type == rental_type).all()
 
-    def get_by_booking_source(
+        return await self._all(db, self.model.rental_type == rental_type)
+
+    async def get_by_booking_source(
         self,
-        db: Session,
+        db: AsyncSession,
         booking_source: str,
     ) -> list[Contract]:
         """Return all contracts originating from a given booking source."""
-        return db.query(self.model).filter(self.model.booking_source == booking_source).all()
 
-    def get_active_contract_by_property(
+        return await self._all(db, self.model.booking_source == booking_source)
+
+    async def get_active_contract_by_property(
         self,
-        db: Session,
+        db: AsyncSession,
         property_id: uuid.UUID,
     ) -> Contract | None:
         """
         Return the single active contract for a property, if one exists.
         Useful for checking occupancy before creating a new contract.
         """
-        return (
-            db.query(self.model)
-            .filter(
-                self.model.property_id == property_id,
-                self.model.status == "ACTIVE",
-            )
-            .first()
-        )
+
+        return await self._first(db, self.model.property_id == property_id, self.model.status == "ACTIVE")
 
 
 # Instantiate once — import this instance everywhere

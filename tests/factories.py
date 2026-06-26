@@ -26,7 +26,7 @@ def make_property(
     }
 
 
-def make_property_model(db, **kwargs) -> Property:
+async def make_property_model(db, **kwargs) -> Property:
     """Creates and persists a Property directly in the test DB."""
     data = make_property(**kwargs)
     obj = Property(
@@ -34,8 +34,8 @@ def make_property_model(db, **kwargs) -> Property:
         **{k: v for k, v in data.items()},
     )
     db.add(obj)
-    db.commit()
-    db.refresh(obj)
+    await db.flush()
+    await db.refresh(obj)
     return obj
 
 
@@ -59,7 +59,7 @@ def make_user(
     }
 
 
-def make_user_model(db, **kwargs) -> User:
+async def make_user_model(db, **kwargs) -> User:
     """Creates and persists a User directly in the test DB (with hashed password)."""
     data = make_user(**kwargs)
     data["email"] = data["email"].strip().lower()
@@ -71,12 +71,12 @@ def make_user_model(db, **kwargs) -> User:
         **data,
     )
     db.add(obj)
-    db.commit()
-    db.refresh(obj)
+    await db.flush()
+    await db.refresh(obj)
     return obj
 
 
-def make_admin_model(db, **kwargs) -> User:
+async def make_admin_model(db, **kwargs) -> User:
     """Shortcut to create an admin user in the test DB."""
     defaults = {
         "full_name": "Admin User",
@@ -85,7 +85,7 @@ def make_admin_model(db, **kwargs) -> User:
         "role": UserRole.ADMIN,
     }
     defaults.update(kwargs)
-    return make_user_model(db, **defaults)
+    return await make_user_model(db, **defaults)
 
 
 # ─── Tenant ───────────────────────────────────────────────────────────────────
@@ -114,13 +114,13 @@ def make_tenant(
     }
 
 
-def make_tenant_model(db, **kwargs) -> Tenant:
+async def make_tenant_model(db, **kwargs) -> Tenant:
     """Creates and persists a Tenant directly in the test DB."""
     data = make_tenant(**kwargs)
     obj = Tenant(id=uuid.uuid4(), **data)
     db.add(obj)
-    db.commit()
-    db.refresh(obj)
+    await db.flush()
+    await db.refresh(obj)
     return obj
 
 
@@ -153,7 +153,7 @@ def make_contract(
     }
 
 
-def make_contract_model(db, property_id: uuid.UUID, tenant_id: uuid.UUID, **kwargs) -> Contract:
+async def make_contract_model(db, property_id: uuid.UUID, tenant_id: uuid.UUID, **kwargs) -> Contract:
     """
     Creates and persists a Contract directly in the test DB.
     Requires pre-existing property and tenant IDs (FK constraints).
@@ -161,8 +161,8 @@ def make_contract_model(db, property_id: uuid.UUID, tenant_id: uuid.UUID, **kwar
     data = make_contract(property_id=property_id, tenant_id=tenant_id, **kwargs)
     obj = Contract(id=uuid.uuid4(), **data)
     db.add(obj)
-    db.commit()
-    db.refresh(obj)
+    await db.flush()
+    await db.refresh(obj)
     return obj
 
 
@@ -185,7 +185,7 @@ def make_document(
     }
 
 
-def make_document_model(db, **kwargs) -> Document:
+async def make_document_model(db, **kwargs) -> Document:
     """Creates and persists a Document directly in the test DB."""
     data = make_document(**kwargs)
     obj = Document(
@@ -193,6 +193,6 @@ def make_document_model(db, **kwargs) -> Document:
         **{k: v for k, v in data.items()},
     )
     db.add(obj)
-    db.commit()
-    db.refresh(obj)
+    await db.flush()
+    await db.refresh(obj)
     return obj

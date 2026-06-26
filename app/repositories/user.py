@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import hash_password
 from app.repositories.base import BaseRepository
 from app.models.user import User, UserRole
@@ -20,32 +20,35 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
     get_all, get_by_id, create, update, delete are inherited — don't repeat them.
     """
 
-    def get_by_username(
+    async def get_by_username(
         self,
-        db: Session,
+        db: AsyncSession,
         username: str,
     ) -> User | None:
         normalized = _normalize_username(username)
-        return db.query(self.model).filter(self.model.username == normalized).first()
 
-    def get_by_email(
+        return await self._first(db, self.model.username == normalized)
+
+    async def get_by_email(
         self,
-        db: Session,
+        db: AsyncSession,
         email: str,
     ) -> User | None:
         normalized = _normalize_email(email)
-        return db.query(self.model).filter(self.model.email == normalized).first()
 
-    def get_by_role(
+        return await self._first(db, self.model.email == normalized)
+
+    async def get_by_role(
         self,
-        db: Session,
+        db: AsyncSession,
         role: UserRole,
     ) -> list[User]:
-        return db.query(self.model).filter(self.model.role == role).all()
 
-    def get_by_identifier(
+        return await self._all(db, self.model.role == role)
+
+    async def get_by_identifier(
         self,
-        db: Session,
+        db: AsyncSession,
         identifier: str,
     ) -> User | None:
         """Get user by username or email."""
@@ -56,10 +59,10 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         # If identifier contains '@', treat it strictly as an email.
         # Avoid passing an email string into the username lookup.
         if "@" in identifier:
-            return self.get_by_email(db, identifier)
-        return self.get_by_username(db, identifier)
+            return await self.get_by_email(db, identifier)
+        return await self.get_by_username(db, identifier)
 
-    def create(self, db: Session, payload: UserCreate) -> User:
+    async def create(self, db: AsyncSession, payload: UserCreate) -> User:
         """Override create to handle password hashing."""
 
         data = payload.model_dump(exclude={"password"})
@@ -69,14 +72,14 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         obj = self.model(**data, password_hash=hash_password(payload.password))
 
         db.add(obj)
-        db.commit()
-        db.refresh(obj)
+        await db.flush()
+        await db.refresh(obj)
         return obj
 
-    def update(self, db: Session, id: UUID, payload: UserUpdate) -> User | None:
+    async def update(self, db: AsyncSession, id: UUID, payload: UserUpdate) -> User | None:
         """Override update to handle password hashing if password is being updated."""
 
-        obj = self.get_by_id(db, id)
+        obj = await self.get_by_id(db, id)
         if not obj:
             return None
 
@@ -94,8 +97,8 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         for field, value in updates.items():
             setattr(obj, field, value)
 
-        db.commit()
-        db.refresh(obj)
+        await db.flush()
+        await db.refresh(obj)
         return obj
 
 

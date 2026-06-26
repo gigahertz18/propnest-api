@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.base import BaseRepository
 from app.models.tenant import Tenant
@@ -13,40 +13,48 @@ class TenantRepository(BaseRepository[Tenant, TenantCreate, TenantUpdate]):
     get_all, get_by_id, create, update, delete are inherited — don't repeat them.
     """
 
-    def get_by_email(
+    async def get_by_email(
         self,
-        db: Session,
+        db: AsyncSession,
         email: str,
     ) -> Tenant | None:
-        return db.query(self.model).filter(self.model.email == email).first()
 
-    def get_by_phone_number(
+        return await self._first(
+            db,
+            self.model.email == email,
+        )
+
+    async def get_by_phone_number(
         self,
-        db: Session,
+        db: AsyncSession,
         phone_number: str,
     ) -> Tenant | None:
-        return db.query(self.model).filter(self.model.phone_number == phone_number).first()
 
-    def get_by_full_name(
+        return await self._first(db, self.model.phone_number == phone_number)
+
+    async def get_by_full_name(
         self,
-        db: Session,
+        db: AsyncSession,
         full_name: str,
     ) -> list[Tenant]:
-        return db.query(self.model).filter(self.model.full_name.ilike(f"%{full_name}%")).all()
+        # return db.query(self.model).filter(self.model.full_name.ilike(f"%{full_name}%")).all()
+        return await self._all(db, self.model.full_name.ilike(f"%{full_name}%"))
 
-    def get_by_occupation(
+    async def get_by_occupation(
         self,
-        db: Session,
+        db: AsyncSession,
         occupation: str,
     ) -> list[Tenant]:
-        return db.query(self.model).filter(self.model.occupation.ilike(f"%{occupation}%")).all()
+        # return db.query(self.model).filter(self.model.occupation.ilike(f"%{occupation}%")).all()
+        return await self._all(db, self.model.occupation.ilike(f"%{occupation}%"))
 
-    def get_by_date_of_birth(
+    async def get_by_date_of_birth(
         self,
-        db: Session,
+        db: AsyncSession,
         date_of_birth: date,
     ) -> list[Tenant]:
-        return db.query(self.model).filter(self.model.date_of_birth == date_of_birth).all()
+        # return db.query(self.model).filter(self.model.date_of_birth == date_of_birth).all()
+        return await self._all(db, self.model.date_of_birth == date_of_birth)
 
 
 # Instantiate once — import this instance everywhere

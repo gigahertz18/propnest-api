@@ -81,15 +81,15 @@ def make_upload(content: bytes, filename: str, content_type: str, seekable: bool
 def make_payload(name: str, mime: str):
     return DocumentCreate(file_name=name, file_type=mime, file_url="")
 
-
-def test_streams_file_and_passes_length_and_content_type(db, service):
+@pytest.mark.asyncio
+async def test_streams_file_and_passes_length_and_content_type(db, service):
     content = b"%PDF-1.4 test content"
     upload = make_upload(content, "test.pdf", "application/pdf", seekable=True)
     payload = make_payload("test.pdf", "application/pdf")
 
     storage = RecordingStorage()
 
-    created = service.create_document(db, payload, storage_client=storage, file_obj=upload)
+    created = await service.create_document(db, payload, storage_client=storage, file_obj=upload)
 
     assert len(storage.calls) == 1
     call = storage.calls[0]
@@ -98,15 +98,15 @@ def test_streams_file_and_passes_length_and_content_type(db, service):
     assert call["content_type"] == "application/pdf"
     assert created.file_name == "test.pdf"
 
-
-def test_streams_file_to_storage_and_reads_content(db, service):
+@pytest.mark.asyncio
+async def test_streams_file_to_storage_and_reads_content(db, service):
     content = b"PDF-DATA"
     payload = make_payload("test.pdf", "application/pdf")
     upload = make_upload(content, payload.file_name, payload.file_type)
 
     storage = DummyStorageClient()
 
-    doc = service.create_document(db, payload, storage_client=storage, file_obj=upload)
+    doc = await service.create_document(db, payload, storage_client=storage, file_obj=upload)
 
     assert doc is not None
     assert len(storage.calls) == 1
@@ -115,8 +115,8 @@ def test_streams_file_to_storage_and_reads_content(db, service):
     assert call["data"] == content
     assert call["content_type"] == payload.file_type
 
-
-def test_rejects_disallowed_mime(db, service):
+@pytest.mark.asyncio
+async def test_rejects_disallowed_mime(db, service):
     content = b"SOME-TEXT"
     payload = make_payload("notes.txt", "text/plain")
     upload = make_upload(content, payload.file_name, payload.file_type)
@@ -124,24 +124,24 @@ def test_rejects_disallowed_mime(db, service):
     storage = DummyStorageClient()
 
     with pytest.raises(DocumentUploadError):
-        service.create_document(db, payload, storage_client=storage, file_obj=upload)
+        await service.create_document(db, payload, storage_client=storage, file_obj=upload)
 
-
-def test_handles_non_seekable_stream(db, service):
+@pytest.mark.asyncio
+async def test_handles_non_seekable_stream(db, service):
     content = b"NON-SEEKABLE-CONTENT"
     upload = make_upload(content, "nonseek.pdf", "application/pdf", seekable=False)
     payload = make_payload("nonseek.pdf", "application/pdf")
 
     storage = DummyStorageClient()
 
-    doc = service.create_document(db, payload, storage_client=storage, file_obj=upload)
+    doc = await service.create_document(db, payload, storage_client=storage, file_obj=upload)
 
     assert doc is not None
     assert len(storage.calls) == 1
     assert storage.calls[0]["data"] == content
 
-
-def test_put_object_called_with_correct_signature(db, service):
+@pytest.mark.asyncio
+async def test_put_object_called_with_correct_signature(db, service):
     """
     Replaces test_put_object_falls_back_to_three_arg_signature.
     Verifies put_object is called with the full correct signature,
@@ -153,14 +153,14 @@ def test_put_object_called_with_correct_signature(db, service):
 
     storage = ThreeArgStorage()
 
-    doc = service.create_document(db, payload, storage_client=storage, file_obj=upload)
+    doc = await service.create_document(db, payload, storage_client=storage, file_obj=upload)
 
     assert doc is not None
     assert len(storage.calls) == 1
     assert storage.calls[0]["data"] == content
 
-
-def test_rejects_large_file_via_max_size_override(db, service):
+@pytest.mark.asyncio
+async def test_rejects_large_file_via_max_size_override(db, service):
     original_max = DocumentService._MAX_FILE_SIZE
     DocumentService._MAX_FILE_SIZE = 5
 
@@ -171,6 +171,6 @@ def test_rejects_large_file_via_max_size_override(db, service):
         storage = DummyStorageClient()
 
         with pytest.raises(DocumentUploadError):
-            service.create_document(db, payload, storage_client=storage, file_obj=upload)
+            await service.create_document(db, payload, storage_client=storage, file_obj=upload)
     finally:
         DocumentService._MAX_FILE_SIZE = original_max

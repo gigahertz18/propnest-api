@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.core.security import decode_access_token
 from app.core.config import settings
@@ -25,9 +25,9 @@ from urllib.parse import urlparse
 bearer_scheme = HTTPBearer()
 
 
-def get_current_user(
+async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ) -> User:
     """
     FastAPI dependency — decodes the JWT and returns the current user.
@@ -63,7 +63,7 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user = user_repo.get_by_id(db, user_uuid)
+    user = await user_repo.get_by_id(db, user_uuid)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

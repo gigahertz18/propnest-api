@@ -1,14 +1,15 @@
+import pytest
 from datetime import datetime, timedelta, timezone
 
 from app.core.config import settings
 from jose import jwt
 from tests.factories import make_user_model
 
-
+@pytest.mark.asyncio
 class TestLogin:
-    def test_login_with_username_succeeds(self, client, db):
-        make_user_model(db, username="john", password="secret123")
-        response = client.post(
+    async def test_login_with_username_succeeds(self, client, db):
+        await make_user_model(db, username="john", password="secret123")
+        response = await client.post(
             "/api/v1/auth/login",
             json={
                 "identifier": "john",
@@ -20,9 +21,9 @@ class TestLogin:
         assert "access_token" in data
         assert data["token_type"] == "bearer"
 
-    def test_login_with_email_succeeds(self, client, db):
-        make_user_model(db, email="john@example.com", password="secret123")
-        response = client.post(
+    async def test_login_with_email_succeeds(self, client, db):
+        await make_user_model(db, email="john@example.com", password="secret123")
+        response = await client.post(
             "/api/v1/auth/login",
             json={
                 "identifier": "john@example.com",
@@ -32,9 +33,9 @@ class TestLogin:
         assert response.status_code == 200
         assert "access_token" in response.json()
 
-    def test_login_with_wrong_password_fails(self, client, db):
-        make_user_model(db, username="john")
-        response = client.post(
+    async def test_login_with_wrong_password_fails(self, client, db):
+        await make_user_model(db, username="john")
+        response = await client.post(
             "/api/v1/auth/login",
             json={
                 "identifier": "john",
@@ -43,8 +44,8 @@ class TestLogin:
         )
         assert response.status_code == 401
 
-    def test_login_with_nonexistent_user_fails(self, client):
-        response = client.post(
+    async def test_login_with_nonexistent_user_fails(self, client):
+        response = await client.post(
             "/api/v1/auth/login",
             json={
                 "identifier": "nobody",
@@ -53,9 +54,9 @@ class TestLogin:
         )
         assert response.status_code == 401
 
-    def test_login_is_case_insensitive_and_strips_whitespace(self, client, db):
-        make_user_model(db, username="john", email="john@example.com", password="secret123")
-        response = client.post(
+    async def test_login_is_case_insensitive_and_strips_whitespace(self, client, db):
+        await make_user_model(db, username="john", email="john@example.com", password="secret123")
+        response = await client.post(
             "/api/v1/auth/login",
             json={
                 "identifier": " John@Example.Com ",
@@ -65,9 +66,9 @@ class TestLogin:
         assert response.status_code == 200
         assert "access_token" in response.json()
 
-    def test_login_with_inactive_account_fails(self, client, db):
-        make_user_model(db, username="inactive", is_active=False)
-        response = client.post(
+    async def test_login_with_inactive_account_fails(self, client, db):
+        await make_user_model(db, username="inactive", is_active=False)
+        response = await client.post(
             "/api/v1/auth/login",
             json={
                 "identifier": "inactive",
@@ -76,10 +77,10 @@ class TestLogin:
         )
         assert response.status_code == 401
 
-    def test_error_message_is_generic(self, client, db):
+    async def test_error_message_is_generic(self, client, db):
         """Should not reveal whether the user exists."""
-        make_user_model(db, username="john")
-        response = client.post(
+        await make_user_model(db, username="john")
+        response = await client.post(
             "/api/v1/auth/login",
             json={
                 "identifier": "john",
@@ -88,11 +89,11 @@ class TestLogin:
         )
         assert response.json()["detail"] == "Invalid credentials"
 
-
+@pytest.mark.asyncio
 class TestMe:
-    def test_returns_current_user(self, client, db):
-        make_user_model(db, username="john", email="john@example.com")
-        login = client.post(
+    async def test_returns_current_user(self, client, db):
+        await make_user_model(db, username="john", email="john@example.com")
+        login = await client.post(
             "/api/v1/auth/login",
             json={
                 "identifier": "john",
@@ -100,20 +101,20 @@ class TestMe:
             },
         )
         token = login.json()["access_token"]
-        response = client.get(
+        response = await client.get(
             "/api/v1/auth/me",
             headers={"Authorization": f"Bearer {token}"},
         )
         assert response.status_code == 200
         assert response.json()["username"] == "john"
 
-    def test_returns_403_without_token(self, client):
-        response = client.get("/api/v1/auth/me")
+    async def test_returns_403_without_token(self, client):
+        response = await client.get("/api/v1/auth/me")
         assert response.status_code == 403
 
-    def test_password_not_in_response(self, client, db):
-        make_user_model(db, username="john")
-        login = client.post(
+    async def test_password_not_in_response(self, client, db):
+        await make_user_model(db, username="john")
+        login = await client.post(
             "/api/v1/auth/login",
             json={
                 "identifier": "john",
@@ -121,7 +122,7 @@ class TestMe:
             },
         )
         token = login.json()["access_token"]
-        response = client.get(
+        response = await client.get(
             "/api/v1/auth/me",
             headers={"Authorization": f"Bearer {token}"},
         )
@@ -129,14 +130,14 @@ class TestMe:
         assert "password" not in data
         assert "password_hash" not in data
 
-    def test_returns_401_with_invalid_token(self, client):
-        response = client.get(
+    async def test_returns_401_with_invalid_token(self, client):
+        response = await client.get(
             "/api/v1/auth/me",
             headers={"Authorization": "Bearer invalidtoken"},
         )
         assert response.status_code == 401
 
-    def test_returns_401_for_token_with_invalid_sub_claim(self, client, db):
+    async def test_returns_401_for_token_with_invalid_sub_claim(self, client, db):
         payload = {
             "sub": "not-a-uuid",
             "role": "user",
@@ -148,14 +149,14 @@ class TestMe:
         }
         token = jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
-        response = client.get(
+        response = await client.get(
             "/api/v1/auth/me",
             headers={"Authorization": f"Bearer {token}"},
         )
         assert response.status_code == 401
         assert response.json()["detail"] == "Invalid token payload"
 
-    def test_returns_401_for_token_with_wrong_issuer(self, client, db):
+    async def test_returns_401_for_token_with_wrong_issuer(self, client, db):
         payload = {
             "sub": "00000000-0000-0000-0000-000000000000",
             "role": "user",
@@ -167,7 +168,7 @@ class TestMe:
         }
         token = jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
-        response = client.get(
+        response = await client.get(
             "/api/v1/auth/me",
             headers={"Authorization": f"Bearer {token}"},
         )
