@@ -14,15 +14,20 @@ class TestContractsRoutes:
         class FakeService:
             async def create_contract(self, db, payload):
                 raise ContractActiveError("conflict")
+            
+        prop_id = uuid.uuid4()
+        manager_id = uuid.uuid4()
+        # Property owned by another manager
+        prop = simple_ns(id=prop_id, manager_id=manager_id)
 
         set_override(get_contract_service, lambda: FakeService())
         # Provide a fake manager principal so the route-level auth dependency passes
-        set_override(require_manager_or_above, lambda: simple_ns(id=uuid.uuid4(), role=UserRole.MANAGER))
+        set_override(require_manager_or_above, lambda: simple_ns(id=manager_id, role=UserRole.MANAGER))
         # Ensure property check does not interfere
-        set_override(get_property_service, lambda: simple_ns(get_property=AsyncMock(return_value=None)))
+        set_override(get_property_service, lambda: simple_ns(get_property=AsyncMock(return_value=prop)))
 
         payload = {
-            "property_id": "00000000-0000-0000-0000-000000000000",
+            "property_id": str(prop_id),
             "tenant_id": "00000000-0000-0000-0000-000000000001",
             "rental_type": "long_term",
             "start_date": "2026-01-01",
