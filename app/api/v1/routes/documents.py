@@ -68,11 +68,7 @@ async def create_document(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail=f"Property {payload.property_id} not found."
             )
-        if (
-            prop.manager_id != current_user.id
-            and getattr(current_user, "role", None) == UserRole.MANAGER
-            
-        ):
+        if prop.manager_id != current_user.id and getattr(current_user, "role", None) == UserRole.MANAGER:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property"
             )
@@ -108,14 +104,9 @@ async def upload_document(
     if property_id is not None:
         prop = await property_service.get_property(db, property_id)
         if not prop:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail=f"Property {property_id} not found."
-            )
-            
-        if ( 
-            prop.manager_id != current_user.id
-            and getattr(current_user, "role", None) == UserRole.MANAGER
-        ):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Property {property_id} not found.")
+
+        if prop.manager_id != current_user.id and getattr(current_user, "role", None) == UserRole.MANAGER:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property"
             )
@@ -131,7 +122,7 @@ async def upload_document(
         property_id=property_id,
         tenant_id=tenant_id,
     )
-    
+
     try:
         return await document_service.create_document(db, payload, storage_client=storage_client, file_obj=file)
     except DocumentUploadError:

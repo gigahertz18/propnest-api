@@ -60,7 +60,7 @@ async def create_contract(
         # Resource-level auth: managers may only create contracts for properties
         # they are assigned to. Admins can create for any property.
         prop = await property_service.get_property(db, payload.property_id)
-        
+
         if not prop:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail=f"Property {payload.property_id} not found"
