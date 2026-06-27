@@ -3,13 +3,13 @@ import uuid
 
 from app.services.exceptions import ContractActiveError
 from app.models.user import UserRole
+from app.core.dependencies import get_contract_service, get_property_service, require_manager_or_above
 
 from unittest.mock import AsyncMock
 
 @pytest.mark.asyncio
 class TestContractsRoutes:
     async def test_create_contract_conflict_returns_409(self, client, set_override, simple_ns):
-        from app.core.dependencies import get_contract_service, require_manager_or_above, get_property_service
 
         class FakeService:
             async def create_contract(self, db, payload):
@@ -43,7 +43,6 @@ class TestContractsRoutes:
         assert response.status_code == 409
 
     async def test_get_contract_returns_404_when_not_found(self, client, set_override, simple_ns):
-        from app.core.dependencies import get_contract_service, require_manager_or_above
 
         set_override(get_contract_service, lambda: simple_ns(get_contract=AsyncMock(return_value=None)))
         # Provide a fake manager principal so the route-level auth dependency passes
@@ -53,7 +52,6 @@ class TestContractsRoutes:
         assert response.status_code == 404
 
     async def test_update_contract_forbidden_for_manager(self, client, set_override, simple_ns):
-        from app.core.dependencies import get_contract_service, get_property_service, require_manager_or_above
 
         fake_contract = simple_ns(property_id=uuid.uuid4())
         fake_manager = simple_ns(manager_id=uuid.uuid4())
@@ -69,8 +67,7 @@ class TestContractsRoutes:
         assert response.status_code == 403
 
     async def test_update_contract_returns_404_when_update_not_found(self, client, set_override, simple_ns, admin_user):
-        from app.core.dependencies import get_contract_service, require_manager_or_above
-
+        
         fake_contract = simple_ns(property_id=uuid.uuid4())
         # Admin bypasses manager check
         set_override(require_manager_or_above, lambda: admin_user)
@@ -86,7 +83,6 @@ class TestContractsRoutes:
         assert response.status_code == 404
 
     async def test_delete_contract_returns_404_when_delete_not_found(self, client, set_override, simple_ns, admin_user):
-        from app.core.dependencies import get_contract_service, require_manager_or_above
 
         fake_contract = simple_ns(property_id=uuid.uuid4())
         set_override(require_manager_or_above, lambda: admin_user)
