@@ -64,10 +64,14 @@ async def create_document(
         # Resource-level auth: managers may only create documents for properties
         # they are assigned to. Admins can create for any property.
         prop = await property_service.get_property(db, payload.property_id)
+        if not prop:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=f"Property {payload.property_id} not found."
+            )
         if (
-            prop is not None
+            prop.manager_id != current_user.id
             and getattr(current_user, "role", None) == UserRole.MANAGER
-            and prop.manager_id != current_user.id
+            
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property"
@@ -101,16 +105,16 @@ async def upload_document(
 
     This endpoint keeps metadata in sync with the storage object.
     """
-
-    if not file.filename:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file must have a filename")
-
     if property_id is not None:
         prop = await property_service.get_property(db, property_id)
-        if (
-            prop is not None
+        if not prop:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=f"Property {property_id} not found."
+            )
+            
+        if ( 
+            prop.manager_id != current_user.id
             and getattr(current_user, "role", None) == UserRole.MANAGER
-            and prop.manager_id != current_user.id
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Manager not authorized for this property"
@@ -119,7 +123,6 @@ async def upload_document(
     # Resolve the object URL before touching the DB —
     # if the upload fails, no orphaned DB record is created.
     object_url = document_service._build_object_url(file.filename)
-
     payload = DocumentCreate(
         file_name=file.filename,
         file_type=file_type,
@@ -128,7 +131,7 @@ async def upload_document(
         property_id=property_id,
         tenant_id=tenant_id,
     )
-
+    
     try:
         return await document_service.create_document(db, payload, storage_client=storage_client, file_obj=file)
     except DocumentUploadError:

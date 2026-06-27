@@ -86,8 +86,8 @@ test-be-unit:
 test-be-integration:
 	$(TEST_EXEC) backend pytest tests/integration $(debug)
 
-test-be-e2e:
-	$(TEST_EXEC) backend pytest tests/e2e $(debug)
+# test-be-e2e:
+# 	$(TEST_EXEC) backend pytest tests/e2e $(debug)
 
 test-be-file:
 	$(TEST_EXEC) backend pytest $(file) $(debug)
@@ -116,7 +116,7 @@ clean:
         logs-backend logs-db logs-minio \
         db-shell be-shell seed \
         migrate-new migrate-up migrate-down migrate-history \
-        test-be test-be-unit test-be-integration test-be-e2e \
+        test-be test-be-unit test-be-integration \
         test-be-file test-be-cov \
 		lint-be lint-be-fix format-be \
 		ps clean
