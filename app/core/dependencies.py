@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
@@ -22,6 +23,7 @@ from app.services.document_service import DocumentService
 from minio import Minio
 from urllib.parse import urlparse
 
+logger = logging.getLogger(__name__)
 bearer_scheme = HTTPBearer()
 
 
@@ -142,7 +144,12 @@ def get_tenant_service() -> TenantService:
 
 
 def get_document_service() -> DocumentService:
-    return DocumentService(document_repo=document_repo)
+    return DocumentService(
+        document_repo=document_repo,
+        property_repo=property_repo,
+        contract_repo=contract_repo,
+        tenant_repo=tenant_repo,
+    )
 
 
 def get_storage_client() -> Minio:
@@ -151,7 +158,11 @@ def get_storage_client() -> Minio:
     Returns a fresh client instance. Tests can override this dependency.
     """
     parsed = urlparse(settings.MINIO_ENDPOINT)
-    # `parsed.netloc` will contain host:port for typical http(s) values.
     endpoint = parsed.netloc or parsed.path
     secure = parsed.scheme == "https"
-    return Minio(endpoint, access_key=settings.MINIO_ROOT_USER, secret_key=settings.MINIO_ROOT_PASSWORD, secure=secure)
+    return Minio(
+        endpoint,
+        access_key=settings.MINIO_ROOT_USER,
+        secret_key=settings.MINIO_ROOT_PASSWORD,
+        secure=secure,
+    )

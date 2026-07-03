@@ -3,7 +3,7 @@ import pytest_asyncio
 import uuid
 
 from app.repositories.document import document_repo
-from app.schemas.document import DocumentCreate, DocumentUpdate
+from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate
 from tests.factories import (
     make_document,
     make_document_model,
@@ -153,17 +153,17 @@ class TestDocumentRepositoryCreate:
 class TestDocumentRepositoryUpdate:
     async def test_updates_file_name(self, db):
         doc = await make_document_model(db, file_name="old.pdf")
-        result = await document_repo.update(db, doc.id, DocumentUpdate(file_name="new.pdf"))
+        result = await document_repo.update(db, doc.id, DocumentFileUpdate(file_name="new.pdf", file_type=doc.file_type, file_url=doc.file_url))
         assert result.file_name == "new.pdf"
 
     async def test_partial_update_does_not_affect_other_fields(self, db):
         doc = await make_document_model(db, file_type="application/pdf")
-        result = await document_repo.update(db, doc.id, DocumentUpdate(file_name="renamed.pdf"))
+        result = await document_repo.update(db, doc.id, DocumentFileUpdate(file_name="renamed.pdf", file_type=doc.file_type, file_url=doc.file_url))
         assert result.file_type == "application/pdf"
 
     async def test_update_property_link(self, db, property_):
         doc = await make_document_model(db)
-        result = await document_repo.update(db, doc.id, DocumentUpdate(property_id=property_.id))
+        result = await document_repo.update(db, doc.id, DocumentRelinkUpdate(property_id=property_.id))
         assert result.property_id == property_.id
 
     async def test_explicit_clear_of_property_link(self, db, property_):
@@ -171,33 +171,33 @@ class TestDocumentRepositoryUpdate:
         # property_id=None is explicitly set on the payload, so
         # exclude_unset=True still includes it — this should clear the FK,
         # unlike a payload that never touches property_id at all.
-        result = await document_repo.update(db, doc.id, DocumentUpdate(property_id=None))
+        result = await document_repo.update(db, doc.id, DocumentRelinkUpdate(property_id=None))
         assert result.property_id is None
 
     async def test_explicit_clear_of_tenant_link(self, db, tenant):
         doc = await make_document_model(db, tenant_id=tenant.id)
-        result = await document_repo.update(db, doc.id, DocumentUpdate(tenant_id=None))
+        result = await document_repo.update(db, doc.id, DocumentRelinkUpdate(tenant_id=None))
         assert result.tenant_id is None
 
     async def test_explicit_clear_of_contract_link(self, db, contract):
         doc = await make_document_model(db, contract_id=contract.id)
-        result = await document_repo.update(db, doc.id, DocumentUpdate(contract_id=None))
+        result = await document_repo.update(db, doc.id, DocumentRelinkUpdate(contract_id=None))
         assert result.contract_id is None
 
     async def test_omitted_property_id_leaves_existing_link_untouched(self, db, property_):
         doc = await make_document_model(db, property_id=property_.id)
         # property_id is never mentioned in the payload, so exclude_unset=True
         # drops it entirely — this must NOT be treated the same as clearing it.
-        result = await document_repo.update(db, doc.id, DocumentUpdate(file_name="renamed.pdf"))
+        result = await document_repo.update(db, doc.id, DocumentFileUpdate(file_name="renamed.pdf", file_type=doc.file_type, file_url=doc.file_url))
         assert result.property_id == property_.id
 
     async def test_returns_none_when_not_found(self, db):
-        result = await document_repo.update(db, uuid.uuid4(), DocumentUpdate(file_name="ghost.pdf"))
+        result = await document_repo.update(db, uuid.uuid4(), DocumentRelinkUpdate(property_id=uuid.uuid4()))
         assert result is None
 
     async def test_updated_value_is_persisted(self, db):
         doc = await make_document_model(db)
-        await document_repo.update(db, doc.id, DocumentUpdate(file_name="saved.pdf"))
+        await document_repo.update(db, doc.id, DocumentFileUpdate(file_name="saved.pdf", file_type=doc.file_type, file_url=doc.file_url))
         fetched = await document_repo.get_by_id(db, doc.id)
         assert fetched.file_name == "saved.pdf"
 

@@ -138,7 +138,15 @@ async def client(db):
     app.dependency_overrides.clear()
 
 
+class DummySavePoint:
+    def __init__(self):
+        self.commit = AsyncMock()
+        self.rollback = AsyncMock()
 # ─── Mock DB Fixture ───────────────────────────────────────────────────────────
 @pytest.fixture
 def mock_db():
-    return AsyncMock(spec=AsyncSession)
+    db = AsyncMock(spec=AsyncSession)
+    db.begin_nested = AsyncMock(return_value=DummySavePoint())
+    db.commit = AsyncMock()
+    db.rollback = AsyncMock()
+    return db

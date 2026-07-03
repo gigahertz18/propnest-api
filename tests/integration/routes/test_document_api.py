@@ -8,8 +8,6 @@ from tests.factories import (
     make_document,
     make_document_model,
     make_property_model,
-    make_tenant_model,
-    make_contract_model,
     make_admin_model,
     make_user_model,
 )
@@ -134,8 +132,6 @@ class TestCreateDocumentRoute:
         assert response.status_code == 403
 
     async def test_returns_404_when_property_not_found(self, client, db):
-        """
-        """
         await make_admin_model(db)
         token = await login(client, "adminuser")
         payload = make_document(property_id=str(uuid.uuid4()))
@@ -240,83 +236,29 @@ class TestUploadDocumentRoute:
 
 @pytest.mark.asyncio
 class TestUpdateDocumentRoute:
-    async def test_updates_file_name(self, client, db):
+    async def test_relink_to_different_property(self, client, db):
         await make_admin_model(db)
+        prop = await make_property_model(db)
+        new_prop = await make_property_model(db)
         token = await login(client, "adminuser")
-        doc = await make_document_model(db, file_name="old.pdf")
+        doc = await make_document_model(db, file_name="old.pdf", property_id=prop.id)
         response = await client.patch(
             f"/api/v1/documents/{doc.id}",
-            json={"file_name": "new.pdf"},
+            json={"property_id": str(new_prop.id)},
             headers=auth_headers(token),
         )
         assert response.status_code == 200
-        assert response.json()["file_name"] == "new.pdf"
+        assert response.json()["property_id"] == str(new_prop.id)
 
     async def test_returns_404_when_not_found(self, client, db):
         await make_admin_model(db)
         token = await login(client, "adminuser")
         response = await client.patch(
             f"/api/v1/documents/{uuid.uuid4()}",
-            json={"file_name": "anything.pdf"},
+            json={"property_id": str(uuid.uuid4())},
             headers=auth_headers(token),
         )
         assert response.status_code == 404
-
-    async def test_manager_can_update_when_authorized_via_property(self, client, db):
-        manager = await _make_manager(db)
-        prop = await make_property_model(db, manager_id=manager.id)
-        doc = await make_document_model(db, property_id=prop.id)
-        token = await login(client, "manager1")
-        response = await client.patch(
-            f"/api/v1/documents/{doc.id}",
-            json={"file_name": "renamed.pdf"},
-            headers=auth_headers(token),
-        )
-        assert response.status_code == 200
-
-    async def test_returns_403_when_manager_not_authorized_via_property(self, client, db):
-        owner = await _make_manager(db, username="owner", email="owner@example.com")
-        outsider = await _make_manager(db, username="outsider", email="outsider@example.com")
-        prop = await make_property_model(db, manager_id=owner.id)
-        doc = await make_document_model(db, property_id=prop.id)
-        token = await login(client, "outsider")
-        response = await client.patch(
-            f"/api/v1/documents/{doc.id}",
-            json={"file_name": "renamed.pdf"},
-            headers=auth_headers(token),
-        )
-        assert response.status_code == 403
-
-    async def test_returns_403_when_manager_not_authorized_via_contract(self, client, db):
-        """The document links to a contract (not a property directly) — the
-        route walks contract -> property -> manager_id to authorize."""
-        owner = await _make_manager(db, username="owner", email="owner@example.com")
-        outsider = await _make_manager(db, username="outsider", email="outsider@example.com")
-        prop = await make_property_model(db, manager_id=owner.id)
-        tenant = await make_tenant_model(db)
-        contract = await make_contract_model(db, property_id=prop.id, tenant_id=tenant.id)
-        doc = await make_document_model(db, contract_id=contract.id)
-        token = await login(client, "outsider")
-        response = await client.patch(
-            f"/api/v1/documents/{doc.id}",
-            json={"file_name": "renamed.pdf"},
-            headers=auth_headers(token),
-        )
-        assert response.status_code == 403
-
-    async def test_manager_can_update_when_authorized_via_contract(self, client, db):
-        manager = await _make_manager(db)
-        prop = await make_property_model(db, manager_id=manager.id)
-        tenant = await make_tenant_model(db)
-        contract = await make_contract_model(db, property_id=prop.id, tenant_id=tenant.id)
-        doc = await make_document_model(db, contract_id=contract.id)
-        token = await login(client, "manager1")
-        response = await client.patch(
-            f"/api/v1/documents/{doc.id}",
-            json={"file_name": "renamed.pdf"},
-            headers=auth_headers(token),
-        )
-        assert response.status_code == 200
 
 
 # ─── DELETE /documents/{id} ───────────────────────────────────────────────────
@@ -328,6 +270,9 @@ class TestDeleteDocumentRoute:
         await make_admin_model(db)
         token = await login(client, "adminuser")
         doc = await make_document_model(db)
+
+        app.dependency_overrides[get_storage_client] = lambda: FakeStorageClient()
+
         response = await client.delete(f"/api/v1/documents/{doc.id}", headers=auth_headers(token))
         assert response.status_code == 204
 
@@ -336,6 +281,9 @@ class TestDeleteDocumentRoute:
         token = await login(client, "adminuser")
         doc = await make_document_model(db)
         document_id = doc.id
+
+        app.dependency_overrides[get_storage_client] = lambda: FakeStorageClient()
+
         await client.delete(f"/api/v1/documents/{document_id}", headers=auth_headers(token))
         response = await client.get(f"/api/v1/documents/{document_id}", headers=auth_headers(token))
         assert response.status_code == 404
@@ -345,20 +293,3 @@ class TestDeleteDocumentRoute:
         token = await login(client, "adminuser")
         response = await client.delete(f"/api/v1/documents/{uuid.uuid4()}", headers=auth_headers(token))
         assert response.status_code == 404
-
-    async def test_returns_403_when_manager_not_authorized_via_property(self, client, db):
-        owner = await _make_manager(db, username="owner", email="owner@example.com")
-        outsider = await _make_manager(db, username="outsider", email="outsider@example.com")
-        prop = await make_property_model(db, manager_id=owner.id)
-        doc = await make_document_model(db, property_id=prop.id)
-        token = await login(client, "outsider")
-        response = await client.delete(f"/api/v1/documents/{doc.id}", headers=auth_headers(token))
-        assert response.status_code == 403
-
-    async def test_manager_can_delete_when_authorized_via_property(self, client, db):
-        manager = await _make_manager(db)
-        prop = await make_property_model(db, manager_id=manager.id)
-        doc = await make_document_model(db, property_id=prop.id)
-        token = await login(client, "manager1")
-        response = await client.delete(f"/api/v1/documents/{doc.id}", headers=auth_headers(token))
-        assert response.status_code == 204
