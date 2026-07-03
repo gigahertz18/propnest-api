@@ -1,8 +1,8 @@
 import logging
 
+from dataclasses import dataclass
 from io import BytesIO
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from uuid import UUID
 
 from app.repositories.document import DocumentRepository
@@ -22,6 +22,23 @@ from app.services.exceptions import (
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class DocumentContext:
+    """
+    Fully prepared context for a document operation.
+
+    After this object is returned:
+    - all related resources have been validated to exist
+    - authorization has been checked
+    - property/contract/tenant resolution has been performed
+    """
+
+    document: Document | None
+    property_id: UUID | None
+    contract_id: UUID | None
+    tenant_id: UUID | None
 
 
 class DocumentService:
@@ -99,39 +116,41 @@ class DocumentService:
           a minimal stub implementing `put_object` or `stat_object`.
         - `file_obj` is an optional file-like object (e.g., FastAPI `UploadFile`).
         """
-        if any([self.property_repo, self.contract_repo, self.tenant_repo]):
-            await self._validate_related_resources(
-                db, property_id=payload.property_id, contract_id=payload.contract_id, tenant_id=payload.tenant_id
-            )
 
-        if current_user:
-            await self._authorize_user_to_property(
-                db,
-                current_user,
-                property_id=payload.property_id,
-                contract_id=payload.contract_id,
-            )
+        ctx = await self._prepare_document_context(
+            db,
+            doc=None,
+            property_id=payload.property_id,
+            contract_id=payload.contract_id,
+            tenant_id=payload.tenant_id,
+            current_user=current_user,
+        )
 
-        if payload.tenant_id:
-            logger.info(f"Creating document linked to {payload.tenant_id}.")
-
+        resolved_payload = DocumentCreate(
+            file_name=payload.file_name,
+            file_type=payload.file_type,
+            file_url=payload.file_url,
+            property_id=ctx.property_id,
+            contract_id=ctx.contract_id,
+            tenant_id=ctx.tenant_id,
+        )
         # Step 1: upload to storage first - before any DB write.
         # If this fails, nothing is written to the DB
         if storage_client is not None and file_obj is not None:
             try:
-                self._upload_to_storage(storage_client, payload, file_obj)
+                self._upload_to_storage(storage_client, resolved_payload, file_obj)
             except Exception:
                 raise  # let route handle this - no DB record created
 
         # Step 2: write DB record only after upload succeeds
         # If this failes, attempt to clean up the orphaned storage object
         try:
-            document = await self.document_repo.create(db, payload)
+            document = await self.document_repo.create(db, resolved_payload)
             await db.commit()
             return document
         except Exception:
             if storage_client is not None and file_obj is not None:
-                self._delete_from_storage(storage_client, payload.file_name)
+                self._delete_from_storage(storage_client, resolved_payload.file_name)
             raise
 
     async def update_document(
@@ -142,36 +161,25 @@ class DocumentService:
         current_user: User | None = None,
     ) -> Document | None:
 
-        if any([self.property_repo, self.contract_repo, self.tenant_repo]):
-            await self._validate_related_resources(
-                db,
-                property_id=payload.property_id,
-                contract_id=payload.contract_id,
-                tenant_id=payload.tenant_id,
-            )
+        doc = await self._load_document_or_raise(db, doc_id)
 
-        doc = await self.document_repo.get_by_id(db, doc_id)
+        ctx = await self._prepare_document_context(
+            db,
+            doc=doc,
+            property_id=payload.property_id,
+            contract_id=payload.contract_id,
+            tenant_id=payload.tenant_id,
+            current_user=current_user,
+        )
 
-        if not doc:
-            raise RelatedResourceNotFoundError(f"Document {doc_id} not found.")
-
-        property_id = payload.property_id
-        contract_id = payload.contract_id
-
-        if not property_id and not contract_id:
-            property_id = doc.property_id
-            contract_id = doc.contract_id
-
-        if current_user:
-            await self._authorize_user_to_property(
-                db,
-                current_user,
-                property_id=property_id,
-                contract_id=contract_id,
-            )
+        resolved_payload = DocumentRelinkUpdate(
+            property_id=ctx.property_id,
+            contract_id=ctx.contract_id,
+            tenant_id=ctx.tenant_id,
+        )
 
         try:
-            doc = await self.document_repo.update(db, doc_id, payload)
+            doc = await self.document_repo.update(db, doc_id, resolved_payload)
             await db.commit()
             return doc
         except Exception:
@@ -187,67 +195,40 @@ class DocumentService:
         file_obj,
         current_user: User | None = None,
     ) -> Document | None:
-        """Replace the physical file behind an existing document record,
-        optionally relinking it to a different property, contract, or
-        tenant in the same request.
+        """
+        Replace the file behind an existing document, optionally updating its
+        property, contract, or tenant association.
 
-        This exists because "replace the file" and "relink it" are almost
-        always the same intent from the caller's point of view — splitting
-        them into two required HTTP calls (upload, then patch) would be
-        pure overhead with no case where you'd want them decoupled.
-
-        `property_id`/`contract_id`/`tenant_id` here mean "leave unchanged
-        if None, set to this value if provided" — there's no way to
-        explicitly clear a link through this method (unlike DocumentUpdate,
-        which distinguishes "omitted" from "explicitly null" via
-        exclude_unset). Use PATCH /{id} for that.
-
-        Operation order (atomicity):
-        1. Fetch the document. Return None if missing (route -> 404).
-        2. Validate any newly-provided property_id/contract_id/tenant_id
-            actually exist — before touching storage.
-        3. Authorize against the RESOLVED target: if property_id or
-            contract_id was provided (i.e. this call also reassigns the
-            document), authorize against that new value — not the
-            document's old one. This mirrors update_document's
-            anti-reassignment-bypass fix; the same bypass would exist here
-            otherwise. If neither was provided, authorize against the
-            document's existing values.
-        4. Upload the new file to storage — no DB write yet.
-        5. Update the DB record (file fields + any relink fields
-            provided). If this raises, delete the newly-uploaded storage
-            object before re-raising, so it doesn't become an orphan.
-        6. Commit.
-        7. Best-effort delete of the OLD storage object, only if the
-            filename changed. Deliberately last and non-fatal: a lingering
-            old file is far less harmful than a missing new one, and by
-            this point the DB record no longer references it anyway.
+        The operation uploads the new file, updates the document record, and
+        removes the old file after a successful commit. If the database update
+        fails after the upload, the newly uploaded file is deleted to prevent
+        orphaned storage objects.
 
         Raises:
-            RelatedResourceNotFoundError: a provided property_id,
-                contract_id, or tenant_id doesn't exist.
-            DocumentForbiddenError: current_user isn't authorized.
-            DocumentUploadError: storage upload failed — DB is untouched.
+            RelatedResourceNotFoundError: The document or a related resource was not found.
+            DocumentForbiddenError: The current user is not authorized to modify the document.
+            DocumentUploadError: Uploading the new file failed.
+            DocumentDeletionError: Deleting the old file from storage failed.
         """
-        doc = await self.document_repo.get_by_id(db, doc_id)
-        if not doc:
-            return None
+        doc = await self._load_document_or_raise(db, doc_id)
 
-        if any(x is not None for x in (payload.property_id, payload.contract_id, payload.tenant_id)):
-            await self._validate_related_resources(
-                db, property_id=payload.property_id, contract_id=payload.contract_id, tenant_id=payload.tenant_id
-            )
+        ctx = await self._prepare_document_context(
+            db,
+            doc=doc,
+            property_id=payload.property_id,
+            contract_id=payload.contract_id,
+            tenant_id=payload.tenant_id,
+            current_user=current_user,
+        )
 
-        auth_property_id = payload.property_id
-        auth_contract_id = payload.contract_id
-        if not auth_property_id and not auth_contract_id:
-            auth_property_id = doc.property_id
-            auth_contract_id = doc.contract_id
-
-        if current_user:
-            await self._authorize_user_to_property(
-                db, current_user, property_id=auth_property_id, contract_id=auth_contract_id
-            )
+        resolved_payload = DocumentFileUpdate(
+            file_name=payload.file_name,
+            file_type=payload.file_type,
+            file_url=payload.file_url,
+            property_id=ctx.property_id,
+            contract_id=ctx.contract_id,
+            tenant_id=ctx.tenant_id,
+        )
 
         old_file_name = doc.file_name
 
@@ -255,9 +236,9 @@ class DocumentService:
         # file_name/file_type off its payload, so a SimpleNamespace avoids
         # needing a full DocumentCreate here.
         try:
-            self._upload_to_storage(storage_client, payload, file_obj)
+            self._upload_to_storage(storage_client, resolved_payload, file_obj)
         except:
-            logger.exception("Storage upload failed for %s", payload.file_name)
+            logger.exception("Storage upload failed for %s", resolved_payload.file_name)
             raise
 
         try:
@@ -267,13 +248,13 @@ class DocumentService:
             # BaseRepository.update accepts a plain dict just as well as a
             # Pydantic model, so we use one here rather than adding a
             # second, internal-only schema just for this call site.
-            updated = await self.document_repo.update(db, doc_id, payload)
+            updated = await self.document_repo.update(db, doc_id, resolved_payload)
             await db.commit()
         except Exception:
-            self._delete_from_storage(storage_client, payload.file_name)
+            self._delete_from_storage(storage_client, resolved_payload.file_name)
             raise
 
-        if old_file_name != payload.file_name:
+        if old_file_name != resolved_payload.file_name:
             self._delete_from_storage(storage_client, old_file_name)
 
         return updated
@@ -286,18 +267,16 @@ class DocumentService:
         current_user: User | None = None,
     ) -> Document | None:
 
-        doc = await self.document_repo.get_by_id(db, doc_id)
+        doc = await self._load_document_or_raise(db, doc_id)
 
-        if not doc:
-            raise RelatedResourceNotFoundError(f"Document {doc_id} not found.")
-
-        if current_user:
-            await self._authorize_user_to_property(
-                db,
-                current_user,
-                property_id=doc.property_id,
-                contract_id=doc.contract_id,
-            )
+        await self._prepare_document_context(
+            db,
+            doc=doc,
+            property_id=doc.property_id,
+            contract_id=doc.contract_id,
+            tenant_id=doc.tenant_id,
+            current_user=current_user,
+        )
 
         savepoint = await db.begin_nested()
 
@@ -503,3 +482,58 @@ class DocumentService:
         except Exception as e:
             logger.warning(f"Failed to cleanup orphaned. storage object after DB write failure: {file_name}")
             raise DocumentDeletionError(f"File deletion failed: {e}")
+
+    async def _load_document_or_raise(self, db: AsyncSession, doc_id: UUID) -> Document:
+        doc = await self.document_repo.get_by_id(db, doc_id)
+        if not doc:
+            raise RelatedResourceNotFoundError(f"Document {doc_id} not found.")
+        return doc
+
+    async def _prepare_document_context(
+        self,
+        db: AsyncSession,
+        *,
+        doc: Document | None = None,
+        property_id: UUID | None = None,
+        contract_id: UUID | None = None,
+        tenant_id: UUID | None = None,
+        current_user: User | None = None,
+    ) -> DocumentContext:
+        """
+        Prepare a DocumentContext for a document operation.
+
+        - Resolves the property/contract/tenant context.
+        - Validates that any provided property_id, contract_id, or tenant_id exist.
+        - Authorizes the current_user against the resolved property/contract.
+
+        Raises:
+            RelatedResourceNotFoundError: if any provided property_id,
+                contract_id, or tenant_id doesn't exist.
+            DocumentForbiddenError: if current_user isn't authorized to
+                manage the resolved property/contract.
+        """
+        effective_property_id = property_id if property_id is not None else doc.property_id if doc else None
+        effective_contract_id = contract_id if contract_id is not None else doc.contract_id if doc else None
+        effective_tenant_id = tenant_id if tenant_id is not None else doc.tenant_id if doc else None
+
+        await self._validate_related_resources(
+            db,
+            property_id=effective_property_id,
+            contract_id=effective_contract_id,
+            tenant_id=effective_tenant_id,
+        )
+
+        if current_user:
+            await self._authorize_user_to_property(
+                db,
+                current_user,
+                property_id=effective_property_id,
+                contract_id=effective_contract_id,
+            )
+
+        return DocumentContext(
+            document=doc,
+            property_id=effective_property_id,
+            contract_id=effective_contract_id,
+            tenant_id=effective_tenant_id,
+        )

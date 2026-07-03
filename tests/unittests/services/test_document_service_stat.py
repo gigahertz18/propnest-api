@@ -66,7 +66,7 @@ async def test_create_document_translates_storage_failures(mock_db):
 async def test_delete_document_skips_storage_cleanup_when_no_storage_client_is_provided(mock_db):
     class FakeRepo:
         async def get_by_id(self, db, id):
-            return SimpleNamespace(id=id, file_name="a.pdf", property_id=None, contract_id=None)
+            return SimpleNamespace(id=id, file_name="a.pdf", property_id=None, contract_id=None, tenant_id=None)
 
         async def delete(self, db, id):
             return SimpleNamespace(id=id, file_name="a.pdf")
@@ -85,7 +85,7 @@ async def test_delete_document_translates_storage_failures(mock_db):
 
     class FakeRepo:
         async def get_by_id(self, db, id):
-            return SimpleNamespace(id=id, file_name="a.pdf", property_id=None, contract_id=None)
+            return SimpleNamespace(id=id, file_name="a.pdf", property_id=None, contract_id=None, tenant_id=None)
 
         async def delete(self, db, id):
             return SimpleNamespace(id=id, file_name="a.pdf")

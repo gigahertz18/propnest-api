@@ -1042,21 +1042,21 @@ class TestReplaceDocumentFile:
         assert storage.put_calls == []
  
     # ─── Not found ────────────────────────────────────────────────────────────
- 
-    async def test_returns_none_when_document_not_found(self, mock_db):
+
+    async def test_raise_not_found_on_nonexistent_document(self, mock_db):
         storage = self.FakeStorageClient()
         svc = _make_service()
         _, payload = self._make_doc(file_name="new.pdf")
  
-        result = await svc.replace_document_file(
-            mock_db, uuid4(),
-            payload,
-            storage_client=storage, file_obj=self._make_file_obj(),
-            current_user=self._make_admin(),
-        )
- 
-        assert result is None
-        assert storage.put_calls == []
+        with pytest.raises(RelatedResourceNotFoundError):
+            await svc.replace_document_file(
+                mock_db, 
+                uuid4(),
+                payload,
+                storage_client=storage, file_obj=self._make_file_obj(),
+                current_user=self._make_admin(),
+            )
+        
  
     # ─── Authorization (no relink involved) ────────────────────────────────────
  
