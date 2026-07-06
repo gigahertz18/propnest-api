@@ -7,6 +7,7 @@ from app.core.dependencies import get_contract_service, get_property_service, re
 
 from unittest.mock import AsyncMock
 
+
 @pytest.mark.asyncio
 class TestContractsRoutes:
     async def test_create_contract_conflict_returns_409(self, client, set_override, simple_ns):
@@ -14,7 +15,7 @@ class TestContractsRoutes:
         class FakeService:
             async def create_contract(self, db, payload):
                 raise ContractActiveError("conflict")
-            
+
         prop_id = uuid.uuid4()
         manager_id = uuid.uuid4()
         # Property owned by another manager
@@ -57,9 +58,7 @@ class TestContractsRoutes:
         fake_manager = simple_ns(manager_id=uuid.uuid4())
         set_override(get_contract_service, lambda: simple_ns(get_contract=AsyncMock(return_value=fake_contract)))
         # property_service returns a property managed by someone else
-        set_override(
-            get_property_service, lambda: simple_ns(get_property=AsyncMock(return_value=fake_manager))
-        )
+        set_override(get_property_service, lambda: simple_ns(get_property=AsyncMock(return_value=fake_manager)))
         # current user is a manager with a different id
         set_override(require_manager_or_above, lambda: simple_ns(id=uuid.uuid4(), role=UserRole.MANAGER))
 
@@ -67,7 +66,7 @@ class TestContractsRoutes:
         assert response.status_code == 403
 
     async def test_update_contract_returns_404_when_update_not_found(self, client, set_override, simple_ns, admin_user):
-        
+
         fake_contract = simple_ns(property_id=uuid.uuid4())
         # Admin bypasses manager check
         set_override(require_manager_or_above, lambda: admin_user)
@@ -89,8 +88,7 @@ class TestContractsRoutes:
         set_override(
             get_contract_service,
             lambda: simple_ns(
-                get_contract=AsyncMock(return_value=fake_contract), 
-                delete_contract=AsyncMock(return_value=None)
+                get_contract=AsyncMock(return_value=fake_contract), delete_contract=AsyncMock(return_value=None)
             ),
         )
 

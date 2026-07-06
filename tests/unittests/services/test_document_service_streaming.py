@@ -81,6 +81,7 @@ def make_upload(content: bytes, filename: str, content_type: str, seekable: bool
 def make_payload(name: str, mime: str):
     return DocumentCreate(file_name=name, file_type=mime, file_url="")
 
+
 @pytest.mark.asyncio
 async def test_streams_file_and_passes_length_and_content_type(db, service):
     content = b"%PDF-1.4 test content"
@@ -97,6 +98,7 @@ async def test_streams_file_and_passes_length_and_content_type(db, service):
     assert call["length"] == len(content)
     assert call["content_type"] == "application/pdf"
     assert created.file_name == "test.pdf"
+
 
 @pytest.mark.asyncio
 async def test_streams_file_to_storage_and_reads_content(db, service):
@@ -115,6 +117,7 @@ async def test_streams_file_to_storage_and_reads_content(db, service):
     assert call["data"] == content
     assert call["content_type"] == payload.file_type
 
+
 @pytest.mark.asyncio
 async def test_rejects_disallowed_mime(db, service):
     content = b"SOME-TEXT"
@@ -125,6 +128,7 @@ async def test_rejects_disallowed_mime(db, service):
 
     with pytest.raises(DocumentUploadError):
         await service.create_document(db, payload, storage_client=storage, file_obj=upload)
+
 
 @pytest.mark.asyncio
 async def test_handles_non_seekable_stream(db, service):
@@ -139,6 +143,7 @@ async def test_handles_non_seekable_stream(db, service):
     assert doc is not None
     assert len(storage.calls) == 1
     assert storage.calls[0]["data"] == content
+
 
 @pytest.mark.asyncio
 async def test_put_object_called_with_correct_signature(db, service):
@@ -158,6 +163,7 @@ async def test_put_object_called_with_correct_signature(db, service):
     assert doc is not None
     assert len(storage.calls) == 1
     assert storage.calls[0]["data"] == content
+
 
 @pytest.mark.asyncio
 async def test_rejects_large_file_via_max_size_override(db, service):

@@ -27,12 +27,14 @@ async def test_create_document_uploads_to_storage_when_file_is_provided(mock_db)
             self.calls = []
 
         def put_object(self, bucket, name, stream, length=None, content_type=None):
-            self.calls.append({
-                "bucket": bucket,
-                "name": name,
-                "length": length,
-                "content_type": content_type,
-            })
+            self.calls.append(
+                {
+                    "bucket": bucket,
+                    "name": name,
+                    "length": length,
+                    "content_type": content_type,
+                }
+            )
 
     class FakeRepo:
         async def create(self, db, payload):

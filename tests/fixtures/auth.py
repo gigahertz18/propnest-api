@@ -6,11 +6,13 @@ from dataclasses import dataclass
 from app.models.user import User, UserRole
 from tests.factories import make_user_model
 
+
 @dataclass
 class AuthContext:
     user: User
     token: str
     headers: dict[str, str]
+
 
 async def login(client, identifier: str, password: str = "password123") -> str:
     """Returns a bearer token for the given identifier."""
@@ -46,11 +48,12 @@ async def create_authenticated_user(client, db):
             role=role,
             password=password,
         )
-        
+
         token = await login(client, username, password=password)
         return AuthContext(user, token, auth_headers(token))
-    
+
     return _create_user_and_token
+
 
 @pytest_asyncio.fixture
 async def authenticate_admin(create_authenticated_user):
@@ -60,8 +63,9 @@ async def authenticate_admin(create_authenticated_user):
         kwargs.setdefault("full_name", "Admin User")
         kwargs.setdefault("role", UserRole.ADMIN)
         return await create_authenticated_user(**kwargs)
-    
+
     return _create
+
 
 @pytest_asyncio.fixture
 async def authenticate_manager(create_authenticated_user):
@@ -71,11 +75,13 @@ async def authenticate_manager(create_authenticated_user):
         kwargs.setdefault("full_name", "Manager User")
         kwargs.setdefault("role", UserRole.MANAGER)
         return await create_authenticated_user(**kwargs)
-    
+
     return _create
+
 
 @pytest_asyncio.fixture
 async def authenticate_user(create_authenticated_user):
     async def _create(**kwargs):
         return await create_authenticated_user(**kwargs)
+
     return _create

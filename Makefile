@@ -97,13 +97,33 @@ test-be-cov:
 
 # ─── Backend Lint & Format ───────────────────────────────
 lint-be:
-	$(TEST_EXEC) backend ruff check app
+	$(TEST_EXEC) backend ruff check  \
+						app \
+						tests \
+						scripts \
+						alembic
 
 lint-be-fix:
-	$(TEST_EXEC) backend ruff check app --fix
+	$(TEST_EXEC) backend ruff check \
+						app \
+						tests \
+						scripts \
+						alembic \
+						--fix
 
 format-be:
-	$(TEST_EXEC) backend black --check --line-length 120 app
+	$(TEST_EXEC) backend black --check \
+						app \
+						tests \
+						scripts \
+						alembic
+
+format-be-fix:
+	$(TEST_EXEC) backend black -l 120 \
+						app \
+						tests \
+						scripts \
+						alembic
 
 # ─── Helpers ──────────────────────────────────────────────
 ps:

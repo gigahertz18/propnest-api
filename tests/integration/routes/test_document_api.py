@@ -11,6 +11,7 @@ from tests.factories import (
     make_property_model,
 )
 
+
 class FakeStorageClient:
     """Minimal stand-in for the MinIO client — only what DocumentService touches."""
 
@@ -72,6 +73,7 @@ class TestGetDocumentRoute:
         response = await client.get(f"/api/v1/documents/{uuid.uuid4()}", headers=auth_ctx.headers)
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]
+
 
 # ─── POST /documents/ (JSON metadata-only create) ────────────────────────────
 
@@ -142,6 +144,7 @@ class TestCreateDocumentRoute:
 
 # ─── POST /documents/upload (multipart upload) ───────────────────────────────
 
+
 @pytest.mark.asyncio
 class TestUploadDocumentRoute:
     async def test_uploads_document_successfully(self, client, authenticate_admin):
@@ -186,19 +189,19 @@ class TestUploadDocumentRoute:
             headers=auth_ctx.headers,
         )
         assert response.status_code == 422
-    
+
     async def test_returns_404_when_property_not_found(self, client, authenticate_admin):
 
         auth_ctx = await authenticate_admin()
         app.dependency_overrides[get_storage_client] = lambda: FakeStorageClient()
-        
+
         response = await client.post(
             "/api/v1/documents/upload",
             files={"file": ("upload.pdf", b"%PDF-1.4 fake content", "application/pdf")},
             data={"file_type": "application/pdf", "property_id": str(uuid.uuid4())},
             headers=auth_ctx.headers,
         )
-        
+
         assert response.status_code == 404
 
     async def test_returns_403_when_manager_not_authorized_for_property(self, client, db, authenticate_manager):
@@ -262,25 +265,21 @@ class TestUpdateDocumentRoute:
         assert response.status_code == 404
 
     async def test_returns_403_when_manager_not_authorized_for_property(self, client, db, authenticate_user):
-            owner_ctx = await authenticate_user(
-                username="owner",
-                email="owner@example.com"
-            )
-            outsider_ctx = await authenticate_user(
-                username="outsider",
-                email="outsider@example.com"
-            )
-            prop = await make_property_model(db, manager_id=owner_ctx.user.id)
-            doc = await make_document_model(db, property_id=prop.id)
+        owner_ctx = await authenticate_user(username="owner", email="owner@example.com")
+        outsider_ctx = await authenticate_user(username="outsider", email="outsider@example.com")
+        prop = await make_property_model(db, manager_id=owner_ctx.user.id)
+        doc = await make_document_model(db, property_id=prop.id)
 
-            response = await client.patch(
-                f"/api/v1/documents/{doc.id}",
-                json={"property_id": str(prop.id)},
-                headers=outsider_ctx.headers,
-            )
-            assert response.status_code == 403
-            
+        response = await client.patch(
+            f"/api/v1/documents/{doc.id}",
+            json={"property_id": str(prop.id)},
+            headers=outsider_ctx.headers,
+        )
+        assert response.status_code == 403
+
+
 # ─── DELETE /documents/{id} ───────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 class TestDeleteDocumentRoute:
@@ -310,17 +309,10 @@ class TestDeleteDocumentRoute:
         assert response.status_code == 404
 
     async def test_returns_403_when_manager_not_authorized_for_property(self, client, db, authenticate_manager):
-        owner_ctx = await authenticate_manager(
-            username="owner",
-            email="owner@example.com"
-        )
-        outsider_ctx = await authenticate_manager(
-            username="outsider",
-            email="outsider@example.com"
-        )
+        owner_ctx = await authenticate_manager(username="owner", email="owner@example.com")
+        outsider_ctx = await authenticate_manager(username="outsider", email="outsider@example.com")
         prop = await make_property_model(db, manager_id=owner_ctx.user.id)
         doc = await make_document_model(db, property_id=prop.id)
-
 
         response = await client.delete(f"/api/v1/documents/{doc.id}", headers=outsider_ctx.headers)
         assert response.status_code == 403
@@ -335,8 +327,8 @@ class TestDeleteDocumentRoute:
 
         response = await client.delete(f"/api/v1/documents/{doc.id}", headers=auth_ctx.headers)
         assert response.status_code == 503
-        
-        
+
+
 # ─── PATCH /{id}/file ───────────────────────────────────────────────────
 @pytest.mark.asyncio
 class TestReplaceDocumentFileRoute:
@@ -365,7 +357,9 @@ class TestReplaceDocumentFileRoute:
             data={"file_type": "application/pdf"},
             headers=auth_ctx.headers,
         )
-        assert response.status_code == 422  # FastAPI validates this before your 400 check fires — verify which actually wins
+        assert (
+            response.status_code == 422
+        )  # FastAPI validates this before your 400 check fires — verify which actually wins
 
     async def test_returns_404_when_document_not_found(self, client, authenticate_admin):
         auth_ctx = await authenticate_admin()
@@ -380,15 +374,9 @@ class TestReplaceDocumentFileRoute:
         assert response.status_code == 404
 
     async def test_returns_403_when_manager_not_authorized(self, client, db, authenticate_manager):
-        owner_ctx = await authenticate_manager(
-            username="owner",
-            email="owner@example.com"
-        )
-        outsider_ctx = await authenticate_manager(
-            username="outsider",
-            email="outsider@example.com"
-        )
-        
+        owner_ctx = await authenticate_manager(username="owner", email="owner@example.com")
+        outsider_ctx = await authenticate_manager(username="outsider", email="outsider@example.com")
+
         prop = await make_property_model(db, manager_id=owner_ctx.user.id)
         doc = await make_document_model(db, property_id=prop.id)
         app.dependency_overrides[get_storage_client] = lambda: FakeStorageClient()

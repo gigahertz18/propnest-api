@@ -5,6 +5,7 @@ from app.schemas.property import PropertyCreate, PropertyUpdate
 from app.models.property import PropertyStatus
 from tests.factories import make_property, make_property_model
 
+
 @pytest.mark.asyncio
 class TestPropertyRepositoryGetAll:
     async def test_returns_empty_list_when_no_properties(self, db):
@@ -23,6 +24,7 @@ class TestPropertyRepositoryGetAll:
         result = await property_repo.get_all(db, skip=2, limit=2)
         assert len(result) == 2
 
+
 @pytest.mark.asyncio
 class TestPropertyRepositoryGetById:
     async def test_returns_property_when_found(self, db):
@@ -34,6 +36,7 @@ class TestPropertyRepositoryGetById:
     async def test_returns_none_when_not_found(self, db):
         result = await property_repo.get_by_id(db, uuid.uuid4())
         assert result is None
+
 
 @pytest.mark.asyncio
 class TestPropertyRepositoryCreate:
@@ -56,6 +59,7 @@ class TestPropertyRepositoryCreate:
         result = await property_repo.create(db, payload)
         assert result.status == PropertyStatus.vacant
 
+
 @pytest.mark.asyncio
 class TestPropertyRepositoryUpdate:
     async def test_updates_specified_fields_only(self, db):
@@ -76,6 +80,7 @@ class TestPropertyRepositoryUpdate:
         result = await property_repo.update(db, prop.id, payload)
         assert result.status == PropertyStatus.occupied
 
+
 @pytest.mark.asyncio
 class TestPropertyRepositoryDelete:
     async def test_deletes_property_successfully(self, db):
@@ -88,6 +93,7 @@ class TestPropertyRepositoryDelete:
     async def test_returns_none_when_not_found(self, db):
         result = await property_repo.delete(db, uuid.uuid4())
         assert result is None
+
 
 @pytest.mark.asyncio
 class TestPropertyRepositoryCustomQueries:

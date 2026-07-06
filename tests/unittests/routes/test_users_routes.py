@@ -1,18 +1,24 @@
 import pytest
 import uuid
-from app.core.dependencies import get_user_service, get_current_user,  require_admin
+from app.core.dependencies import get_user_service, get_current_user, require_admin
 from app.services.exceptions import EmailAlreadyExistsError, UserNotFoundError
+
+
 class FakeService:
     async def create_user(self, db, payload):
         raise EmailAlreadyExistsError("duplicate")
+
     async def update_user(self, db, user_id, payload):
         raise UserNotFoundError("not found")
+
     async def delete_user(self, db, user_id):
         raise UserNotFoundError("not found")
+
+
 @pytest.mark.asyncio
 class TestUsersRoutes:
     async def test_create_user_conflict_returns_409(self, client, set_override, admin_user):
-        
+
         set_override(get_user_service, lambda: FakeService())
         set_override(require_admin, lambda: admin_user)
 

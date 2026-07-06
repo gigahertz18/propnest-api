@@ -33,6 +33,7 @@ async def active_contract(db, property_, tenant):
 
 # ─── get_all ──────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 class TestContractRepositoryGetAll:
     async def test_returns_empty_list_when_no_contracts(self, db):
@@ -69,6 +70,7 @@ class TestContractRepositoryGetAll:
 
 # ─── get_by_id ────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 class TestContractRepositoryGetById:
     async def test_returns_contract_when_found(self, db, active_contract):
@@ -82,6 +84,7 @@ class TestContractRepositoryGetById:
 
 
 # ─── create ───────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 class TestContractRepositoryCreate:
@@ -155,6 +158,7 @@ class TestContractRepositoryCreate:
         result = await contract_repo.create(db, payload)
         assert result.deposit is None
 
+
 class TestContractRepositoryCreateEdgeCases:
     def test_rent_amount_zero_raises_validation_error(self, db, property_, tenant):
         with pytest.raises(ValidationError):
@@ -210,7 +214,9 @@ class TestContractRepositoryCreateEdgeCases:
                 )
             )
 
+
 # ─── update ───────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 class TestContractRepositoryUpdate:
@@ -250,6 +256,7 @@ class TestContractRepositoryUpdate:
         assert result.status == active_contract.status
         assert result.booking_source == active_contract.booking_source
 
+
 class TestContractRespositoryUpdateEdgeCases:
     def test_rent_amount_zero_raises_validation_error(self, db):
         with pytest.raises(ValidationError):
@@ -278,6 +285,7 @@ class TestContractRespositoryUpdateEdgeCases:
 
 # ─── delete ───────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 class TestContractRepositoryDelete:
     async def test_deletes_contract_successfully(self, db, active_contract):
@@ -293,6 +301,7 @@ class TestContractRepositoryDelete:
 
 
 # ─── get_by_property ──────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 class TestContractRepositoryGetByProperty:
@@ -319,6 +328,7 @@ class TestContractRepositoryGetByProperty:
 
 
 # ─── get_by_tenant ────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 class TestContractRepositoryGetByTenant:
@@ -347,6 +357,7 @@ class TestContractRepositoryGetByTenant:
 
 # ─── get_by_status ────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 class TestContractRepositoryGetByStatus:
     async def test_returns_contracts_with_matching_status(self, db, property_, tenant):
@@ -367,15 +378,20 @@ class TestContractRepositoryGetByStatus:
 
 # ─── get_by_rental_type ───────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 class TestContractRepositoryGetByRentalType:
     async def test_returns_contracts_with_matching_rental_type(self, db, property_, tenant):
         await make_contract_model(db, property_id=property_.id, tenant_id=tenant.id, rental_type=RentalType.long_term)
         other_property = await make_property_model(db, name="Other Property")
-        await make_contract_model(db, property_id=other_property.id, tenant_id=tenant.id, rental_type=RentalType.long_term)
+        await make_contract_model(
+            db, property_id=other_property.id, tenant_id=tenant.id, rental_type=RentalType.long_term
+        )
         # Place the non-matching short-term contract on a different property
         third_property = await make_property_model(db, name="Third Property")
-        await make_contract_model(db, property_id=third_property.id, tenant_id=tenant.id, rental_type=RentalType.short_term)
+        await make_contract_model(
+            db, property_id=third_property.id, tenant_id=tenant.id, rental_type=RentalType.short_term
+        )
 
         result = await contract_repo.get_by_rental_type(db, RentalType.long_term)
         assert len(result) == 2
@@ -388,6 +404,7 @@ class TestContractRepositoryGetByRentalType:
 
 
 # ─── get_by_booking_source ────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 class TestContractRepositoryGetByBookingSource:
@@ -410,6 +427,7 @@ class TestContractRepositoryGetByBookingSource:
 
 
 # ─── get_active_contract_by_property ─────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 class TestContractRepositoryGetActiveContractByProperty:

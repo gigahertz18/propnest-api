@@ -6,6 +6,7 @@ from app.repositories.tenant import tenant_repo
 from app.schemas.tenant import TenantCreate, TenantUpdate
 from tests.factories import make_tenant, make_tenant_model
 
+
 @pytest.mark.asyncio
 class TestTenantRepositoryGetAll:
     async def test_returns_empty_list_when_no_tenants(self, db):
@@ -30,6 +31,7 @@ class TestTenantRepositoryGetAll:
         result = await tenant_repo.get_all(db, limit=0)
         assert result == []
 
+
 @pytest.mark.asyncio
 class TestTenantRepositoryGetById:
     async def test_returns_tenant_when_found(self, db):
@@ -41,6 +43,7 @@ class TestTenantRepositoryGetById:
     async def test_returns_none_when_not_found(self, db):
         result = await tenant_repo.get_by_id(db, uuid.uuid4())
         assert result is None
+
 
 @pytest.mark.asyncio
 class TestTenantRepositoryCreate:
@@ -109,6 +112,7 @@ class TestTenantRepositoryCreate:
         result = await tenant_repo.create(db, payload)
         assert result is not None
 
+
 @pytest.mark.asyncio
 class TestTenantRepositoryUpdate:
     async def test_updates_full_name(self, db):
@@ -146,6 +150,7 @@ class TestTenantRepositoryUpdate:
         fetched = await tenant_repo.get_by_id(db, tenant.id)
         assert fetched.full_name == "Saved Name"
 
+
 @pytest.mark.asyncio
 class TestTenantRepositoryDelete:
     async def test_deletes_tenant_successfully(self, db):
@@ -162,6 +167,7 @@ class TestTenantRepositoryDelete:
     async def test_returns_none_when_not_found(self, db):
         result = await tenant_repo.delete(db, uuid.uuid4())
         assert result is None
+
 
 @pytest.mark.asyncio
 class TestTenantRepositoryGetByEmail:
@@ -187,6 +193,7 @@ class TestTenantRepositoryGetByEmail:
         result = tenant_repo.get_by_email(db, "dup@example.com")
         assert result is not None
 
+
 @pytest.mark.asyncio
 class TestTenantRepositoryGetByPhoneNumber:
     async def test_returns_tenant_when_found(self, db):
@@ -203,6 +210,7 @@ class TestTenantRepositoryGetByPhoneNumber:
         await make_tenant_model(db, phone_number="09123456789")
         result = await tenant_repo.get_by_phone_number(db, "0912")
         assert result is None
+
 
 @pytest.mark.asyncio
 class TestTenantRepositoryGetByFullName:
@@ -230,6 +238,7 @@ class TestTenantRepositoryGetByFullName:
     async def test_returns_empty_list_when_no_match(self, db):
         result = await tenant_repo.get_by_full_name(db, "Nonexistent XYZ9999")
         assert result == []
+
 
 @pytest.mark.asyncio
 class TestTenantRepositoryGetByOccupation:
@@ -263,6 +272,7 @@ class TestTenantRepositoryGetByOccupation:
         result = await tenant_repo.get_by_occupation(db, "Engineer")
         # Tenants with NULL occupation should not appear in filtered results
         assert all(t.occupation is not None for t in result)
+
 
 @pytest.mark.asyncio
 class TestTenantRepositoryGetByDateOfBirth:

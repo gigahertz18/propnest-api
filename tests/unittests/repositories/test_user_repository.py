@@ -1,10 +1,7 @@
 import asyncio
 import uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
-import pytest_asyncio
-from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -15,6 +12,7 @@ from app.schemas.user import UserCreate, UserUpdate
 from app.models.user import UserRole
 from app.core.security import verify_password
 from tests.factories import make_user, make_user_model, make_admin_model
+
 
 @pytest.mark.asyncio
 class TestUserRepositoryGetAll:
@@ -34,6 +32,7 @@ class TestUserRepositoryGetAll:
         result = await user_repo.get_all(db, skip=2, limit=2)
         assert len(result) == 2
 
+
 @pytest.mark.asyncio
 class TestUserRepositoryGetById:
     async def test_returns_user_when_found(self, db):
@@ -45,6 +44,7 @@ class TestUserRepositoryGetById:
     async def test_returns_none_when_not_found(self, db):
         result = await user_repo.get_by_id(db, uuid.uuid4())
         assert result is None
+
 
 @pytest.mark.asyncio
 class TestUserRepositoryGetByEmail:
@@ -58,6 +58,7 @@ class TestUserRepositoryGetByEmail:
         result = await user_repo.get_by_email(db, "missing@example.com")
         assert result is None
 
+
 @pytest.mark.asyncio
 class TestUserRepositoryGetByUsername:
     async def test_returns_user_when_found(self, db):
@@ -69,6 +70,7 @@ class TestUserRepositoryGetByUsername:
     async def test_returns_none_when_not_found(self, db):
         result = await user_repo.get_by_username(db, "nobody")
         assert result is None
+
 
 @pytest.mark.asyncio
 class TestUserRepositoryGetByIdentifier:
@@ -136,31 +138,30 @@ class TestUserRepositoryCreate:
             class_=AsyncSession,
             expire_on_commit=False,
         )
-        
+
         success = failure = 0
-        
+
         async def create_user():
             async with SessionLocal() as session:
                 try:
                     await user_repo.create(
-                        session, 
-                        UserCreate(**make_user(username="racer", email="racer@example.com"))
+                        session, UserCreate(**make_user(username="racer", email="racer@example.com"))
                     )
                     await session.commit()
                     return True
                 except IntegrityError:
                     await session.rollback()
                     return False
-        
+
         try:
             results = await asyncio.gather(
                 create_user(),
                 create_user(),
             )
-            
+
             success = sum(results)
             failure = len(results) - success
-        
+
         finally:
             # cleanup created user so subsequent tests
             # are not affected by rows inserted outside the test transaction.
@@ -169,10 +170,10 @@ class TestUserRepositoryCreate:
                 if user:
                     await cleanup_session.delete(user)
                     await cleanup_session.commit()
-                    
+
         assert success == 1
         assert failure == 1
-             
+
 
 @pytest.mark.asyncio
 class TestUserRepositoryUpdate:
@@ -206,6 +207,7 @@ class TestUserRepositoryUpdate:
         result = await user_repo.update(db, uuid.uuid4(), payload)
         assert result is None
 
+
 @pytest.mark.asyncio
 class TestUserRepositoryDelete:
     async def test_deletes_user_successfully(self, db):
@@ -218,6 +220,7 @@ class TestUserRepositoryDelete:
     async def test_returns_none_when_not_found(self, db):
         result = await user_repo.delete(db, uuid.uuid4())
         assert result is None
+
 
 @pytest.mark.asyncio
 class TestUserRepositoryGetByRole:

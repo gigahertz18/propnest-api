@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from app.services.contract_service import ContractService
 from app.services.exceptions import ContractActiveError
 
+
 @pytest.mark.asyncio
 async def test_create_contract_translates_integrity_error_with_uq(mock_db):
     class Repo:
@@ -19,6 +20,7 @@ async def test_create_contract_translates_integrity_error_with_uq(mock_db):
     with pytest.raises(ContractActiveError):
         await svc.create_contract(db=mock_db, payload=None)
 
+
 @pytest.mark.asyncio
 async def test_create_contract_translates_integrity_error_with_property_key(mock_db):
     class Repo:
@@ -32,6 +34,7 @@ async def test_create_contract_translates_integrity_error_with_property_key(mock
     with pytest.raises(ContractActiveError):
         await svc.create_contract(db=mock_db, payload=None)
 
+
 @pytest.mark.asyncio
 async def test_create_contract_reraises_other_integrity_errors(mock_db):
     class Repo:
@@ -42,6 +45,7 @@ async def test_create_contract_reraises_other_integrity_errors(mock_db):
 
     with pytest.raises(IntegrityError):
         await svc.create_contract(db=mock_db, payload=None)
+
 
 @pytest.mark.asyncio
 async def test_contract_service_delegates_to_repo_methods(mock_db):

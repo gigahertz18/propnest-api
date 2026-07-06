@@ -4,7 +4,6 @@ from io import BytesIO
 from types import SimpleNamespace
 from uuid import uuid4
 
-from app.api.v1.routes import documents
 from app.services.document_service import DocumentService
 from app.services.exceptions import (
     RelatedResourceNotFoundError,
@@ -14,21 +13,14 @@ from app.services.exceptions import (
 from app.repositories.document import document_repo
 from app.models.user import UserRole
 from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate
-from tests.factories import make_document
+
 
 class FailingStorage:
     def put_object(self, bucket, name, stream, length=None, content_type=None):
         raise RuntimeError("Network Error")
-    
+
     def remove_object(self, bucket, name):
         raise RuntimeError("Network error")
-
-
-# ─── Fakes shared by the helper tests below ───────────────────────────────────
-#
-# Hand-rolled, dict-backed repos — consistent with the rest of the service
-# test suite (see test_contract_service.py / test_tenant_service.py) rather
-# than an AsyncMock-based double.
 
 
 class FakePropertyRepo:
@@ -89,12 +81,12 @@ class FakeDocumentRepo:
             return None
         self.updated_payloads.append((id, payload))
         doc = self.documents[id]
-        
+
         if isinstance(payload, DocumentFileUpdate):
             doc.file_name = payload.file_name
             doc.file_type = payload.file_type
             doc.file_url = payload.file_url
-        
+
         doc.property_id = payload.property_id
         doc.contract_id = payload.contract_id
         doc.tenant_id = payload.tenant_id
@@ -114,14 +106,6 @@ def _make_service(properties=None, contracts=None, tenants=None, documents=None)
         contract_repo=FakeContractRepo(contracts),
         tenant_repo=FakeTenantRepo(tenants),
     )
-
-
-# ─── _get_property / _get_contract / _get_tenant ───────────────────────────────
-#
-# The atomic single-entity lookup primitives _resolve_property and
-# _validate_related_resources are both built on top of. Tested directly so
-# that "how to fetch X" is verified once, independent of the two helpers
-# that compose it.
 
 
 @pytest.mark.asyncio
@@ -170,9 +154,6 @@ class TestGetPropertyContractTenantPrimitives:
         svc = DocumentService(document_repo=document_repo)
         with pytest.raises(RuntimeError):
             await svc._get_tenant(mock_db, uuid4())
-
-
-# ─── _resolve_property ────────────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
@@ -244,9 +225,6 @@ class TestResolveProperty:
             await svc._resolve_property(mock_db, property_id=uuid4(), contract_id=None)
 
 
-# ─── _authorize_user_to_property ───────────────────────────────────────────────────────
-
-
 @pytest.mark.asyncio
 class TestAuthorizeManager:
     async def test_admin_is_always_authorized(self, mock_db):
@@ -309,14 +287,16 @@ class TestAuthorizeManager:
             await svc._authorize_user_to_property(mock_db, manager, property_id=uuid4(), contract_id=None)
 
 
-# ─── _validate_related_resources ──────────────────────────────────────────────
-
-
 @pytest.mark.asyncio
 class TestValidateRelatedResources:
     async def test_passes_when_nothing_provided(self, mock_db):
         svc = _make_service()
-        await svc._validate_related_resources(mock_db, property_id=None, contract_id=None, tenant_id=None)
+        await svc._validate_related_resources(
+            mock_db,
+            property_id=None,
+            contract_id=None,
+            tenant_id=None,
+        )
 
     async def test_passes_when_all_provided_and_exist(self, mock_db):
         prop_id, contract_id, tenant_id = uuid4(), uuid4(), uuid4()
@@ -334,21 +314,30 @@ class TestValidateRelatedResources:
         svc = _make_service()
         with pytest.raises(RelatedResourceNotFoundError):
             await svc._validate_related_resources(
-                mock_db, property_id=uuid4(), contract_id=None, tenant_id=None
+                mock_db,
+                property_id=uuid4(),
+                contract_id=None,
+                tenant_id=None,
             )
 
     async def test_raises_when_contract_id_does_not_exist(self, mock_db):
         svc = _make_service()
         with pytest.raises(RelatedResourceNotFoundError):
             await svc._validate_related_resources(
-                mock_db, property_id=None, contract_id=uuid4(), tenant_id=None
+                mock_db,
+                property_id=None,
+                contract_id=uuid4(),
+                tenant_id=None,
             )
 
     async def test_raises_when_tenant_id_does_not_exist(self, mock_db):
         svc = _make_service()
         with pytest.raises(RelatedResourceNotFoundError):
             await svc._validate_related_resources(
-                mock_db, property_id=None, contract_id=None, tenant_id=uuid4()
+                mock_db,
+                property_id=None,
+                contract_id=None,
+                tenant_id=uuid4(),
             )
 
     async def test_checks_property_before_contract_before_tenant(self, mock_db):
@@ -357,14 +346,20 @@ class TestValidateRelatedResources:
         svc = _make_service()
         with pytest.raises(RelatedResourceNotFoundError, match="Property"):
             await svc._validate_related_resources(
-                mock_db, property_id=uuid4(), contract_id=uuid4(), tenant_id=uuid4()
+                mock_db,
+                property_id=uuid4(),
+                contract_id=uuid4(),
+                tenant_id=uuid4(),
             )
 
     async def test_raises_runtime_error_when_repos_not_injected(self, mock_db):
         svc = DocumentService(document_repo=document_repo)
         with pytest.raises(RuntimeError):
             await svc._validate_related_resources(
-                mock_db, property_id=uuid4(), contract_id=None, tenant_id=None
+                mock_db,
+                property_id=uuid4(),
+                contract_id=None,
+                tenant_id=None,
             )
 
 
@@ -395,17 +390,17 @@ class TestCreateDocument:
         defaults.update(kwargs)
         return DocumentCreate(**defaults)
 
-    # ─── Translated from test_can_create_document_without_a_property ──────────
-
     async def test_creates_document_without_a_property(self, mock_db):
         """Unattached document (no property/contract/tenant) is valid —
         validation passes, no FK involved, creation succeeds."""
         svc = _make_service()
-        result = await svc.create_document(mock_db, self._payload(), current_user=self._make_admin())
+        result = await svc.create_document(
+            mock_db,
+            self._payload(),
+            current_user=self._make_admin(),
+        )
         assert result.file_name == "test.pdf"
         assert result.property_id is None
-
-    # ─── Translated from test_can_create_document_linked_only_to_a_contract ───
 
     async def test_creates_document_linked_only_to_a_contract(self, mock_db):
         """Contract-only document: contract must exist, manager must own its
@@ -417,11 +412,11 @@ class TestCreateDocument:
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
         )
         result = await svc.create_document(
-            mock_db, self._payload(contract_id=contract_id), current_user=self._make_admin()
+            mock_db,
+            self._payload(contract_id=contract_id),
+            current_user=self._make_admin(),
         )
         assert result.contract_id == contract_id
-
-    # ─── Translated from test_can_create_document_linked_only_to_a_tenant ─────
 
     async def test_creates_document_linked_only_to_a_tenant(self, mock_db):
         """Tenant-only document, created by an admin.
@@ -438,7 +433,9 @@ class TestCreateDocument:
         tenant_id = uuid4()
         svc = _make_service(tenants={tenant_id: SimpleNamespace(id=tenant_id)})
         result = await svc.create_document(
-            mock_db, self._payload(tenant_id=tenant_id), current_user=self._make_admin()
+            mock_db,
+            self._payload(tenant_id=tenant_id),
+            current_user=self._make_admin(),
         )
         assert result.tenant_id == tenant_id
 
@@ -452,11 +449,11 @@ class TestCreateDocument:
         repo = svc.document_repo
         with pytest.raises(DocumentForbiddenError):
             await svc.create_document(
-                mock_db, self._payload(tenant_id=tenant_id), current_user=self._make_manager()
+                mock_db,
+                self._payload(tenant_id=tenant_id),
+                current_user=self._make_manager(),
             )
         assert repo.created_payloads == []
-
-    # ─── Translated from test_returns_404_when_property_not_found ─────────────
 
     async def test_raises_when_property_id_does_not_exist(self, mock_db):
         """Nonexistent property_id → RelatedResourceNotFoundError before
@@ -465,11 +462,11 @@ class TestCreateDocument:
         repo = svc.document_repo
         with pytest.raises(RelatedResourceNotFoundError):
             await svc.create_document(
-                mock_db, self._payload(property_id=uuid4()), current_user=self._make_admin()
+                mock_db,
+                self._payload(property_id=uuid4()),
+                current_user=self._make_admin(),
             )
         assert repo.created_payloads == []
-
-    # ─── Translated from test_returns_404_when_contract_id_does_not_exist ─────
 
     async def test_raises_when_contract_id_does_not_exist(self, mock_db):
         """Nonexistent contract_id → RelatedResourceNotFoundError before
@@ -478,11 +475,11 @@ class TestCreateDocument:
         repo = svc.document_repo
         with pytest.raises(RelatedResourceNotFoundError):
             await svc.create_document(
-                mock_db, self._payload(contract_id=uuid4()), current_user=self._make_admin()
+                mock_db,
+                self._payload(contract_id=uuid4()),
+                current_user=self._make_admin(),
             )
         assert repo.created_payloads == []
-
-    # ─── Translated from test_returns_404_when_tenant_id_does_not_exist ───────
 
     async def test_raises_when_tenant_id_does_not_exist(self, mock_db):
         """Nonexistent tenant_id → RelatedResourceNotFoundError before
@@ -491,18 +488,16 @@ class TestCreateDocument:
         repo = svc.document_repo
         with pytest.raises(RelatedResourceNotFoundError):
             await svc.create_document(
-                mock_db, self._payload(tenant_id=uuid4()), current_user=self._make_admin()
+                mock_db,
+                self._payload(tenant_id=uuid4()),
+                current_user=self._make_admin(),
             )
         assert repo.created_payloads == []
-
-    # ─── Translated from test_manager_can_create_for_their_own_property ───────
 
     async def test_manager_can_create_for_owned_property(self, mock_db):
         manager_id = uuid4()
         prop_id = uuid4()
-        svc = _make_service(
-            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)}
-        )
+        svc = _make_service(properties={prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)})
         result = await svc.create_document(
             mock_db,
             self._payload(property_id=prop_id),
@@ -510,13 +505,9 @@ class TestCreateDocument:
         )
         assert result.property_id == prop_id
 
-    # ─── Translated from test_returns_403_when_manager_not_authorized_for_property
-
     async def test_manager_forbidden_for_unowned_property(self, mock_db):
         prop_id = uuid4()
-        svc = _make_service(
-            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())}
-        )
+        svc = _make_service(properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())})
         repo = svc.document_repo
         with pytest.raises(DocumentForbiddenError):
             await svc.create_document(
@@ -525,8 +516,6 @@ class TestCreateDocument:
                 current_user=self._make_manager(),  # different manager
             )
         assert repo.created_payloads == []
-
-    # ─── Translated from test_manager_can_create_via_contract_when_authorized ──
 
     async def test_manager_can_create_via_owned_contract(self, mock_db):
         """Manager creates a contract-only document; the contract's property
@@ -544,8 +533,6 @@ class TestCreateDocument:
             current_user=self._make_manager(manager_id),
         )
         assert result.contract_id == contract_id
-
-    # ─── Translated from test_returns_403_when_manager_not_authorized_via_contract
 
     async def test_manager_forbidden_via_unowned_contract(self, mock_db):
         """Manager creates a contract-only document; the contract's property
@@ -568,9 +555,7 @@ class TestCreateDocument:
     async def test_admin_can_create_for_any_property(self, mock_db):
         """Admin bypasses manager-ownership check entirely."""
         prop_id = uuid4()
-        svc = _make_service(
-            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())}
-        )
+        svc = _make_service(properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())})
         result = await svc.create_document(
             mock_db,
             self._payload(property_id=prop_id),
@@ -579,24 +564,8 @@ class TestCreateDocument:
         assert result.property_id == prop_id
 
 
-# ─── TestUpdateDocumentAuthorization ──────────────────────────────────────────
-#
-# TDD / RED — `update_document` does not yet accept `current_user`.
-# These tests express the behavior the service should own once
-# `update_document` is migrated (Step 2.5 / third endpoint).
-#
-# Until then every test in this class raises:
-#   TypeError: update_document() got an unexpected keyword argument 'current_user'
-#
-# Translated from the TODO-marked tests in TestUpdateDocumentRoute
-# in test_document_api.py.
-
-
 @pytest.mark.asyncio
 class TestUpdateDocumentAuthorization:
-    """
-    TDD / RED until update_document(db, id, payload, current_user=...) is wired.
-    """
 
     def _make_admin(self):
         return SimpleNamespace(id=uuid4(), role=UserRole.ADMIN)
@@ -613,8 +582,6 @@ class TestUpdateDocumentAuthorization:
             tenant_id=kwargs.get("tenant_id"),
         )
 
-    # ─── Translated from test_manager_can_update_when_authorized_via_property ──
-
     async def test_manager_can_update_when_authorized_via_property(self, mock_db):
 
         manager_id = uuid4()
@@ -622,16 +589,19 @@ class TestUpdateDocumentAuthorization:
         new_prop_id = uuid4()
         doc_id, doc = self._make_doc(property_id=prop_id)
         svc = _make_service(
-            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id), new_prop_id: SimpleNamespace(id=new_prop_id, manager_id=manager_id),},
+            properties={
+                prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id),
+                new_prop_id: SimpleNamespace(id=new_prop_id, manager_id=manager_id),
+            },
             documents={doc_id: doc},
         )
         result = await svc.update_document(
-            mock_db, doc_id, DocumentRelinkUpdate(property_id=new_prop_id),
+            mock_db,
+            doc_id,
+            DocumentRelinkUpdate(property_id=new_prop_id),
             current_user=self._make_manager(manager_id),
         )
         assert result is not None
-
-    # ─── Translated from test_returns_403_when_manager_not_authorized_via_property
 
     async def test_manager_forbidden_when_not_authorized_via_property(self, mock_db):
 
@@ -639,17 +609,20 @@ class TestUpdateDocumentAuthorization:
         new_prop_id = uuid4()
         doc_id, doc = self._make_doc(property_id=prop_id)
         svc = _make_service(
-            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4()), new_prop_id: SimpleNamespace(id=new_prop_id, manager_id=uuid4()),},
+            properties={
+                prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4()),
+                new_prop_id: SimpleNamespace(id=new_prop_id, manager_id=uuid4()),
+            },
             documents={doc_id: doc},
         )
-        
+
         with pytest.raises(DocumentForbiddenError):
             await svc.update_document(
-                mock_db, doc_id, DocumentRelinkUpdate(property_id=new_prop_id),
+                mock_db,
+                doc_id,
+                DocumentRelinkUpdate(property_id=new_prop_id),
                 current_user=self._make_manager(),
             )
-
-    # ─── Translated from test_manager_can_update_when_authorized_via_contract ──
 
     async def test_manager_can_update_when_authorized_via_contract(self, mock_db):
 
@@ -660,17 +633,19 @@ class TestUpdateDocumentAuthorization:
         doc_id, doc = self._make_doc(contract_id=contract_id)
         svc = _make_service(
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)},
-            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id),
-                       new_contract_id: SimpleNamespace(id=new_contract_id, property_id=prop_id)},
+            contracts={
+                contract_id: SimpleNamespace(id=contract_id, property_id=prop_id),
+                new_contract_id: SimpleNamespace(id=new_contract_id, property_id=prop_id),
+            },
             documents={doc_id: doc},
         )
         result = await svc.update_document(
-            mock_db, doc_id, DocumentRelinkUpdate(contract_id=new_contract_id),
+            mock_db,
+            doc_id,
+            DocumentRelinkUpdate(contract_id=new_contract_id),
             current_user=self._make_manager(manager_id),
         )
         assert result is not None
-
-    # ─── Translated from test_returns_403_when_manager_not_authorized_via_contract
 
     async def test_manager_forbidden_when_not_authorized_via_contract(self, mock_db):
 
@@ -680,17 +655,19 @@ class TestUpdateDocumentAuthorization:
         doc_id, doc = self._make_doc(contract_id=contract_id)
         svc = _make_service(
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
-            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id),
-                       new_contract_id: SimpleNamespace(id=new_contract_id, property_id=prop_id)},
+            contracts={
+                contract_id: SimpleNamespace(id=contract_id, property_id=prop_id),
+                new_contract_id: SimpleNamespace(id=new_contract_id, property_id=prop_id),
+            },
             documents={doc_id: doc},
         )
         with pytest.raises(DocumentForbiddenError):
             await svc.update_document(
-                mock_db, doc_id, DocumentRelinkUpdate(contract_id=new_contract_id),
+                mock_db,
+                doc_id,
+                DocumentRelinkUpdate(contract_id=new_contract_id),
                 current_user=self._make_manager(),
             )
-
-    # ─── Translated from test_manager_cannot_reassign_document_to_unauthorized_property
 
     async def test_manager_cannot_reassign_to_unauthorized_property(self, mock_db):
         """Manager owns the document's *current* property but the payload
@@ -710,11 +687,11 @@ class TestUpdateDocumentAuthorization:
         )
         with pytest.raises(DocumentForbiddenError):
             await svc.update_document(
-                mock_db, doc_id, DocumentRelinkUpdate(property_id=prop_b_id),
+                mock_db,
+                doc_id,
+                DocumentRelinkUpdate(property_id=prop_b_id),
                 current_user=self._make_manager(manager_id),
             )
-
-    # ─── Translated from test_returns_404_when_reassigned_to_nonexistent_property
 
     async def test_raises_when_reassigned_to_nonexistent_property(self, mock_db):
         """Payload contains a property_id that doesn't exist — must raise
@@ -724,11 +701,11 @@ class TestUpdateDocumentAuthorization:
         svc = _make_service(documents={doc_id: doc})
         with pytest.raises(RelatedResourceNotFoundError):
             await svc.update_document(
-                mock_db, doc_id, DocumentRelinkUpdate(property_id=uuid4()),
+                mock_db,
+                doc_id,
+                DocumentRelinkUpdate(property_id=uuid4()),
                 current_user=self._make_admin(),
             )
-
-    # ─── Translated from test_returns_403_when_manager_updates_a_fully_unlinked_document
 
     async def test_manager_forbidden_on_fully_unlinked_document(self, mock_db):
         """No property, no contract → manager cannot update.
@@ -736,26 +713,20 @@ class TestUpdateDocumentAuthorization:
 
         doc_id, doc = self._make_doc()  # no property_id, no contract_id
         prop_id = uuid4()
-        svc = _make_service(properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
-                            documents={doc_id: doc})
+        svc = _make_service(
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())}, documents={doc_id: doc}
+        )
         with pytest.raises(DocumentForbiddenError):
             await svc.update_document(
-                mock_db, doc_id, DocumentRelinkUpdate(property_id=prop_id),
+                mock_db,
+                doc_id,
+                DocumentRelinkUpdate(property_id=prop_id),
                 current_user=self._make_manager(),
             )
 
 
-# ─── TestDeleteDocumentAuthorization ──────────────────────────────────────────
-#
-# TDD / RED — same migration status as TestUpdateDocumentAuthorization above.
-# Translated from the TODO-marked tests in TestDeleteDocumentRoute.
-
-
 @pytest.mark.asyncio
 class TestDeleteDocumentAuthorization:
-    """
-    TDD / RED until delete_document(db, id, current_user=...) is wired.
-    """
 
     def _make_admin(self):
         return SimpleNamespace(id=uuid4(), role=UserRole.ADMIN)
@@ -775,8 +746,6 @@ class TestDeleteDocumentAuthorization:
             tenant_id=kwargs.get("tenant_id"),
         )
 
-    # ─── Translated from test_manager_can_delete_when_authorized_via_property ──
-
     async def test_manager_can_delete_when_authorized_via_property(self, mock_db):
         manager_id = uuid4()
         prop_id = uuid4()
@@ -785,12 +754,8 @@ class TestDeleteDocumentAuthorization:
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)},
             documents={doc_id: doc},
         )
-        result = await svc.delete_document(
-            mock_db, doc_id, current_user=self._make_manager(manager_id)
-        )
+        result = await svc.delete_document(mock_db, doc_id, current_user=self._make_manager(manager_id))
         assert result is not None
-
-    # ─── Translated from test_returns_403_when_manager_not_authorized_via_property
 
     async def test_manager_forbidden_when_not_authorized_via_property(self, mock_db):
         prop_id = uuid4()
@@ -800,11 +765,7 @@ class TestDeleteDocumentAuthorization:
             documents={doc_id: doc},
         )
         with pytest.raises(DocumentForbiddenError):
-            await svc.delete_document(
-                mock_db, doc_id, current_user=self._make_manager()
-            )
-
-    # ─── Translated from test_returns_403_when_manager_not_authorized_via_contract
+            await svc.delete_document(mock_db, doc_id, current_user=self._make_manager())
 
     async def test_manager_forbidden_when_not_authorized_via_contract(self, mock_db):
         prop_id = uuid4()
@@ -816,11 +777,7 @@ class TestDeleteDocumentAuthorization:
             documents={doc_id: doc},
         )
         with pytest.raises(DocumentForbiddenError):
-            await svc.delete_document(
-                mock_db, doc_id, current_user=self._make_manager()
-            )
-
-    # ─── Translated from test_manager_can_delete_when_authorized_via_contract ──
+            await svc.delete_document(mock_db, doc_id, current_user=self._make_manager())
 
     async def test_manager_can_delete_when_authorized_via_contract(self, mock_db):
         manager_id = uuid4()
@@ -832,12 +789,8 @@ class TestDeleteDocumentAuthorization:
             contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
             documents={doc_id: doc},
         )
-        result = await svc.delete_document(
-            mock_db, doc_id, current_user=self._make_manager(manager_id)
-        )
+        result = await svc.delete_document(mock_db, doc_id, current_user=self._make_manager(manager_id))
         assert result is not None
-
-    # ─── Translated from test_returns_403_when_manager_deletes_a_fully_unlinked_document
 
     async def test_manager_forbidden_on_fully_unlinked_document(self, mock_db):
         """No property, no contract → manager cannot delete.
@@ -845,25 +798,17 @@ class TestDeleteDocumentAuthorization:
         doc_id, doc = self._make_doc()
         svc = _make_service(documents={doc_id: doc})
         with pytest.raises(DocumentForbiddenError):
-            await svc.delete_document(
-                mock_db, doc_id, current_user=self._make_manager()
-            )
+            await svc.delete_document(mock_db, doc_id, current_user=self._make_manager())
 
 
-# ─── TestReplaceDocumentFile ───────────────────────────────────────────────────
-#
-# Covers the merged PUT /{document_id}/file endpoint: replace the physical
-# file and optionally relink the document, in a single atomic service call.
- 
- 
 @pytest.mark.asyncio
 class TestReplaceDocumentFile:
     def _make_admin(self):
         return SimpleNamespace(id=uuid4(), role=UserRole.ADMIN)
- 
+
     def _make_manager(self, manager_id=None):
         return SimpleNamespace(id=manager_id or uuid4(), role=UserRole.MANAGER)
- 
+
     def _make_doc(self, file_name="original.pdf", **kwargs):
         doc_id = uuid4()
         return doc_id, DocumentFileUpdate(
@@ -874,43 +819,41 @@ class TestReplaceDocumentFile:
             contract_id=kwargs.get("contract_id"),
             tenant_id=kwargs.get("tenant_id"),
         )
- 
+
     class FakeStorageClient:
         def __init__(self, raise_on_put: Exception | None = None):
             self.put_calls: list[str] = []
             self.remove_calls: list[str] = []
             self.raise_on_put = raise_on_put
- 
+
         def put_object(self, bucket, name, stream, length, content_type=None):
             if self.raise_on_put:
                 raise self.raise_on_put
             self.put_calls.append(name)
- 
+
         def remove_object(self, bucket, name):
             self.remove_calls.append(name)
- 
+
     def _make_file_obj(self, filename="replacement.pdf"):
         return SimpleNamespace(content_type="application/pdf", file=BytesIO(b"%PDF-1.4 fake content"))
- 
-    # ─── Happy paths — file replace only, no relink ────────────────────────────
- 
+
     async def test_replaces_file_and_returns_updated_document(self, mock_db):
         doc_id, doc = self._make_doc("original.pdf")
         svc = _make_service(documents={doc_id: doc})
         storage = self.FakeStorageClient()
         _, payload = self._make_doc("replacement.pdf")
         result = await svc.replace_document_file(
-            mock_db, 
+            mock_db,
             doc_id,
             payload,
-            storage_client=storage, 
+            storage_client=storage,
             file_obj=self._make_file_obj("replacement.pdf"),
             current_user=self._make_admin(),
         )
- 
+
         assert result.file_name == "replacement.pdf"
         assert "replacement.pdf" in storage.put_calls
- 
+
     async def test_deletes_old_storage_object_when_filename_changes(self, mock_db):
         """Old object must be removed from MinIO when the new filename
         differs — otherwise orphaned objects accumulate indefinitely."""
@@ -919,15 +862,16 @@ class TestReplaceDocumentFile:
         svc = _make_service(documents={doc_id: doc})
         _, payload = self._make_doc("replacement.pdf")
         await svc.replace_document_file(
-            mock_db, 
+            mock_db,
             doc_id,
             payload,
-            storage_client=storage, file_obj=self._make_file_obj("replacement.pdf"),
+            storage_client=storage,
+            file_obj=self._make_file_obj("replacement.pdf"),
             current_user=self._make_admin(),
         )
- 
+
         assert "original.pdf" in storage.remove_calls
- 
+
     async def test_does_not_delete_old_object_when_filename_is_the_same(self, mock_db):
         """Same filename → replace-in-place via put_object. Calling
         remove_object on it afterwards would delete the file just uploaded."""
@@ -936,16 +880,16 @@ class TestReplaceDocumentFile:
         svc = _make_service(documents={doc_id: doc})
         _, payload = self._make_doc("same_name.pdf")
         await svc.replace_document_file(
-            mock_db, 
+            mock_db,
             doc_id,
             payload,
-            storage_client=storage, 
+            storage_client=storage,
             file_obj=self._make_file_obj("same_name.pdf"),
             current_user=self._make_admin(),
         )
- 
+
         assert "same_name.pdf" not in storage.remove_calls
- 
+
     async def test_manager_authorized_via_existing_property_can_replace(self, mock_db):
         """No relink requested — authorization falls back to the
         document's existing property, mirroring update_document."""
@@ -957,18 +901,18 @@ class TestReplaceDocumentFile:
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)},
             documents={doc_id: payload},
         )
- 
+
         result = await svc.replace_document_file(
-            mock_db, doc_id,
+            mock_db,
+            doc_id,
             payload,
-            storage_client=storage, file_obj=self._make_file_obj("new.pdf"),
+            storage_client=storage,
+            file_obj=self._make_file_obj("new.pdf"),
             current_user=self._make_manager(manager_id),
         )
- 
+
         assert result is not None
- 
-    # ─── Combined replace + relink in one call ─────────────────────────────────
- 
+
     async def test_replaces_file_and_relinks_to_new_property_in_one_call(self, mock_db):
         """The core reason this method exists: file replace + relink as a
         single atomic operation, not two separate HTTP round-trips."""
@@ -979,23 +923,25 @@ class TestReplaceDocumentFile:
         _, new_doc = self._make_doc(file_name="new.pdf", property_id=new_prop_id)
         storage = self.FakeStorageClient()
         svc = _make_service(
-            properties={old_prop_id: SimpleNamespace(id=old_prop_id, manager_id=manager_id),
-                        new_prop_id: SimpleNamespace(id=new_prop_id, manager_id=manager_id)},
+            properties={
+                old_prop_id: SimpleNamespace(id=old_prop_id, manager_id=manager_id),
+                new_prop_id: SimpleNamespace(id=new_prop_id, manager_id=manager_id),
+            },
             documents={doc_id: doc},
         )
- 
+
         result = await svc.replace_document_file(
-            mock_db, 
+            mock_db,
             doc_id,
             new_doc,
-            storage_client=storage, 
+            storage_client=storage,
             file_obj=self._make_file_obj("new.pdf"),
             current_user=self._make_manager(manager_id),
         )
- 
+
         assert result.file_name == "new.pdf"
         assert result.property_id == new_prop_id
- 
+
     async def test_authorizes_against_new_property_not_old_one(self, mock_db):
         """Anti-bypass check, mirroring update_document's reassignment fix:
         a manager who owns the document's CURRENT property must NOT be able
@@ -1013,17 +959,19 @@ class TestReplaceDocumentFile:
             },
             documents={doc_id: doc},
         )
- 
+
         with pytest.raises(DocumentForbiddenError):
             await svc.replace_document_file(
-                mock_db, doc_id,
+                mock_db,
+                doc_id,
                 payload,
-                storage_client=storage, file_obj=self._make_file_obj("new.pdf"),
+                storage_client=storage,
+                file_obj=self._make_file_obj("new.pdf"),
                 current_user=self._make_manager(old_manager_id),  # owns OLD property only
             )
- 
+
         assert storage.put_calls == []
- 
+
     async def test_raises_when_relink_target_does_not_exist(self, mock_db):
         """A relink property_id that doesn't exist must be caught before
         any storage call — mirrors create_document's existence checks."""
@@ -1033,33 +981,31 @@ class TestReplaceDocumentFile:
         _, payload = self._make_doc(file_name="new.pdf", property_id=uuid4())
         with pytest.raises(RelatedResourceNotFoundError):
             await svc.replace_document_file(
-                mock_db, doc_id,
+                mock_db,
+                doc_id,
                 payload,
-                storage_client=storage, file_obj=self._make_file_obj("new.pdf"),
+                storage_client=storage,
+                file_obj=self._make_file_obj("new.pdf"),
                 current_user=self._make_admin(),
             )
- 
+
         assert storage.put_calls == []
- 
-    # ─── Not found ────────────────────────────────────────────────────────────
 
     async def test_raise_not_found_on_nonexistent_document(self, mock_db):
         storage = self.FakeStorageClient()
         svc = _make_service()
         _, payload = self._make_doc(file_name="new.pdf")
- 
+
         with pytest.raises(RelatedResourceNotFoundError):
             await svc.replace_document_file(
-                mock_db, 
+                mock_db,
                 uuid4(),
                 payload,
-                storage_client=storage, file_obj=self._make_file_obj(),
+                storage_client=storage,
+                file_obj=self._make_file_obj(),
                 current_user=self._make_admin(),
             )
-        
- 
-    # ─── Authorization (no relink involved) ────────────────────────────────────
- 
+
     async def test_manager_forbidden_when_not_authorized_via_existing_property(self, mock_db):
         prop_id = uuid4()
         doc_id, doc = self._make_doc(property_id=prop_id)
@@ -1069,17 +1015,19 @@ class TestReplaceDocumentFile:
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
             documents={doc_id: doc},
         )
- 
+
         with pytest.raises(DocumentForbiddenError):
             await svc.replace_document_file(
-                mock_db, doc_id,
+                mock_db,
+                doc_id,
                 payload,
-                storage_client=storage, file_obj=self._make_file_obj(),
+                storage_client=storage,
+                file_obj=self._make_file_obj(),
                 current_user=self._make_manager(),
             )
- 
+
         assert storage.put_calls == []
- 
+
     async def test_manager_forbidden_on_fully_unlinked_document(self, mock_db):
         doc_id, doc = self._make_doc()  # no property, no contract
         storage = self.FakeStorageClient()
@@ -1091,16 +1039,16 @@ class TestReplaceDocumentFile:
         )
         with pytest.raises(DocumentForbiddenError):
             await svc.replace_document_file(
-                mock_db, doc_id,
+                mock_db,
+                doc_id,
                 payload,
-                storage_client=storage, file_obj=self._make_file_obj(),
+                storage_client=storage,
+                file_obj=self._make_file_obj(),
                 current_user=self._make_manager(),
             )
- 
+
         assert storage.put_calls == []
- 
-    # ─── Storage failure atomicity ──────────────────────────────────────────────
- 
+
     async def test_storage_failure_raises_and_db_is_not_touched(self, mock_db):
         doc_id, doc = self._make_doc("original.pdf")
         storage = self.FakeStorageClient(raise_on_put=Exception("MinIO down"))
@@ -1111,17 +1059,19 @@ class TestReplaceDocumentFile:
             file_type="application/pdf",
             file_url="http://minio/bucket/new.pdf",
         )
- 
+
         with pytest.raises(DocumentUploadError):
             await svc.replace_document_file(
-                mock_db, doc_id,
+                mock_db,
+                doc_id,
                 payload,
-                storage_client=storage, file_obj=self._make_file_obj(),
+                storage_client=storage,
+                file_obj=self._make_file_obj(),
                 current_user=self._make_admin(),
             )
- 
+
         assert repo.updated_payloads == []
- 
+
     async def test_new_storage_object_cleaned_up_when_db_update_fails(self, mock_db):
         """Upload succeeds, DB update raises → the newly uploaded object
         must be removed from storage, and the OLD object must be left
@@ -1134,21 +1084,21 @@ class TestReplaceDocumentFile:
             file_type="application/pdf",
             file_url="http://minio/bucket/new.pdf",
         )
- 
+
         async def failing_update(*args, **kwargs):
             raise RuntimeError("DB connection lost")
- 
+
         svc.document_repo.update = failing_update
- 
+
         with pytest.raises(RuntimeError):
             await svc.replace_document_file(
-                mock_db, doc_id,
+                mock_db,
+                doc_id,
                 payload,
-                storage_client=storage, file_obj=self._make_file_obj("new.pdf"),
+                storage_client=storage,
+                file_obj=self._make_file_obj("new.pdf"),
                 current_user=self._make_admin(),
             )
- 
+
         assert "new.pdf" in storage.remove_calls
         assert "original.pdf" not in storage.remove_calls
-        
- 
