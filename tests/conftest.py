@@ -15,6 +15,10 @@ from app.main import app
 from app.db.session import Base, get_db
 from app.core.config import settings
 
+
+pytest_plugins = [
+    "tests.fixtures.auth",
+]
 # ─── Guard ────────────────────────────────────────────────────────────────────
 # Prevent tests from accidentally running against the real database.
 if not settings.is_test:
