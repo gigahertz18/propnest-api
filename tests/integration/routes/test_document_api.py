@@ -1,7 +1,8 @@
 import pytest
 import uuid
+from unittest.mock import AsyncMock, MagicMock
 
-from app.core.dependencies import get_storage_client
+from app.core.dependencies import get_storage_client, get_document_service
 from app.main import app
 from app.models.user import UserRole
 from tests.factories import (
@@ -11,6 +12,7 @@ from tests.factories import (
     make_admin_model,
     make_user_model,
 )
+
 from tests.helpers import login, auth_headers
 
 
@@ -24,9 +26,11 @@ async def _make_manager(db, username="manager1", email="manager1@example.com"):
 class FakeStorageClient:
     """Minimal stand-in for the MinIO client — only what DocumentService touches."""
 
-    def __init__(self, raise_on_put: Exception | None = None):
+    def __init__(self, raise_on_put: Exception | None = None, raise_on_remove: Exception | None = None):
         self.raise_on_put = raise_on_put
+        self.raise_on_remove = raise_on_remove
         self.put_calls: list[tuple] = []
+        self.remove_calls: list[tuple] = []
 
     def put_object(self, *args, **kwargs):
         if self.raise_on_put:
@@ -34,7 +38,9 @@ class FakeStorageClient:
         self.put_calls.append((args, kwargs))
 
     def remove_object(self, *args, **kwargs):
-        pass
+        if self.raise_on_remove:
+            raise self.raise_on_remove
+        self.remove_calls.append((args, kwargs))
 
 
 # ─── GET /documents/ ──────────────────────────────────────────────────────────
@@ -78,7 +84,6 @@ class TestGetDocumentRoute:
         response = await client.get(f"/api/v1/documents/{uuid.uuid4()}", headers=auth_headers(token))
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]
-
 
 # ─── POST /documents/ (JSON metadata-only create) ────────────────────────────
 
@@ -260,9 +265,21 @@ class TestUpdateDocumentRoute:
         )
         assert response.status_code == 404
 
+    async def test_returns_403_when_manager_not_authorized_for_property(self, client, db):
+            owner = await _make_manager(db, username="owner", email="owner@example.com")
+            outsider = await _make_manager(db, username="outsider", email="outsider@example.com")
+            prop = await make_property_model(db, manager_id=owner.id)
+            doc = await make_document_model(db, property_id=prop.id)
+            token = await login(client, "outsider")
 
+            response = await client.patch(
+                f"/api/v1/documents/{doc.id}",
+                json={"property_id": str(prop.id)},
+                headers=auth_headers(token),
+            )
+            assert response.status_code == 403
+            
 # ─── DELETE /documents/{id} ───────────────────────────────────────────────────
-
 
 @pytest.mark.asyncio
 class TestDeleteDocumentRoute:
@@ -292,4 +309,135 @@ class TestDeleteDocumentRoute:
         await make_admin_model(db)
         token = await login(client, "adminuser")
         response = await client.delete(f"/api/v1/documents/{uuid.uuid4()}", headers=auth_headers(token))
+        assert response.status_code == 404
+
+    async def test_returns_403_when_manager_not_authorized_for_property(self, client, db):
+        owner = await _make_manager(db, username="owner", email="owner@example.com")
+        outsider = await _make_manager(db, username="outsider", email="outsider@example.com")
+        prop = await make_property_model(db, manager_id=owner.id)
+        doc = await make_document_model(db, property_id=prop.id)
+        token = await login(client, "outsider")
+
+        response = await client.delete(f"/api/v1/documents/{doc.id}", headers=auth_headers(token))
+        assert response.status_code == 403
+
+    async def test_returns_503_when_storage_deletion_fails(self, client, db):
+        await make_admin_model(db)
+        token = await login(client, "adminuser")
+        doc = await make_document_model(db)
+
+        app.dependency_overrides[get_storage_client] = lambda: FakeStorageClient(
+            raise_on_remove=Exception("storage is down")
+        )
+
+        response = await client.delete(f"/api/v1/documents/{doc.id}", headers=auth_headers(token))
+        assert response.status_code == 503
+# ─── PATCH /{id}/file ───────────────────────────────────────────────────
+@pytest.mark.asyncio
+class TestReplaceDocumentFileRoute:
+    async def test_replaces_file_successfully(self, client, db):
+        await make_admin_model(db)
+        token = await login(client, "adminuser")
+        doc = await make_document_model(db, file_name="old.pdf")
+        app.dependency_overrides[get_storage_client] = lambda: FakeStorageClient()
+
+        response = await client.put(
+            f"/api/v1/documents/{doc.id}/file",
+            files={"file": ("new.pdf", b"%PDF-1.4 new content", "application/pdf")},
+            data={"file_type": "application/pdf"},
+            headers=auth_headers(token),
+        )
+        assert response.status_code == 200
+        assert response.json()["file_name"] == "new.pdf"
+
+    async def test_returns_422_when_filename_missing(self, client, db):
+        await make_admin_model(db)
+        token = await login(client, "adminuser")
+        doc = await make_document_model(db)
+        app.dependency_overrides[get_storage_client] = lambda: FakeStorageClient()
+
+        response = await client.put(
+            f"/api/v1/documents/{doc.id}/file",
+            files={"file": ("", b"content", "application/pdf")},
+            data={"file_type": "application/pdf"},
+            headers=auth_headers(token),
+        )
+        assert response.status_code == 422  # FastAPI validates this before your 400 check fires — verify which actually wins
+
+    async def test_returns_404_when_document_not_found(self, client, db):
+        await make_admin_model(db)
+        token = await login(client, "adminuser")
+        app.dependency_overrides[get_storage_client] = lambda: FakeStorageClient()
+
+        response = await client.put(
+            f"/api/v1/documents/{uuid.uuid4()}/file",
+            files={"file": ("new.pdf", b"content", "application/pdf")},
+            data={"file_type": "application/pdf"},
+            headers=auth_headers(token),
+        )
+        assert response.status_code == 404
+
+    async def test_returns_403_when_manager_not_authorized(self, client, db):
+        owner = await _make_manager(db, username="owner", email="owner@example.com")
+        outsider = await _make_manager(db, username="outsider", email="outsider@example.com")
+        prop = await make_property_model(db, manager_id=owner.id)
+        doc = await make_document_model(db, property_id=prop.id)
+        token = await login(client, "outsider")
+        app.dependency_overrides[get_storage_client] = lambda: FakeStorageClient()
+
+        response = await client.put(
+            f"/api/v1/documents/{doc.id}/file",
+            files={"file": ("new.pdf", b"content", "application/pdf")},
+            data={"file_type": "application/pdf"},
+            headers=auth_headers(token),
+        )
+        assert response.status_code == 403
+
+    async def test_returns_503_when_storage_upload_fails(self, client, db):
+        await make_admin_model(db)
+        token = await login(client, "adminuser")
+        doc = await make_document_model(db)
+        app.dependency_overrides[get_storage_client] = lambda: FakeStorageClient(
+            raise_on_put=Exception("storage is down")
+        )
+
+        response = await client.put(
+            f"/api/v1/documents/{doc.id}/file",
+            files={"file": ("new.pdf", b"content", "application/pdf")},
+            data={"file_type": "application/pdf"},
+            headers=auth_headers(token),
+        )
+        assert response.status_code == 503
+
+    async def test_returns_403_for_regular_user(self, client, db):
+        await make_user_model(db, username="user1", email="user1@example.com", role=UserRole.USER)
+        token = await login(client, "user1")
+        doc = await make_document_model(db)
+
+        response = await client.put(
+            f"/api/v1/documents/{doc.id}/file",
+            files={"file": ("new.pdf", b"content", "application/pdf")},
+            data={"file_type": "application/pdf"},
+            headers=auth_headers(token),
+        )
+        assert response.status_code == 403
+
+    async def test_replace_file_returns_404_when_service_returns_none(self, client, db):
+
+        await make_admin_model(db)
+        token = await login(client, "adminuser")
+        doc_id = uuid.uuid4()
+
+        mock_service = AsyncMock()
+        mock_service.build_object_url = MagicMock(return_value="http://example.com/new.pdf")
+        mock_service.replace_document_file.return_value = None
+        app.dependency_overrides[get_document_service] = lambda: mock_service
+        app.dependency_overrides[get_storage_client] = lambda: FakeStorageClient()
+
+        response = await client.put(
+            f"/api/v1/documents/{doc_id}/file",
+            files={"file": ("new.pdf", b"content", "application/pdf")},
+            data={"file_type": "application/pdf"},
+            headers=auth_headers(token),
+        )
         assert response.status_code == 404

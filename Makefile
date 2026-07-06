@@ -37,10 +37,10 @@ logs-minio:
 	$(COMPOSE) logs -f minio
 
 # ─── Shells ───────────────────────────────────────────────
-db-shell:
+shell-db:
 	$(COMPOSE) exec db psql -U propnest -d propnest_db
 
-be-shell:
+shell-be:
 	$(COMPOSE) exec -it backend sh
 
 
@@ -114,7 +114,7 @@ clean:
 
 .PHONY: up up-detached down restart restart-detached logs \
         logs-backend logs-db logs-minio \
-        db-shell be-shell seed \
+        shell-db shell-be seed \
         migrate-new migrate-up migrate-down migrate-history \
         test-be test-be-unit test-be-integration \
         test-be-file test-be-cov \

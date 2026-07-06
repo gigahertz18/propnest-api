@@ -1150,4 +1150,5 @@ class TestReplaceDocumentFile:
  
         assert "new.pdf" in storage.remove_calls
         assert "original.pdf" not in storage.remove_calls
+        
  

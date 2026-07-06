@@ -65,8 +65,6 @@ async def create_document(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except DocumentForbiddenError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
-    except DocumentUploadError as e:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
 
 
 @router.post(
@@ -89,8 +87,6 @@ async def upload_document(
 
     This endpoint keeps metadata in sync with the storage object.
     """
-    if not file.filename:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File must have a name")
     # Resolve the object URL before touching the DB —
     # if the upload fails, no orphaned DB record is created.
     object_url = document_service.build_object_url(file.filename)
@@ -140,8 +136,6 @@ async def replace_document_file(
     request. This is the only correct way to change a document's file —
     PATCH /{document_id} is relink-only and cannot touch storage.
     """
-    if not file.filename:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File must have a name")
 
     # This payload is the new file to be stored, not the existing document.
     payload = DocumentFileUpdate(

@@ -7,8 +7,6 @@ from unittest.mock import AsyncMock
 from app.models.user import UserRole
 from app.core.dependencies import get_document_service, get_current_user, get_property_service, require_manager_or_above, get_storage_client, get_contract_service
 from tests.factories import make_admin_model, make_user_model, make_property_model, make_document_model
-
-
 @pytest.mark.asyncio
 class TestDocumentsRoutes:
     async def test_list_documents_calls_service(self, client, set_override, simple_ns):
