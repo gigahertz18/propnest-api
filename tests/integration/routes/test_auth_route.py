@@ -5,6 +5,7 @@ from app.core.config import settings
 from jose import jwt
 from tests.factories import make_user_model
 
+
 @pytest.mark.asyncio
 class TestLogin:
     async def test_login_with_username_succeeds(self, client, db):
@@ -88,6 +89,7 @@ class TestLogin:
             },
         )
         assert response.json()["detail"] == "Invalid credentials"
+
 
 @pytest.mark.asyncio
 class TestMe:

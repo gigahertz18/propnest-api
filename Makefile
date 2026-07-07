@@ -37,10 +37,10 @@ logs-minio:
 	$(COMPOSE) logs -f minio
 
 # ─── Shells ───────────────────────────────────────────────
-db-shell:
+shell-db:
 	$(COMPOSE) exec db psql -U propnest -d propnest_db
 
-be-shell:
+shell-be:
 	$(COMPOSE) exec -it backend sh
 
 
@@ -97,13 +97,33 @@ test-be-cov:
 
 # ─── Backend Lint & Format ───────────────────────────────
 lint-be:
-	$(TEST_EXEC) backend ruff check app
+	$(TEST_EXEC) backend ruff check  \
+						app \
+						tests \
+						scripts \
+						alembic
 
 lint-be-fix:
-	$(TEST_EXEC) backend ruff check app --fix
+	$(TEST_EXEC) backend ruff check \
+						app \
+						tests \
+						scripts \
+						alembic \
+						--fix
 
 format-be:
-	$(TEST_EXEC) backend black --check --line-length 120 app
+	$(TEST_EXEC) backend black --check \
+						app \
+						tests \
+						scripts \
+						alembic
+
+format-be-fix:
+	$(TEST_EXEC) backend black -l 120 \
+						app \
+						tests \
+						scripts \
+						alembic
 
 # ─── Helpers ──────────────────────────────────────────────
 ps:
@@ -114,7 +134,7 @@ clean:
 
 .PHONY: up up-detached down restart restart-detached logs \
         logs-backend logs-db logs-minio \
-        db-shell be-shell seed \
+        shell-db shell-be seed \
         migrate-new migrate-up migrate-down migrate-history \
         test-be test-be-unit test-be-integration \
         test-be-file test-be-cov \

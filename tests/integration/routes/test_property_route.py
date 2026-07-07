@@ -46,6 +46,7 @@ class TestGetPropertyRoute:
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]
 
+
 @pytest.mark.asyncio
 class TestCreatePropertyRoute:
     async def test_creates_property_successfully(self, client, db):
@@ -87,6 +88,7 @@ class TestCreatePropertyRoute:
         )
         assert response.json()["status"] == "vacant"
 
+
 @pytest.mark.asyncio
 class TestUpdatePropertyRoute:
     async def test_updates_name(self, client, db):
@@ -123,6 +125,7 @@ class TestUpdatePropertyRoute:
             headers=auth_headers(token),
         )
         assert response.status_code == 404
+
 
 @pytest.mark.asyncio
 class TestDeletePropertyRoute:

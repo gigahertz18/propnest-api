@@ -15,11 +15,12 @@ from tests.factories import (
     make_contract,
 )
 
+
 @pytest.mark.asyncio
 async def test_concurrent_create_active_contracts_fails_once():
-    
+
     engine = create_async_engine(settings.DATABASE_URL)
-    
+
     SessionLocal = sessionmaker(
         bind=engine,
         class_=AsyncSession,
@@ -29,12 +30,12 @@ async def test_concurrent_create_active_contracts_fails_once():
     async with SessionLocal() as setup_session:
         prop = await make_property_model(setup_session)
         tenant = await make_tenant_model(setup_session)
-        
+
         await setup_session.commit()
-        
+
         prop_id = prop.id
         tenant_id = tenant.id
-        
+
     async def create_contract():
         async with SessionLocal() as session:
             try:
@@ -50,16 +51,16 @@ async def test_concurrent_create_active_contracts_fails_once():
             except IntegrityError:
                 await session.rollback()
                 return False
-    
+
     try:
         results = await asyncio.gather(
             create_contract(),
             create_contract(),
         )
-        
+
         successes = sum(results)
         failures = len(results) - successes
-        
+
     finally:
         # cleanup created contracts, property, and tenant so subsequent tests
         # are not affected by rows inserted outside the test transaction.
@@ -75,6 +76,6 @@ async def test_concurrent_create_active_contracts_fails_once():
             if t:
                 await cleanup_session.delete(t)
             await cleanup_session.commit()
-    
+
     assert successes == 1
     assert failures == 1

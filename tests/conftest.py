@@ -1,7 +1,6 @@
 import pytest
 import pytest_asyncio
 
-from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import sessionmaker
@@ -15,6 +14,9 @@ from app.main import app
 from app.db.session import Base, get_db
 from app.core.config import settings
 
+pytest_plugins = [
+    "tests.fixtures.auth",
+]
 # ─── Guard ────────────────────────────────────────────────────────────────────
 # Prevent tests from accidentally running against the real database.
 if not settings.is_test:
@@ -50,7 +52,8 @@ def _ensure_test_db_exists() -> None:
     Connects to the postgres maintenance database to issue CREATE DATABASE.
     """
     admin_url = (
-        f"postgresql+psycopg2://{settings.DB_USER}:{settings.DB_PASSWORD}" f"@{settings.DB_HOST}:{settings.DB_PORT}/postgres"
+        f"postgresql+psycopg2://{settings.DB_USER}:{settings.DB_PASSWORD}"
+        f"@{settings.DB_HOST}:{settings.DB_PORT}/postgres"
     )
     admin_engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
     with admin_engine.connect() as conn:
@@ -87,10 +90,10 @@ def setup_database():
 @pytest_asyncio.fixture
 async def db():
     connection = await engine.connect()
-    
-    #Outer transaction
+
+    # Outer transaction
     txn = await connection.begin()
-    
+
     session = AsyncSession(
         bind=connection,
         expire_on_commit=False,
@@ -98,7 +101,7 @@ async def db():
 
     # First savepoint
     await session.begin_nested()
-    
+
     @event.listens_for(session.sync_session, "after_transaction_end")
     def restart_savepoint(session_, trans):
         """
@@ -110,14 +113,17 @@ async def db():
         """
         if txn.is_active and not session_.in_nested_transaction():
             session_.begin_nested()
-    
+
     try:
         yield session
     finally:
         await session.close()
         await txn.rollback()
         await connection.close()
+
+
 # ─── Client Fixture ───────────────────────────────────────────────────────────
+
 
 @pytest_asyncio.fixture
 async def client(db):
@@ -129,16 +135,23 @@ async def client(db):
 
     transport = ASGITransport(app=app)
 
-    async with AsyncClient(
-        transport=transport,
-        base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
 
     app.dependency_overrides.clear()
 
 
+class DummySavePoint:
+    def __init__(self):
+        self.commit = AsyncMock()
+        self.rollback = AsyncMock()
+
+
 # ─── Mock DB Fixture ───────────────────────────────────────────────────────────
 @pytest.fixture
 def mock_db():
-    return AsyncMock(spec=AsyncSession)
+    db = AsyncMock(spec=AsyncSession)
+    db.begin_nested = AsyncMock(return_value=DummySavePoint())
+    db.commit = AsyncMock()
+    db.rollback = AsyncMock()
+    return db

@@ -2,6 +2,7 @@ import pytest
 from app.models.property import PropertyStatus
 from app.services.property_service import PropertyService
 
+
 @pytest.mark.asyncio
 async def test_property_service_delegates_to_repo_methods(mock_db):
     class Repo:

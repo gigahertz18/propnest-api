@@ -6,9 +6,10 @@ from unittest.mock import AsyncMock
 
 from app.core.dependencies import get_tenant_service, get_current_user, require_manager_or_above
 
+
 @pytest.mark.asyncio
 class TestTenantsRoutes:
-    
+
     async def test_get_tenant_returns_404_when_not_found(self, client, set_override, simple_ns):
 
         set_override(get_tenant_service, lambda: simple_ns(get_tenant=AsyncMock(return_value=None)))
@@ -20,7 +21,6 @@ class TestTenantsRoutes:
     async def test_tenants_direct_calls_cover_returns(self):
         """Directly call route functions to ensure return lines execute under full test run."""
         from app.api.v1.routes import tenants as tenants_module
-        
 
         now = datetime.datetime.utcnow().isoformat()
         sample_id = str(uuid.uuid4())

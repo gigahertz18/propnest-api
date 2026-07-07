@@ -1,5 +1,3 @@
-
-
 async def login(client, identifier: str, password: str = "password123") -> str:
     """Returns a bearer token for the given identifier."""
     response = await client.post(

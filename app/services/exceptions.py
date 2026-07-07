@@ -80,3 +80,27 @@ class DocumentUploadError(ServiceException):
     """Raised when storing a document fails due to external storage errors."""
 
     pass
+
+
+class DocumentDeletionError(ServiceException):
+    """Raised when deleting a document failes due to external storage errors."""
+
+    pass
+
+
+class DocumentForbiddenError(ServiceException):
+    """Raised when a document is acccessed by an unauthorized user"""
+
+    pass
+
+
+class DocumentValidationError(ServiceException):
+    """Raised when a document validation fails"""
+
+    pass
+
+
+class RelatedResourceNotFoundError(ServiceException):
+    """Raised when there is a missing/failed property/contract/tenant lookup"""
+
+    pass

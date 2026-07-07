@@ -24,15 +24,18 @@ class DocumentCreate(DocumentBase):
 
 
 # ─── Update ───────────────────────────────────────────────
-class DocumentUpdate(BaseModel):
+class DocumentRelinkUpdate(BaseModel):
     """All fields optional — only send what you want to change."""
 
-    file_name: str | None = None
-    file_type: str | None = None
-    file_url: str | None = None
     contract_id: uuid.UUID | None = None
     property_id: uuid.UUID | None = None
     tenant_id: uuid.UUID | None = None
+
+
+class DocumentFileUpdate(DocumentBase):
+    """Used when replacing the file behind an existing document"""
+
+    pass
 
 
 # ─── Response ─────────────────────────────────────────────

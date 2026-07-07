@@ -23,6 +23,7 @@ class FakeRepoIntegrityEmail:
             "INSERT", {}, Exception('duplicate key value violates unique constraint "users_email_key"')
         )
 
+
 @pytest.mark.asyncio
 async def test_create_user_translates_integrity_error_to_email_conflict(mock_db) -> None:
     repo = FakeRepoIntegrityEmail()
@@ -59,6 +60,7 @@ class RaceRepo:
             "INSERT", {}, Exception('duplicate key value violates unique constraint "users_email_key"')
         )
 
+
 @pytest.mark.asyncio
 async def test_concurrent_creates_one_fails_with_email_conflict() -> None:
     repo = RaceRepo()
@@ -66,7 +68,6 @@ async def test_concurrent_creates_one_fails_with_email_conflict() -> None:
     payload = UserCreate(username="u", email="e@example.com", full_name="Name", password="pw")
 
     results = [None, None]
-    errors = [None, None]
 
     async def worker():
         try:
@@ -78,27 +79,28 @@ async def test_concurrent_creates_one_fails_with_email_conflict() -> None:
         worker(),
         worker(),
     )
-    
-    email_errors = [
-        r for r in results
-        if isinstance(r, EmailAlreadyExistsError)
-    ]
-    
+
+    email_errors = [r for r in results if isinstance(r, EmailAlreadyExistsError)]
+
     assert len(email_errors) == 1
 
 
 class BaseRepo:
     async def get_by_id(self, db, id) -> Any:
         return None
+
     async def get_by_email(self, db, email) -> Any:
         return None
+
     async def get_by_username(self, db, username) -> Any:
         return None
+
     async def update(self, db, id, payload) -> Any:
         return None
+
     async def delete(self, db, id) -> Any:
         return None
-    
+
 
 @pytest.mark.asyncio
 async def test_update_user_translates_integrity_error(mock_db) -> None:
@@ -113,6 +115,7 @@ async def test_update_user_translates_integrity_error(mock_db) -> None:
     with pytest.raises(UsernameAlreadyExistsError):
         await svc.update_user(db=mock_db, id="id", payload=UserUpdate(username="collision"))
 
+
 @pytest.mark.asyncio
 async def test_get_user_not_found_raises(mock_db):
 
@@ -121,17 +124,18 @@ async def test_get_user_not_found_raises(mock_db):
     with pytest.raises(UserNotFoundError):
         await svc.get_user(db=mock_db, id="nope")
 
+
 @pytest.mark.asyncio
 async def test_update_user_precheck_email_collision(mock_db):
     class Repo(BaseRepo):
         async def get_by_email(self, db, email):
             return SimpleNamespace(id="other")
 
-
     svc = UserService(user_repo=Repo())
 
     with pytest.raises(EmailAlreadyExistsError):
         await svc.update_user(db=mock_db, id="me", payload=UserUpdate(email="e@x.com"))
+
 
 @pytest.mark.asyncio
 async def test_update_user_precheck_username_collision(mock_db):
@@ -145,6 +149,7 @@ async def test_update_user_precheck_username_collision(mock_db):
     with pytest.raises(UsernameAlreadyExistsError):
         await svc.update_user(db=mock_db, id="me", payload=UserUpdate(username="u"))
 
+
 @pytest.mark.asyncio
 async def test_update_user_not_found_raises(mock_db):
 
@@ -152,6 +157,7 @@ async def test_update_user_not_found_raises(mock_db):
 
     with pytest.raises(UserNotFoundError):
         await svc.update_user(db=mock_db, id="me", payload=UserUpdate())
+
 
 @pytest.mark.asyncio
 async def test_delete_user_not_found_raises(mock_db):

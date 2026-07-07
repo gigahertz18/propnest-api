@@ -3,10 +3,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.base import BaseRepository
 from app.models.document import Document
-from app.schemas.document import DocumentCreate, DocumentUpdate
+from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate
 
 
-class DocumentRepository(BaseRepository[Document, DocumentCreate, DocumentUpdate]):
+class DocumentRepository(BaseRepository[Document, DocumentCreate, DocumentRelinkUpdate | DocumentFileUpdate]):
     """
     Document-specific queries on top of the generic BaseRepository.
     get_all, get_by_id, create, update, delete are inherited — don't repeat them.

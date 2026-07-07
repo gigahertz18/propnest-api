@@ -6,6 +6,7 @@ from tests.helpers import login, auth_headers
 
 # ─── List Users ───────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 class TestListUsersRoute:
     async def test_admin_can_list_users(self, client, db):
@@ -42,7 +43,7 @@ class TestListUsersRoute:
         await make_admin_model(db)
         for i in range(105):
             await make_user_model(db, username=f"user{i}", email=f"user{i}@example.com")
-        
+
         token = await login(client, "adminuser")
 
         response = await client.get(

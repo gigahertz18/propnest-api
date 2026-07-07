@@ -4,6 +4,7 @@ from app.core.dependencies import get_current_user
 from app.models.user import UserRole
 from tests.factories import make_user_model, make_tenant_model, make_property_model
 
+
 @pytest.mark.asyncio
 class TestContractsResourceAuth:
     async def test_manager_cannot_create_contract_for_unmanaged_property(self, client, db, set_override):
