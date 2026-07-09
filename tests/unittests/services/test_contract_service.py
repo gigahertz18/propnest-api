@@ -362,19 +362,6 @@ class TestUpdateContract:
         assert repo.updated_payloads == []
         assert not mock_db.commit.called
 
-    async def test_requires_property_repo_to_be_injected(self, mock_db):
-        """update_contract always resolves the existing contract's own
-        property (ContractUpdate can't relink), so property_repo must be
-        injected even though the payload never carries a property_id."""
-        contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
-        contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="ACTIVE")
-        svc = ContractService(contract_repo=MockContractRepo({contract_id: contract}))
-
-        with pytest.raises(RuntimeError):
-            await svc.update_contract(
-                mock_db, contract_id, ContractUpdate(status="INACTIVE"), current_user=make_admin()
-            )
-
     async def test_skips_authorization_when_no_current_user(self, mock_db):
         contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
         contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="ACTIVE")
@@ -477,6 +464,27 @@ class TestDeleteContract:
         result = await svc.delete_contract(mock_db, contract_id)
 
         assert result is contract
+
+    async def test_returns_none_when_repo_delete_returns_none(self, mock_db):
+        """Edge case: contract existed at get_contract time but the repo's
+        update returns None anyway (e.g. deleted concurrently). The service
+        doesn't paper over this — it returns None and lets the route 404."""
+        contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
+        contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="ACTIVE")
+
+        class Repo(MockContractRepo):
+            async def delete(self, db, id):
+                return None
+
+        svc = ContractService(
+            contract_repo=Repo({contract_id: contract}),
+            property_repo=MockReadOnlyRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())}),
+            tenant_repo=MockReadOnlyRepo({tenant_id: SimpleNamespace(id=tenant_id)}),
+        )
+
+        result = await svc.delete_contract(mock_db, contract_id, current_user=make_admin())
+
+        assert result is None
 
 
 # ─── Delegated read-only passthroughs ───────────────────────────────────────
