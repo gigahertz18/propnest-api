@@ -466,9 +466,6 @@ class TestDeleteContract:
         assert result is contract
 
     async def test_returns_none_when_repo_delete_returns_none(self, mock_db):
-        """Edge case: contract existed at get_contract time but the repo's
-        update returns None anyway (e.g. deleted concurrently). The service
-        doesn't paper over this — it returns None and lets the route 404."""
         contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
         contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="ACTIVE")
 
