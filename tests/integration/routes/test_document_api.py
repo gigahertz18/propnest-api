@@ -264,9 +264,9 @@ class TestUpdateDocumentRoute:
         )
         assert response.status_code == 404
 
-    async def test_returns_403_when_manager_not_authorized_for_property(self, client, db, authenticate_user):
-        owner_ctx = await authenticate_user(username="owner", email="owner@example.com")
-        outsider_ctx = await authenticate_user(username="outsider", email="outsider@example.com")
+    async def test_returns_403_when_manager_not_authorized_for_property(self, client, db, authenticate_manager):
+        owner_ctx = await authenticate_manager(username="owner", email="owner@example.com")
+        outsider_ctx = await authenticate_manager(username="outsider", email="outsider@example.com")
         prop = await make_property_model(db, manager_id=owner_ctx.user.id)
         doc = await make_document_model(db, property_id=prop.id)
 

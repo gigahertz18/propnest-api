@@ -1,6 +1,7 @@
 import uuid
 
 from datetime import date
+from types import SimpleNamespace
 from app.models.property import Property, PropertyStatus
 from app.models.user import User, UserRole
 from app.models.contract import Contract, RentalType as ContractRentalType
@@ -86,6 +87,31 @@ async def make_admin_model(db, **kwargs) -> User:
     }
     defaults.update(kwargs)
     return await make_user_model(db, **defaults)
+
+
+def make_admin() -> SimpleNamespace:
+    """
+    Lightweight admin stand-in for service unit tests that mock the DB
+    session (`mock_db`) rather than hitting a real one.
+
+    Unlike `make_admin_model`, this is NOT persisted — it's a bare
+    `SimpleNamespace(id, role)`, just enough duck-typing for
+    `ResourceAuthorizationMixin._authorize_user_to_property` to read
+    `.id`/`.role` off it. Use `make_admin_model` instead for anything that
+    goes through a real `db` session or the `client`/`db` fixtures.
+    """
+    return SimpleNamespace(id=uuid.uuid4(), role=UserRole.ADMIN)
+
+
+def make_manager(manager_id: uuid.UUID | None = None) -> SimpleNamespace:
+    """
+    Lightweight manager stand-in — see `make_admin`'s docstring for why
+    this isn't a persisted model. `manager_id` lets a test pin the id to
+    match a fake `Property.manager_id`, to exercise the
+    owns-this-property vs. doesn't-own-it branches in
+    `_authorize_user_to_property`.
+    """
+    return SimpleNamespace(id=manager_id or uuid.uuid4(), role=UserRole.MANAGER)
 
 
 # ─── Tenant ───────────────────────────────────────────────────────────────────
