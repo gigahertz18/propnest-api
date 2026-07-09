@@ -11,8 +11,8 @@ from app.repositories.property import PropertyRepository
 from app.repositories.tenant import TenantRepository
 from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate
 from app.models.document import Document
-from app.models.property import Property
-from app.models.user import User, UserRole
+from app.models.user import User
+from app.services.base import ResourceAuthorizationMixin
 from app.services.exceptions import (
     DocumentUploadError,
     DocumentForbiddenError,
@@ -41,7 +41,7 @@ class DocumentContext:
     tenant_id: UUID | None
 
 
-class DocumentService:
+class DocumentService(ResourceAuthorizationMixin):
     """Business logic for `Document` entities.
 
     Optionally accepts a storage client (e.g., MinIO) for uploading files.
@@ -61,6 +61,7 @@ class DocumentService:
         "application/msword",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     }
+    forbidden_error = DocumentForbiddenError
 
     def __init__(
         self,
@@ -74,29 +75,10 @@ class DocumentService:
         self.contract_repo = contract_repo
         self.tenant_repo = tenant_repo
 
-    async def _get_property(self, db: AsyncSession, property_id: UUID) -> Property | None:
-        """Single-entity lookup primitive. `_resolve_property` and
-        `_validate_related_resources` both build on this rather than each
-        calling `property_repo.get_by_id` independently — keeps "how to
-        fetch a property" in exactly one place."""
-        if self.property_repo is None:
-            raise RuntimeError("DocumentService._get_property requires property_repo to be injected.")
-        return await self.property_repo.get_by_id(db, property_id)
-
-    async def _get_contract(self, db: AsyncSession, contract_id: UUID):
-        if self.contract_repo is None:
-            raise RuntimeError("DocumentService._get_contract requires contract_repo to be injected.")
-        return await self.contract_repo.get_by_id(db, contract_id)
-
-    async def _get_tenant(self, db: AsyncSession, tenant_id: UUID):
-        if self.tenant_repo is None:
-            raise RuntimeError("DocumentService._get_tenant requires tenant_repo to be injected.")
-        return await self.tenant_repo.get_by_id(db, tenant_id)
-
     async def list_documents(self, db: AsyncSession, skip: int = 0, limit: int = 100) -> list[Document]:
         return await self.document_repo.get_all(db, skip=skip, limit=limit)
 
-    async def get_document(self, db: AsyncSession, doc_id: UUID) -> Document | None:
+    async def get_document(self, db: AsyncSession, doc_id: UUID) -> Document:
         doc = await self.document_repo.get_by_id(db, doc_id)
         if not doc:
             raise RelatedResourceNotFoundError(f"Document {doc_id} not found.")
@@ -161,7 +143,7 @@ class DocumentService:
         current_user: User | None = None,
     ) -> Document | None:
 
-        doc = await self._load_document_or_raise(db, doc_id)
+        doc = await self.get_document(db, doc_id)
 
         ctx = await self._prepare_document_context(
             db,
@@ -178,12 +160,9 @@ class DocumentService:
             tenant_id=ctx.tenant_id,
         )
 
-        try:
-            doc = await self.document_repo.update(db, doc_id, resolved_payload)
-            await db.commit()
-            return doc
-        except Exception:
-            raise
+        doc = await self.document_repo.update(db, doc_id, resolved_payload)
+        await db.commit()
+        return doc
 
     async def replace_document_file(
         self,
@@ -210,7 +189,7 @@ class DocumentService:
             DocumentUploadError: Uploading the new file failed.
             DocumentDeletionError: Deleting the old file from storage failed.
         """
-        doc = await self._load_document_or_raise(db, doc_id)
+        doc = await self.get_document(db, doc_id)
 
         ctx = await self._prepare_document_context(
             db,
@@ -267,7 +246,7 @@ class DocumentService:
         current_user: User | None = None,
     ) -> Document | None:
 
-        doc = await self._load_document_or_raise(db, doc_id)
+        doc = await self.get_document(db, doc_id)
 
         await self._prepare_document_context(
             db,
@@ -296,6 +275,10 @@ class DocumentService:
             await savepoint.rollback()
             raise
 
+    # ─── Reporting support ──────────────────────────────────────────────
+    # Not yet called by any route — held here for an upcoming reporting
+    # feature that will need documents filtered by contract/property/
+    # tenant/type. If that feature is dropped, these should go with it.
     async def get_by_contract(self, db: AsyncSession, contract_id: UUID) -> list[Document]:
         return await self.document_repo.get_by_contract(db, contract_id)
 
@@ -307,123 +290,6 @@ class DocumentService:
 
     async def get_by_type(self, db: AsyncSession, file_type: str) -> list[Document]:
         return await self.document_repo.get_by_type(db, file_type)
-
-    async def _resolve_property(
-        self,
-        db: AsyncSession,
-        *,
-        property_id: UUID | None,
-        contract_id: UUID | None,
-    ) -> Property | None:
-        """
-        Resolve the Property a document operation is acting on.
-
-        Resolution order:
-        1. `property_id`, if provided -> direct lookup
-        2. otherwise, if `contract_id` is provided, lookup the contract,
-           then lookup property using `contract.property_id`.
-        3. otherwise `None`
-        """
-
-        if property_id is not None:
-            prop = await self._get_property(db, property_id)
-            if prop is None:
-                raise RelatedResourceNotFoundError(f"Property {property_id} not found.")
-            return prop
-
-        if contract_id is not None:
-            contract = await self._get_contract(db, contract_id)
-            if contract is None:
-                raise RelatedResourceNotFoundError(f"Contract {contract_id} not found.")
-            prop = await self._get_property(db, contract.property_id)
-            if prop is None:
-                raise RelatedResourceNotFoundError(f"Property {contract.property_id} not found.")
-            return prop
-
-        return None
-
-    async def _authorize_user_to_property(
-        self,
-        db: AsyncSession,
-        current_user: User,
-        *,
-        property_id: UUID | None,
-        contract_id: UUID | None,
-    ) -> None:
-        """
-        Enforce manager-ownership authorization for a document operation.
-
-        - Admins are always authorized; this method is a no-op for them.
-        - Non-manager, non-admin roles are not handled here — route-level
-          role gating (`require_manager_or_above`) already excludes them
-          from reaching mutating document endpoints at all.
-        - Managers must own the resolved property (directly, or via its
-          contract). If the operation targets no property/contract at all,
-          managers are forbidden — only admins may operate on unattached
-          documents.
-
-        Raises:
-            RelatedResourceNotFoundError: bubled up from `_resolve_property` when
-                a provided property_id/contract_id doesn't exist.
-            DocumentForbiddenError: when a manager isn't authorized
-        """
-
-        if getattr(current_user, "role", None) != UserRole.MANAGER:
-            return
-
-        prop = await self._resolve_property(db, property_id=property_id, contract_id=contract_id)
-
-        if not prop:
-            raise DocumentForbiddenError("User not authorized to manage this document.")
-
-        if prop.manager_id != current_user.id:
-            raise DocumentForbiddenError("User not authorized to manage this document.")
-
-    async def _validate_related_resources(
-        self,
-        db: AsyncSession,
-        *,
-        property_id: UUID | None,
-        contract_id: UUID | None,
-        tenant_id: UUID | None,
-    ) -> None:
-        """Validate that any provided property_id, contract_id, or
-        tenant_id actually exists, independent of authorization.
-
-        This exists separately from `_resolve_property` because `tenant_id`
-        has no bearing on property resolution or manager authorization at
-        all — a document can be tenant-linked with no property or contract
-        in play, and that link still needs existence-checking on its own.
-
-        Built on the same `_get_property`/`_get_contract`/`_get_tenant`
-        primitives `_resolve_property` uses, so "how to fetch X" stays
-        defined in exactly one place. Callers combining this with
-        `_authorize_user_to_property`/`_resolve_property` will still issue a
-        duplicate query for property_id/contract_id when both run for the
-        same request (e.g. `create_document` will, once migrated) — that's
-        a call-pattern cost, not a logic-duplication one, and is worth
-        revisiting once real call sites exist rather than optimizing
-        speculatively now.
-
-        Raises:
-            RelatedResourceNotFoundError: for the first of property_id,
-                contract_id, or tenant_id (checked in that order) that is
-                provided but doesn't resolve to an existing record.
-        """
-        if property_id is not None:
-            prop = await self._get_property(db, property_id)
-            if prop is None:
-                raise RelatedResourceNotFoundError(f"Property {property_id} not found.")
-
-        if contract_id is not None:
-            contract = await self._get_contract(db, contract_id)
-            if contract is None:
-                raise RelatedResourceNotFoundError(f"Contract {contract_id} not found.")
-
-        if tenant_id is not None:
-            tenant = await self._get_tenant(db, tenant_id)
-            if tenant is None:
-                raise RelatedResourceNotFoundError(f"Tenant {tenant_id} not found.")
 
     def build_object_url(self, file_name: str) -> str:
         """
@@ -482,12 +348,6 @@ class DocumentService:
         except Exception as e:
             logger.warning(f"Failed to cleanup orphaned. storage object after DB write failure: {file_name}")
             raise DocumentDeletionError(f"File deletion failed: {e}")
-
-    async def _load_document_or_raise(self, db: AsyncSession, doc_id: UUID) -> Document:
-        doc = await self.document_repo.get_by_id(db, doc_id)
-        if not doc:
-            raise RelatedResourceNotFoundError(f"Document {doc_id} not found.")
-        return doc
 
     async def _prepare_document_context(
         self,

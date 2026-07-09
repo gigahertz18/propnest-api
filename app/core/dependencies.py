@@ -136,7 +136,7 @@ def get_property_service() -> PropertyService:
 
 
 def get_contract_service() -> ContractService:
-    return ContractService(contract_repo=contract_repo)
+    return ContractService(contract_repo=contract_repo, property_repo=property_repo, tenant_repo=tenant_repo)
 
 
 def get_tenant_service() -> TenantService:

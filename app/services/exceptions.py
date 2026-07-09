@@ -76,6 +76,28 @@ class ContractActiveError(ServiceException):
     pass
 
 
+class ResourceForbiddenError(ServiceException):
+    """
+    Base class for "user not authorized to manage this resource" errors.
+
+    `ResourceAuthorizationMixin._authorize_user_to_property` raises
+    `self.forbidden_error(...)`, a class attribute each service overrides
+    with its own subclass below, so routes/tests can catch the specific
+    entity's error rather than this base. A service that forgets to
+    override it still raises a real, catchable exception via this base —
+    a safe (if less specific) default rather than a silent failure.
+    """
+
+    pass
+
+
+class ContractForbiddenError(ResourceForbiddenError):
+    """Raised when a contract operation is attempted by a manager who
+    doesn't own the contract's property."""
+
+    pass
+
+
 class DocumentUploadError(ServiceException):
     """Raised when storing a document fails due to external storage errors."""
 
@@ -88,7 +110,7 @@ class DocumentDeletionError(ServiceException):
     pass
 
 
-class DocumentForbiddenError(ServiceException):
+class DocumentForbiddenError(ResourceForbiddenError):
     """Raised when a document is acccessed by an unauthorized user"""
 
     pass
