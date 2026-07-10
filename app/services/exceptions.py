@@ -126,3 +126,7 @@ class RelatedResourceNotFoundError(ServiceException):
     """Raised when there is a missing/failed property/contract/tenant lookup"""
 
     pass
+
+
+class PropertyAlreadyExistsError(ServiceException):
+    pass

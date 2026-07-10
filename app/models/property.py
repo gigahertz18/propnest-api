@@ -1,7 +1,7 @@
 import enum
 import uuid
 
-from sqlalchemy import String, Text, Enum, Uuid, Boolean, ForeignKey
+from sqlalchemy import String, Text, Enum, Uuid, Boolean, ForeignKey, UniqueConstraint
 
 from sqlalchemy.orm import Mapped, mapped_column
 from app.db.session import Base
@@ -15,6 +15,7 @@ class PropertyStatus(str, enum.Enum):
 
 class Property(Base, TimestampMixin):
     __tablename__ = "properties"
+    __table_args__ = (UniqueConstraint("name", "address", name="uq_property_name_address"),)
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),

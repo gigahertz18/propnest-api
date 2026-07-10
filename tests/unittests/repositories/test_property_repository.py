@@ -41,7 +41,7 @@ class TestPropertyRepositoryGetById:
 @pytest.mark.asyncio
 class TestPropertyRepositoryCreate:
     async def test_creates_property_successfully(self, db):
-        payload = PropertyCreate(**make_property())
+        payload = PropertyCreate(**make_property(name="Test Property"))
         result = await property_repo.create(db, payload)
         assert result.id is not None
         assert result.name == "Test Property"

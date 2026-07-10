@@ -11,16 +11,17 @@ from app.core.security import hash_password
 
 
 def make_property(
-    name: str = "Test Property",
-    address: str = "123 Test Street",
+    name: str | None = None,
+    address: str | None = None,
     description: str | None = "A test property",
     status: PropertyStatus = PropertyStatus.vacant,
     manager_id: uuid.UUID | None = None,
 ) -> dict:
     """Returns a dict matching PropertyCreate schema."""
+    suffix = uuid.uuid4().hex[:8]
     return {
-        "name": name,
-        "address": address,
+        "name": name or f"Test Property {suffix}",
+        "address": address or f"Test address {suffix}",
         "description": description,
         "status": status.value,
         "manager_id": manager_id,

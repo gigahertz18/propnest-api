@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.schemas.property import PropertyCreate, PropertyUpdate, PropertyResponse
 from app.services.property_service import PropertyService
+from app.services.exceptions import RelatedResourceNotFoundError, PropertyAlreadyExistsError
 
 router = APIRouter(prefix="/properties", tags=["Properties"])
 
@@ -36,13 +37,10 @@ async def get_property(
     property_service: PropertyService = Depends(get_property_service),
 ):
     """Get a single property by ID."""
-    prop = await property_service.get_property(db, property_id)
-    if not prop:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Property {property_id} not found",
-        )
-    return prop
+    try:
+        return await property_service.get_property(db, property_id)
+    except RelatedResourceNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.post(
@@ -57,7 +55,10 @@ async def create_property(
     property_service: PropertyService = Depends(get_property_service),
 ):
     """Create a new property."""
-    return await property_service.create_property(db, payload)
+    try:
+        return await property_service.create_property(db, payload)
+    except PropertyAlreadyExistsError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
 @router.patch("/{property_id}", response_model=PropertyResponse, dependencies=[Depends(require_admin)])
@@ -68,13 +69,12 @@ async def update_property(
     property_service: PropertyService = Depends(get_property_service),
 ):
     """Partially update a property — only send fields you want to change."""
-    prop = await property_service.update_property(db, property_id, payload)
-    if not prop:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Property {property_id} not found",
-        )
-    return prop
+    try:
+        return await property_service.update_property(db, property_id, payload)
+    except RelatedResourceNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except PropertyAlreadyExistsError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
 @router.delete("/{property_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)])
@@ -84,9 +84,7 @@ async def delete_property(
     property_service: PropertyService = Depends(get_property_service),
 ):
     """Delete a property."""
-    prop = await property_service.delete_property(db, property_id)
-    if not prop:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Property {property_id} not found",
-        )
+    try:
+        return await property_service.delete_property(db, property_id)
+    except RelatedResourceNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
