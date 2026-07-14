@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import Generic, TypeVar, Type
 from sqlalchemy import select, Select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,7 +61,7 @@ class BaseRepository(Generic[ModelType, CreateSchema, UpdateSchema]):
         db: AsyncSession,
         *criteria,
         **kwargs,
-    ) -> ModelType | None:
+    ) -> Sequence[ModelType]:
         result = await db.execute(self._build_query(*criteria, **kwargs))
 
         return result.scalars().all()
@@ -70,7 +71,7 @@ class BaseRepository(Generic[ModelType, CreateSchema, UpdateSchema]):
         db: AsyncSession,
         skip: int = 0,
         limit: int = 100,
-    ) -> list[ModelType]:
+    ) -> Sequence[ModelType]:
         skip = max(0, skip)
         limit = min(max(0, limit), 100)
 

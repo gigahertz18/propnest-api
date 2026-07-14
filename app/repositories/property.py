@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.base import BaseRepository
 from app.models.property import Property, PropertyStatus
@@ -14,7 +15,7 @@ class PropertyRepository(BaseRepository[Property, PropertyCreate, PropertyUpdate
         self,
         db: AsyncSession,
         status: PropertyStatus,
-    ) -> list[Property]:
+    ) -> Sequence[Property]:
 
         return await self._all(db, self.model.status == status)
 

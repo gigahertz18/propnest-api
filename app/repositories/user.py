@@ -1,9 +1,11 @@
+from collections.abc import Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
+from uuid import UUID
+
 from app.core.security import hash_password
 from app.repositories.base import BaseRepository
 from app.models.user import User, UserRole
 from app.schemas.user import UserCreate, UserUpdate
-from uuid import UUID
 
 
 def _normalize_email(email: str) -> str:
@@ -42,7 +44,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         self,
         db: AsyncSession,
         role: UserRole,
-    ) -> list[User]:
+    ) -> Sequence[User]:
 
         return await self._all(db, self.model.role == role)
 

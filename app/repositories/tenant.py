@@ -1,5 +1,7 @@
-from datetime import date
+import uuid
 
+from collections.abc import Sequence
+from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.base import BaseRepository
@@ -36,7 +38,7 @@ class TenantRepository(BaseRepository[Tenant, TenantCreate, TenantUpdate]):
         self,
         db: AsyncSession,
         full_name: str,
-    ) -> list[Tenant]:
+    ) -> Sequence[Tenant]:
         # return db.query(self.model).filter(self.model.full_name.ilike(f"%{full_name}%")).all()
         return await self._all(db, self.model.full_name.ilike(f"%{full_name}%"))
 
@@ -44,7 +46,7 @@ class TenantRepository(BaseRepository[Tenant, TenantCreate, TenantUpdate]):
         self,
         db: AsyncSession,
         occupation: str,
-    ) -> list[Tenant]:
+    ) -> Sequence[Tenant]:
         # return db.query(self.model).filter(self.model.occupation.ilike(f"%{occupation}%")).all()
         return await self._all(db, self.model.occupation.ilike(f"%{occupation}%"))
 
@@ -52,9 +54,16 @@ class TenantRepository(BaseRepository[Tenant, TenantCreate, TenantUpdate]):
         self,
         db: AsyncSession,
         date_of_birth: date,
-    ) -> list[Tenant]:
+    ) -> Sequence[Tenant]:
         # return db.query(self.model).filter(self.model.date_of_birth == date_of_birth).all()
         return await self._all(db, self.model.date_of_birth == date_of_birth)
+
+    async def get_by_user_id(
+        self,
+        db: AsyncSession,
+        user_id: uuid.UUID,
+    ) -> Tenant | None:
+        return await self._first(db, self.model.user_id == user_id)
 
 
 # Instantiate once — import this instance everywhere

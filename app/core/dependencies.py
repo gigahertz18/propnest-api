@@ -140,7 +140,7 @@ def get_contract_service() -> ContractService:
 
 
 def get_tenant_service() -> TenantService:
-    return TenantService(tenant_repo=tenant_repo)
+    return TenantService(tenant_repo=tenant_repo, user_repo=user_repo)
 
 
 def get_document_service() -> DocumentService:

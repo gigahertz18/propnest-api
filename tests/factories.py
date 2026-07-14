@@ -141,10 +141,16 @@ def make_tenant(
     }
 
 
-async def make_tenant_model(db, **kwargs) -> Tenant:
-    """Creates and persists a Tenant directly in the test DB."""
+async def make_tenant_model(db, user_id: uuid.UUID | None = None, **kwargs) -> Tenant:
+    """Creates and persists a Tenant directly in the test DB.
+
+    `user_id` is kept out of `make_tenant()` (which mirrors TenantCreate,
+    a request-body schema with no user_id field) and applied directly to
+    the model instead, since portal linkage happens via
+    TenantService.link_user, not tenant creation.
+    """
     data = make_tenant(**kwargs)
-    obj = Tenant(id=uuid.uuid4(), **data)
+    obj = Tenant(id=uuid.uuid4(), user_id=user_id, **data)
     db.add(obj)
     await db.flush()
     await db.refresh(obj)

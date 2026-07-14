@@ -77,7 +77,15 @@ class MockCRUDRepo:
             return None
         self.updated_payloads.append((id, payload))
         obj = self.records[id]
-        for field, value in payload.model_dump(exclude_unset=True).items():
+        # Mirrors BaseRepository.update's real dual-path handling: services
+        # like TenantService.link_user/unlink_user pass plain dicts rather
+        # than a Pydantic *Update schema, since the field being touched
+        # (`user_id`) isn't part of any schema's public update surface.
+        if hasattr(payload, "model_dump"):
+            updates = payload.model_dump(exclude_unset=True)
+        else:
+            updates = payload
+        for field, value in updates.items():
             setattr(obj, field, value)
         return obj
 

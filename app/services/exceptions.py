@@ -130,3 +130,12 @@ class RelatedResourceNotFoundError(ServiceException):
 
 class PropertyAlreadyExistsError(ServiceException):
     pass
+
+
+# ─── Tenant / User linking ──────────────────────────────────────────────
+class TenantAlreadyLinkedError(ServiceException):
+    """Raised when linking a tenant to a user would violate the 1:1
+    tenant<->user relationship — either the tenant is already linked to a
+    different user, or the user is already linked to a different tenant."""
+
+    pass

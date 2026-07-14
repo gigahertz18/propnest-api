@@ -1,4 +1,6 @@
 import uuid
+
+from collections.abc import Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.base import BaseRepository
@@ -16,7 +18,7 @@ class DocumentRepository(BaseRepository[Document, DocumentCreate, DocumentRelink
         self,
         db: AsyncSession,
         contract_id: uuid.UUID,
-    ) -> list[Document]:
+    ) -> Sequence[Document]:
         """Return all documents linked to a given contract."""
         return await self._all(db, self.model.contract_id == contract_id)
 
@@ -24,7 +26,7 @@ class DocumentRepository(BaseRepository[Document, DocumentCreate, DocumentRelink
         self,
         db: AsyncSession,
         property_id: uuid.UUID,
-    ) -> list[Document]:
+    ) -> Sequence[Document]:
         """Return all documents linked to a given property."""
         return await self._all(db, self.model.property_id == property_id)
 
@@ -32,7 +34,7 @@ class DocumentRepository(BaseRepository[Document, DocumentCreate, DocumentRelink
         self,
         db: AsyncSession,
         tenant_id: uuid.UUID,
-    ) -> list[Document]:
+    ) -> Sequence[Document]:
         """Return all documents linked to a given tenant."""
         return await self._all(db, self.model.tenant_id == tenant_id)
 
@@ -40,7 +42,7 @@ class DocumentRepository(BaseRepository[Document, DocumentCreate, DocumentRelink
         self,
         db: AsyncSession,
         file_type: str,
-    ) -> list[Document]:
+    ) -> Sequence[Document]:
         """Return all documents of a given type (e.g. LEASE_AGREEMENT, ID_PROOF)."""
         return await self._all(db, self.model.file_type == file_type)
 

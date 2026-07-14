@@ -1,5 +1,6 @@
 import uuid
 
+from collections.abc import Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.base import BaseRepository
@@ -17,7 +18,7 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
         self,
         db: AsyncSession,
         property_id: uuid.UUID,
-    ) -> list[Contract]:
+    ) -> Sequence[Contract]:
         """Return all contracts linked to a given property."""
 
         return await self._all(db, self.model.property_id == property_id)
@@ -26,7 +27,7 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
         self,
         db: AsyncSession,
         tenant_id: uuid.UUID,
-    ) -> list[Contract]:
+    ) -> Sequence[Contract]:
         """Return all contracts linked to a given tenant."""
         return await self._all(db, self.model.tenant_id == tenant_id)
 
@@ -34,7 +35,7 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
         self,
         db: AsyncSession,
         status: str,
-    ) -> list[Contract]:
+    ) -> Sequence[Contract]:
         """Return all contracts with a given status (e.g. ACTIVE, EXPIRED)."""
 
         return await self._all(db, self.model.status == status)
@@ -43,7 +44,7 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
         self,
         db: AsyncSession,
         rental_type: RentalType,
-    ) -> list[Contract]:
+    ) -> Sequence[Contract]:
         """Return all contracts of a given rental type."""
 
         return await self._all(db, self.model.rental_type == rental_type)
@@ -52,7 +53,7 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
         self,
         db: AsyncSession,
         booking_source: str,
-    ) -> list[Contract]:
+    ) -> Sequence[Contract]:
         """Return all contracts originating from a given booking source."""
 
         return await self._all(db, self.model.booking_source == booking_source)
