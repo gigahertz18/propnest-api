@@ -40,5 +40,12 @@ class TenantResponse(TenantBase, BaseResponse):
     """Returned to the client — includes DB-generated fields."""
 
     id: uuid.UUID
+    user_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class TenantLinkUser(BaseModel):
+    """Request body for linking a tenant to a portal-access User account."""
+
+    user_id: uuid.UUID

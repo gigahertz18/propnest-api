@@ -5,10 +5,12 @@ from unittest.mock import AsyncMock, MagicMock
 from app.core.dependencies import get_storage_client, get_document_service
 from app.main import app
 
+from app.models.user import UserRole
 from tests.factories import (
     make_document,
     make_document_model,
     make_property_model,
+    make_user_model,
 )
 
 
@@ -37,21 +39,43 @@ class FakeStorageClient:
 
 @pytest.mark.asyncio
 class TestListDocumentsRoute:
-    async def test_returns_empty_list(self, client, authenticate_user):
-
-        auth_ctx = await authenticate_user()
+    async def test_returns_empty_list(self, client, authenticate_manager):
+        auth_ctx = await authenticate_manager()
         response = await client.get("/api/v1/documents/", headers=auth_ctx.headers)
         assert response.status_code == 200
         assert response.json() == []
 
-    async def test_returns_all_documents(self, client, db, authenticate_user):
+    async def test_admin_sees_all_documents(self, client, db, authenticate_admin):
         await make_document_model(db, file_name="a.pdf")
         await make_document_model(db, file_name="b.pdf")
 
-        auth_ctx = await authenticate_user()
+        auth_ctx = await authenticate_admin()
         response = await client.get("/api/v1/documents/", headers=auth_ctx.headers)
         assert response.status_code == 200
         assert len(response.json()) == 2
+
+    async def test_manager_sees_only_documents_for_own_properties(self, client, db, authenticate_manager):
+        auth_ctx = await authenticate_manager()
+        other_manager = await authenticate_manager(username="othermgr", email="othermgr@example.com")
+        own_prop = await make_property_model(db, manager_id=auth_ctx.user.id)
+        other_prop = await make_property_model(db, manager_id=other_manager.user.id)
+
+        owned_doc = await make_document_model(db, file_name="mine.pdf", property_id=own_prop.id)
+        await make_document_model(db, file_name="not_mine.pdf", property_id=other_prop.id)
+
+        response = await client.get("/api/v1/documents/", headers=auth_ctx.headers)
+        assert response.status_code == 200
+        ids = {d["id"] for d in response.json()}
+        assert ids == {str(owned_doc.id)}
+
+    async def test_regular_user_cannot_list_documents(self, client, authenticate_user):
+        auth_ctx = await authenticate_user()
+        response = await client.get("/api/v1/documents/", headers=auth_ctx.headers)
+        assert response.status_code == 403
+
+    async def test_unauthenticated_cannot_list_documents(self, client):
+        response = await client.get("/api/v1/documents/")
+        assert response.status_code == 403
 
 
 # ─── GET /documents/{id} ──────────────────────────────────────────────────────
@@ -59,17 +83,38 @@ class TestListDocumentsRoute:
 
 @pytest.mark.asyncio
 class TestGetDocumentRoute:
-    async def test_returns_document_by_id(self, client, db, authenticate_user):
-
-        auth_ctx = await authenticate_user()
+    async def test_admin_can_get_any_document(self, client, db, authenticate_admin):
+        auth_ctx = await authenticate_admin()
         doc = await make_document_model(db)
         response = await client.get(f"/api/v1/documents/{doc.id}", headers=auth_ctx.headers)
         assert response.status_code == 200
         assert response.json()["id"] == str(doc.id)
 
-    async def test_returns_404_when_not_found(self, client, authenticate_user):
+    async def test_manager_can_get_document_for_own_property(self, client, db, authenticate_manager):
+        auth_ctx = await authenticate_manager()
+        prop = await make_property_model(db, manager_id=auth_ctx.user.id)
+        doc = await make_document_model(db, property_id=prop.id)
+        response = await client.get(f"/api/v1/documents/{doc.id}", headers=auth_ctx.headers)
+        assert response.status_code == 200
 
+    async def test_manager_cannot_get_document_for_another_managers_property(self, client, db, authenticate_manager):
+        auth_ctx = await authenticate_manager()
+        other_manager = await make_user_model(
+            db, username="othermgr", email="othermgr@example.com", role=UserRole.MANAGER
+        )
+        prop = await make_property_model(db, manager_id=other_manager.id)
+        doc = await make_document_model(db, property_id=prop.id)
+        response = await client.get(f"/api/v1/documents/{doc.id}", headers=auth_ctx.headers)
+        assert response.status_code == 403
+
+    async def test_regular_user_cannot_get_document(self, client, db, authenticate_user):
         auth_ctx = await authenticate_user()
+        doc = await make_document_model(db)
+        response = await client.get(f"/api/v1/documents/{doc.id}", headers=auth_ctx.headers)
+        assert response.status_code == 403
+
+    async def test_returns_404_when_not_found(self, client, authenticate_manager):
+        auth_ctx = await authenticate_manager()
         response = await client.get(f"/api/v1/documents/{uuid.uuid4()}", headers=auth_ctx.headers)
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]

@@ -116,6 +116,20 @@ class DocumentForbiddenError(ResourceForbiddenError):
     pass
 
 
+class PropertyForbiddenError(ResourceForbiddenError):
+    """Raised when a property is accessed by a manager who doesn't own it."""
+
+    pass
+
+
+class TenantForbiddenError(ResourceForbiddenError):
+    """Raised when a tenant is accessed by a manager who doesn't manage any
+    property tied to that tenant's contracts. Tenants with no contracts yet
+    are unclaimed — any manager may act on them."""
+
+    pass
+
+
 class DocumentValidationError(ServiceException):
     """Raised when a document validation fails"""
 
@@ -129,4 +143,13 @@ class RelatedResourceNotFoundError(ServiceException):
 
 
 class PropertyAlreadyExistsError(ServiceException):
+    pass
+
+
+# ─── Tenant / User linking ──────────────────────────────────────────────
+class TenantAlreadyLinkedError(ServiceException):
+    """Raised when linking a tenant to a user would violate the 1:1
+    tenant<->user relationship — either the tenant is already linked to a
+    different user, or the user is already linked to a different tenant."""
+
     pass

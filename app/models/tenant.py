@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import String, Text, Uuid, Boolean, Date
+from sqlalchemy import String, Text, Uuid, Boolean, Date, ForeignKey
 
 from sqlalchemy.orm import Mapped, mapped_column
 from app.db.session import Base
@@ -30,6 +30,17 @@ class Tenant(Base, TimestampMixin):
         Boolean,
         nullable=False,
         default=True,
+    )
+
+    # Nullable + unique: a tenant can exist with no portal access yet.
+    # Linked later via TenantService.link_user(); ondelete=SET NULL so a
+    # deleted User account doesn't take the tenant's rental history with it.
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        unique=True,
+        index=True,
     )
 
     def __repr__(self) -> str:

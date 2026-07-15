@@ -25,6 +25,18 @@ class FailingStorage:
         raise RuntimeError("Network error")
 
 
+class MockDocumentRepoWithScoping(MockCRUDRepo):
+    """Adds get_all_for_manager for control-flow testing only — driven by
+    a simple manager_id set directly on each mock record, not the real
+    property/contract join. The real join semantics are covered by
+    DocumentRepository's own tests against a real DB; this only needs to
+    confirm DocumentService.list_documents calls the right repo method
+    for the right role."""
+
+    async def get_all_for_manager(self, db, manager_id, skip=0, limit=100):
+        return [doc for doc in self.records.values() if getattr(doc, "manager_id", None) == manager_id]
+
+
 def _make_service(properties=None, contracts=None, tenants=None, documents=None):
     return DocumentService(
         document_repo=MockCRUDRepo(documents),
@@ -32,6 +44,40 @@ def _make_service(properties=None, contracts=None, tenants=None, documents=None)
         contract_repo=MockReadOnlyRepo(contracts),
         tenant_repo=MockReadOnlyRepo(tenants),
     )
+
+
+@pytest.mark.asyncio
+class TestListDocuments:
+    async def test_current_user_is_required(self, mock_db):
+        """current_user has no default — a caller that forgets to pass it
+        gets a loud TypeError, not a silent bypass. This is the specific
+        fix for the regression where Tenant/Document authorization was
+        silently skippable when current_user was omitted."""
+        doc = SimpleNamespace(id=uuid4())
+        svc = DocumentService(document_repo=MockDocumentRepoWithScoping({doc.id: doc}))
+
+        with pytest.raises(TypeError):
+            await svc.list_documents(mock_db)
+
+    async def test_admin_sees_all_documents(self, mock_db):
+        owned = SimpleNamespace(id=uuid4(), manager_id=uuid4())
+        other = SimpleNamespace(id=uuid4(), manager_id=uuid4())
+        svc = DocumentService(document_repo=MockDocumentRepoWithScoping({owned.id: owned, other.id: other}))
+        admin = make_admin()
+
+        result = await svc.list_documents(mock_db, current_user=admin)
+
+        assert result == [owned, other]
+
+    async def test_manager_only_sees_documents_for_own_properties(self, mock_db):
+        manager = make_manager()
+        owned = SimpleNamespace(id=uuid4(), manager_id=manager.id)
+        other = SimpleNamespace(id=uuid4(), manager_id=uuid4())
+        svc = DocumentService(document_repo=MockDocumentRepoWithScoping({owned.id: owned, other.id: other}))
+
+        result = await svc.list_documents(mock_db, current_user=manager)
+
+        assert result == [owned]
 
 
 class TestDocumentServiceClassAttributes:

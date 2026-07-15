@@ -11,7 +11,7 @@ from app.repositories.property import PropertyRepository
 from app.repositories.tenant import TenantRepository
 from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate
 from app.models.document import Document
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.services.base import ResourceAuthorizationMixin
 from app.services.exceptions import (
     DocumentUploadError,
@@ -75,13 +75,39 @@ class DocumentService(ResourceAuthorizationMixin):
         self.contract_repo = contract_repo
         self.tenant_repo = tenant_repo
 
-    async def list_documents(self, db: AsyncSession, skip: int = 0, limit: int = 100) -> list[Document]:
+    async def list_documents(
+        self,
+        db: AsyncSession,
+        current_user: User,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> list[Document]:
+        """Admins see every document. Managers only see documents tied to
+        one of their own properties.
+
+        `current_user` is required, not optional — see
+        TenantService.list_tenants' docstring for why an optional,
+        silently-skippable auth parameter is a footgun this codebase has
+        already been bitten by once."""
+        if current_user.role == UserRole.MANAGER:
+            return await self.document_repo.get_all_for_manager(db, current_user.id, skip=skip, limit=limit)
         return await self.document_repo.get_all(db, skip=skip, limit=limit)
 
-    async def get_document(self, db: AsyncSession, doc_id: UUID) -> Document:
+    async def get_document(
+        self,
+        db: AsyncSession,
+        doc_id: UUID,
+        current_user: User,
+    ) -> Document:
         doc = await self.document_repo.get_by_id(db, doc_id)
         if not doc:
             raise RelatedResourceNotFoundError(f"Document {doc_id} not found.")
+        await self._authorize_user_to_property(
+            db,
+            current_user,
+            property_id=doc.property_id,
+            contract_id=doc.contract_id,
+        )
         return doc
 
     async def create_document(
@@ -143,7 +169,7 @@ class DocumentService(ResourceAuthorizationMixin):
         current_user: User | None = None,
     ) -> Document | None:
 
-        doc = await self.get_document(db, doc_id)
+        doc = await self.get_document(db, doc_id, current_user=current_user)
 
         ctx = await self._prepare_document_context(
             db,
@@ -189,7 +215,7 @@ class DocumentService(ResourceAuthorizationMixin):
             DocumentUploadError: Uploading the new file failed.
             DocumentDeletionError: Deleting the old file from storage failed.
         """
-        doc = await self.get_document(db, doc_id)
+        doc = await self.get_document(db, doc_id, current_user=current_user)
 
         ctx = await self._prepare_document_context(
             db,
@@ -246,7 +272,7 @@ class DocumentService(ResourceAuthorizationMixin):
         current_user: User | None = None,
     ) -> Document | None:
 
-        doc = await self.get_document(db, doc_id)
+        doc = await self.get_document(db, doc_id, current_user=current_user)
 
         await self._prepare_document_context(
             db,

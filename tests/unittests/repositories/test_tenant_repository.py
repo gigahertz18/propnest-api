@@ -2,9 +2,11 @@ import pytest
 import uuid
 from datetime import date
 
+from sqlalchemy.exc import IntegrityError
+
 from app.repositories.tenant import tenant_repo
 from app.schemas.tenant import TenantCreate, TenantUpdate
-from tests.factories import make_tenant, make_tenant_model
+from tests.factories import make_tenant, make_tenant_model, make_user_model
 
 
 @pytest.mark.asyncio
@@ -272,6 +274,46 @@ class TestTenantRepositoryGetByOccupation:
         result = await tenant_repo.get_by_occupation(db, "Engineer")
         # Tenants with NULL occupation should not appear in filtered results
         assert all(t.occupation is not None for t in result)
+
+
+@pytest.mark.asyncio
+class TestTenantRepositoryGetByUserId:
+    async def test_returns_tenant_when_linked(self, db):
+        user = await make_user_model(db, username="linked_user", email="linked@example.com")
+        tenant = await make_tenant_model(db, user_id=user.id, email="linked_tenant@example.com")
+        result = await tenant_repo.get_by_user_id(db, user.id)
+        assert result is not None
+        assert result.id == tenant.id
+
+    async def test_returns_none_when_not_linked(self, db):
+        result = await tenant_repo.get_by_user_id(db, uuid.uuid4())
+        assert result is None
+
+    async def test_returns_none_for_tenant_with_null_user_id(self, db):
+        # Default tenant has no linked user — must not accidentally match
+        # a lookup for None or any other falsy-ish value.
+        await make_tenant_model(db, email="unlinked@example.com")
+        result = await tenant_repo.get_by_user_id(db, uuid.uuid4())
+        assert result is None
+
+    async def test_db_rejects_second_tenant_linked_to_same_user(self, db):
+        # Documents the DB-level guarantee from the unique index on
+        # tenants.user_id: a user can only ever be linked to one tenant.
+        # TenantService.link_user checks this in Python first, but the
+        # constraint is the real backstop against concurrent requests.
+        user = await make_user_model(db, username="shared_user", email="shared_user@example.com")
+        await make_tenant_model(db, user_id=user.id, email="first_tenant@example.com")
+
+        from app.models.tenant import Tenant as TenantModel
+
+        dupe = TenantModel(
+            id=uuid.uuid4(),
+            **make_tenant(email="second_tenant@example.com"),
+            user_id=user.id,
+        )
+        db.add(dupe)
+        with pytest.raises(IntegrityError):
+            await db.flush()
 
 
 @pytest.mark.asyncio
