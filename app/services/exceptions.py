@@ -116,6 +116,20 @@ class DocumentForbiddenError(ResourceForbiddenError):
     pass
 
 
+class PropertyForbiddenError(ResourceForbiddenError):
+    """Raised when a property is accessed by a manager who doesn't own it."""
+
+    pass
+
+
+class TenantForbiddenError(ResourceForbiddenError):
+    """Raised when a tenant is accessed by a manager who doesn't manage any
+    property tied to that tenant's contracts. Tenants with no contracts yet
+    are unclaimed — any manager may act on them."""
+
+    pass
+
+
 class DocumentValidationError(ServiceException):
     """Raised when a document validation fails"""
 

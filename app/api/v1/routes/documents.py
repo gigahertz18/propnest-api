@@ -4,13 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.models.user import User
 from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate, DocumentResponse
 from app.services.document_service import DocumentService
 from app.core.dependencies import (
     get_document_service,
     require_manager_or_above,
     get_storage_client,
-    get_current_user,
 )
 from app.services.exceptions import (
     DocumentDeletionError,
@@ -25,27 +25,33 @@ router = APIRouter(prefix="/documents", tags=["Documents"])
 @router.get(
     "/",
     response_model=list[DocumentResponse],
-    dependencies=[Depends(get_current_user)],
 )
 async def list_documents(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
     document_service: DocumentService = Depends(get_document_service),
+    current_user: User = Depends(require_manager_or_above),
 ):
-    return await document_service.list_documents(db, skip=skip, limit=limit)
+    return await document_service.list_documents(db, current_user, skip=skip, limit=limit)
 
 
-@router.get("/{document_id}", response_model=DocumentResponse, dependencies=[Depends(get_current_user)])
+@router.get(
+    "/{document_id}",
+    response_model=DocumentResponse,
+)
 async def get_document(
     document_id: UUID,
     db: AsyncSession = Depends(get_db),
     document_service: DocumentService = Depends(get_document_service),
+    current_user: User = Depends(require_manager_or_above),
 ):
     try:
-        return await document_service.get_document(db, document_id)
+        return await document_service.get_document(db, document_id, current_user)
     except RelatedResourceNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except DocumentForbiddenError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
 @router.post(

@@ -1,19 +1,34 @@
 import pytest
 import uuid
 
-from tests.factories import make_tenant, make_tenant_model, make_user_model
+from app.models.user import UserRole
+from tests.factories import (
+    make_tenant,
+    make_tenant_model,
+    make_user_model,
+    make_property_model,
+    make_contract_model,
+)
+
+
+async def _make_owned_tenant(db, manager_id, **tenant_kwargs):
+    """Build a tenant tied via a contract to a property owned by manager_id."""
+    prop = await make_property_model(db, manager_id=manager_id)
+    tenant = await make_tenant_model(db, **tenant_kwargs)
+    await make_contract_model(db, property_id=prop.id, tenant_id=tenant.id)
+    return tenant
 
 
 @pytest.mark.asyncio
 class TestListTenantsRoute:
-    async def test_returns_empty_list(self, client, authenticate_user):
-        ctx = await authenticate_user()
+    async def test_returns_empty_list(self, client, authenticate_manager):
+        ctx = await authenticate_manager()
         response = await client.get("/api/v1/tenants/", headers=ctx.headers)
         assert response.status_code == 200
         assert response.json() == []
 
-    async def test_returns_all_tenants(self, client, db, authenticate_user):
-        ctx = await authenticate_user()
+    async def test_admin_sees_all_tenants(self, client, db, authenticate_admin):
+        ctx = await authenticate_admin()
         await make_tenant_model(db, email="tenant_a@example.com")
         await make_tenant_model(db, email="tenant_b@example.com")
 
@@ -21,18 +36,74 @@ class TestListTenantsRoute:
         assert response.status_code == 200
         assert len(response.json()) == 2
 
+    async def test_manager_sees_unclaimed_and_own_tenants(self, client, db, authenticate_manager):
+        ctx = await authenticate_manager()
+        other_manager = await make_user_model(
+            db, username="othermgr", email="othermgr@example.com", role=UserRole.MANAGER
+        )
+
+        unclaimed = await make_tenant_model(db, email="unclaimed@example.com")
+        owned = await _make_owned_tenant(db, ctx.user.id, email="owned@example.com")
+        await _make_owned_tenant(db, other_manager.id, email="not_mine@example.com")
+
+        response = await client.get("/api/v1/tenants/", headers=ctx.headers)
+        assert response.status_code == 200
+        ids = {t["id"] for t in response.json()}
+        assert ids == {str(unclaimed.id), str(owned.id)}
+
+    async def test_regular_user_cannot_list_tenants(self, client, authenticate_user):
+        ctx = await authenticate_user()
+        response = await client.get("/api/v1/tenants/", headers=ctx.headers)
+        assert response.status_code == 403
+
+    async def test_unauthenticated_cannot_list_tenants(self, client):
+        response = await client.get("/api/v1/tenants/")
+        assert response.status_code == 403
+
 
 @pytest.mark.asyncio
 class TestGetTenantRoute:
-    async def test_returns_tenant_by_id(self, client, db, authenticate_user):
-        ctx = await authenticate_user()
+    async def test_manager_can_get_unclaimed_tenant(self, client, db, authenticate_manager):
+        ctx = await authenticate_manager()
         tenant = await make_tenant_model(db)
         response = await client.get(f"/api/v1/tenants/{tenant.id}", headers=ctx.headers)
         assert response.status_code == 200
         assert response.json()["id"] == str(tenant.id)
 
-    async def test_returns_404_when_not_found(self, client, authenticate_user):
+    async def test_manager_can_get_own_tenant(self, client, db, authenticate_manager):
+        ctx = await authenticate_manager()
+        tenant = await _make_owned_tenant(db, ctx.user.id)
+        response = await client.get(f"/api/v1/tenants/{tenant.id}", headers=ctx.headers)
+        assert response.status_code == 200
+
+    async def test_manager_cannot_get_another_managers_tenant(self, client, db, authenticate_manager):
+        ctx = await authenticate_manager()
+        other_manager = await make_user_model(
+            db, username="othermgr", email="othermgr@example.com", role=UserRole.MANAGER
+        )
+        tenant = await _make_owned_tenant(db, other_manager.id)
+
+        response = await client.get(f"/api/v1/tenants/{tenant.id}", headers=ctx.headers)
+        assert response.status_code == 403
+
+    async def test_admin_can_get_any_tenant(self, client, db, authenticate_admin):
+        ctx = await authenticate_admin()
+        other_manager = await make_user_model(
+            db, username="othermgr", email="othermgr@example.com", role=UserRole.MANAGER
+        )
+        tenant = await _make_owned_tenant(db, other_manager.id)
+
+        response = await client.get(f"/api/v1/tenants/{tenant.id}", headers=ctx.headers)
+        assert response.status_code == 200
+
+    async def test_regular_user_cannot_get_tenant(self, client, db, authenticate_user):
         ctx = await authenticate_user()
+        tenant = await make_tenant_model(db)
+        response = await client.get(f"/api/v1/tenants/{tenant.id}", headers=ctx.headers)
+        assert response.status_code == 403
+
+    async def test_returns_404_when_not_found(self, client, authenticate_manager):
+        ctx = await authenticate_manager()
         response = await client.get(f"/api/v1/tenants/{uuid.uuid4()}", headers=ctx.headers)
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]
@@ -40,8 +111,8 @@ class TestGetTenantRoute:
 
 @pytest.mark.asyncio
 class TestCreateTenantRoute:
-    async def test_creates_tenant_successfully(self, client, authenticate_user):
-        ctx = await authenticate_user()
+    async def test_creates_tenant_successfully(self, client, authenticate_manager):
+        ctx = await authenticate_manager()
         payload = make_tenant(full_name="New Tenant", email="new_tenant@example.com")
         payload["date_of_birth"] = payload["date_of_birth"].isoformat()
         response = await client.post(
@@ -57,8 +128,8 @@ class TestCreateTenantRoute:
         # Not yet linked to a portal-access User account.
         assert data["user_id"] is None
 
-    async def test_returns_422_when_email_missing(self, client, authenticate_user):
-        ctx = await authenticate_user()
+    async def test_returns_422_when_email_missing(self, client, authenticate_manager):
+        ctx = await authenticate_manager()
         payload = make_tenant()
         payload["date_of_birth"] = payload["date_of_birth"].isoformat()
         del payload["email"]
@@ -69,11 +140,22 @@ class TestCreateTenantRoute:
         )
         assert response.status_code == 422
 
+    async def test_regular_user_cannot_create_tenant(self, client, authenticate_user):
+        ctx = await authenticate_user()
+        payload = make_tenant(email="blocked@example.com")
+        payload["date_of_birth"] = payload["date_of_birth"].isoformat()
+        response = await client.post(
+            "/api/v1/tenants/",
+            json=payload,
+            headers=ctx.headers,
+        )
+        assert response.status_code == 403
+
 
 @pytest.mark.asyncio
 class TestUpdateTenantRoute:
-    async def test_updates_full_name(self, client, db, authenticate_user):
-        ctx = await authenticate_user()
+    async def test_updates_full_name(self, client, db, authenticate_manager):
+        ctx = await authenticate_manager()
         tenant = await make_tenant_model(db, full_name="Old Name")
         response = await client.patch(
             f"/api/v1/tenants/{tenant.id}",
@@ -84,8 +166,8 @@ class TestUpdateTenantRoute:
         assert response.status_code == 200
         assert response.json()["full_name"] == "New Name"
 
-    async def test_partial_update_does_not_affect_other_fields(self, client, db, authenticate_user):
-        ctx = await authenticate_user()
+    async def test_partial_update_does_not_affect_other_fields(self, client, db, authenticate_manager):
+        ctx = await authenticate_manager()
         tenant = await make_tenant_model(db, full_name="Alice", occupation="Engineer")
         response = await client.patch(
             f"/api/v1/tenants/{tenant.id}",
@@ -95,14 +177,38 @@ class TestUpdateTenantRoute:
 
         assert response.json()["occupation"] == "Engineer"
 
-    async def test_returns_404_when_not_found(self, client, authenticate_user):
-        ctx = await authenticate_user()
+    async def test_returns_404_when_not_found(self, client, authenticate_manager):
+        ctx = await authenticate_manager()
         response = await client.patch(
             f"/api/v1/tenants/{uuid.uuid4()}",
             json={"full_name": "Anything"},
             headers=ctx.headers,
         )
         assert response.status_code == 404
+
+    async def test_manager_cannot_update_another_managers_tenant(self, client, db, authenticate_manager):
+        ctx = await authenticate_manager()
+        other_manager = await make_user_model(
+            db, username="othermgr", email="othermgr@example.com", role=UserRole.MANAGER
+        )
+        tenant = await _make_owned_tenant(db, other_manager.id)
+
+        response = await client.patch(
+            f"/api/v1/tenants/{tenant.id}",
+            json={"full_name": "Hacked"},
+            headers=ctx.headers,
+        )
+        assert response.status_code == 403
+
+    async def test_regular_user_cannot_update_tenant(self, client, db, authenticate_user):
+        ctx = await authenticate_user()
+        tenant = await make_tenant_model(db)
+        response = await client.patch(
+            f"/api/v1/tenants/{tenant.id}",
+            json={"full_name": "Hacked"},
+            headers=ctx.headers,
+        )
+        assert response.status_code == 403
 
 
 @pytest.mark.asyncio
@@ -141,6 +247,19 @@ class TestDeleteTenantRoute:
         )
         assert response.status_code == 403
 
+    async def test_manager_cannot_delete_another_managers_tenant(self, client, db, authenticate_manager):
+        ctx = await authenticate_manager()
+        other_manager = await make_user_model(
+            db, username="othermgr", email="othermgr@example.com", role=UserRole.MANAGER
+        )
+        tenant = await _make_owned_tenant(db, other_manager.id)
+
+        response = await client.delete(
+            f"/api/v1/tenants/{tenant.id}",
+            headers=ctx.headers,
+        )
+        assert response.status_code == 403
+
 
 @pytest.mark.asyncio
 class TestLinkTenantUserRoute:
@@ -157,6 +276,20 @@ class TestLinkTenantUserRoute:
 
         assert response.status_code == 200
         assert response.json()["user_id"] == str(user.id)
+
+    async def test_manager_cannot_link_another_managers_tenant(self, client, db, authenticate_manager):
+        ctx = await authenticate_manager()
+        other_manager = await authenticate_manager(username="othermgr", email="othermgr@example.com")
+        tenant = await _make_owned_tenant(db, other_manager.user.id)
+        user = await make_user_model(db, username="portal_user", email="portal_user@example.com")
+
+        response = await client.put(
+            f"/api/v1/tenants/{tenant.id}/link-user",
+            json={"user_id": str(user.id)},
+            headers=ctx.headers,
+        )
+
+        assert response.status_code == 403
 
     async def test_returns_404_when_tenant_not_found(self, client, db, authenticate_manager):
         ctx = await authenticate_manager()
@@ -252,6 +385,22 @@ class TestUnlinkTenantUserRoute:
 
         assert response.status_code == 200
         assert response.json()["user_id"] is None
+
+    async def test_manager_cannot_unlink_another_managers_tenant(self, client, db, authenticate_manager):
+        ctx = await authenticate_manager()
+        other_manager = await make_user_model(
+            db, username="othermgr", email="othermgr@example.com", role=UserRole.MANAGER
+        )
+        user = await make_user_model(db, username="unlink_user", email="unlink_user@example.com")
+        tenant = await make_tenant_model(db, user_id=user.id)
+        prop = await make_property_model(db, manager_id=other_manager.id)
+        await make_contract_model(db, property_id=prop.id, tenant_id=tenant.id)
+
+        response = await client.delete(
+            f"/api/v1/tenants/{tenant.id}/link-user",
+            headers=ctx.headers,
+        )
+        assert response.status_code == 403
 
     async def test_unlinking_already_unlinked_tenant_is_idempotent(self, client, db, authenticate_manager):
         ctx = await authenticate_manager()

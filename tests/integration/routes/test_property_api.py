@@ -9,14 +9,14 @@ from tests.factories import (
 
 @pytest.mark.asyncio
 class TestListPropertiesRoute:
-    async def test_returns_empty_list(self, client, authenticate_user):
-        ctx = await authenticate_user()
+    async def test_returns_empty_list(self, client, authenticate_admin):
+        ctx = await authenticate_admin()
         response = await client.get("/api/v1/properties/", headers=ctx.headers)
         assert response.status_code == 200
         assert response.json() == []
 
-    async def test_returns_all_properties(self, client, db, authenticate_user):
-        ctx = await authenticate_user()
+    async def test_returns_all_properties(self, client, db, authenticate_admin):
+        ctx = await authenticate_admin()
         await make_property_model(db, name="Unit A")
         await make_property_model(db, name="Unit B")
 
@@ -27,18 +27,29 @@ class TestListPropertiesRoute:
 
 @pytest.mark.asyncio
 class TestGetPropertyRoute:
-    async def test_returns_property_by_id(self, client, db, authenticate_user):
-        ctx = await authenticate_user()
+    async def test_returns_property_by_id(self, client, db, authenticate_admin):
+        ctx = await authenticate_admin()
         prop = await make_property_model(db)
         response = await client.get(f"/api/v1/properties/{prop.id}", headers=ctx.headers)
         assert response.status_code == 200
         assert response.json()["id"] == str(prop.id)
 
-    async def test_returns_404_when_not_found(self, client, authenticate_user):
-        ctx = await authenticate_user()
+    async def test_returns_404_when_not_found(self, client, authenticate_admin):
+        ctx = await authenticate_admin()
         response = await client.get(f"/api/v1/properties/{uuid.uuid4()}", headers=ctx.headers)
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]
+
+    async def test_returns_403_when_property_not_managed_by_manager(self, client, db, authenticate_manager):
+        ctx = await authenticate_manager()
+        other_manager = await authenticate_manager(
+            username="other_manager",
+            email="other_manager@example.com",
+        )
+        prop = await make_property_model(db, manager_id=other_manager.user.id)
+
+        response = await client.get(f"/api/v1/properties/{prop.id}", headers=ctx.headers)
+        assert response.status_code == 403
 
 
 @pytest.mark.asyncio

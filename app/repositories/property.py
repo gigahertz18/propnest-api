@@ -1,5 +1,7 @@
 from collections.abc import Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
+from uuid import UUID
+
 from app.repositories.base import BaseRepository
 from app.models.property import Property, PropertyStatus
 from app.schemas.property import PropertyCreate, PropertyUpdate
@@ -18,6 +20,21 @@ class PropertyRepository(BaseRepository[Property, PropertyCreate, PropertyUpdate
     ) -> Sequence[Property]:
 
         return await self._all(db, self.model.status == status)
+
+    async def get_all_for_manager(
+        self,
+        db: AsyncSession,
+        manager_id: UUID,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Sequence[Property]:
+
+        return await self._all(
+            db,
+            self.model.manager_id == manager_id,
+            skip=skip,
+            limit=limit,
+        )
 
 
 # Instantiate once — import this instance everywhere
