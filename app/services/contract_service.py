@@ -52,11 +52,13 @@ class ContractService(ResourceAuthorizationMixin):
         payload: ContractCreate,
         current_user: User | None = None,
     ) -> Contract:
-        # Rely on DB constraint to prevent race conditions where two concurrent
-        # requests attempt to create an ACTIVE contract for the same property.
-        # Attempt the insert and translate unique/constraint errors into the
-        # domain-specific `ContractActiveError` so callers get a consistent
-        # response without depending on a fragile pre-check.
+        """
+        Rely on DB constraint to prevent race conditions where two concurrent
+        requests attempt to create an ACTIVE contract for the same property.
+        Attempt the insert and translate unique/constraint errors into the
+        domain-specific `ContractActiveError` so callers get a consistent
+        response without depending on a fragile pre-check.
+        """
         ctx = await self._prepare_contract_context(
             db,
             contract=None,
@@ -77,9 +79,6 @@ class ContractService(ResourceAuthorizationMixin):
             await db.commit()
             return contract
         except IntegrityError as e:
-            # msg = str(e.orig) if getattr(e, "orig", None) is not None else str(e)
-            # if "uq_active_contract_property" in msg or ("duplicate key value" in msg and "property_id" in msg):
-            #     raise ContractActiveError("An active contract already exists for this property")
             self._raise_if_active_contract_conflict(e)
             raise
 
@@ -93,7 +92,7 @@ class ContractService(ResourceAuthorizationMixin):
         """
         Rely on the DB here: ContractUpdate can't change property_id,
         but it can flip `status` back to ACTIVE (e.g reactivating TERMINATED contract)
-        on a property that has since picked up a sifferent active contract.
+        on a property that has since picked up a different active contract.
         Same partial unique index as create_contract, so translate the same way
         """
         contract = await self.get_contract(db, contract_id)
@@ -106,9 +105,7 @@ class ContractService(ResourceAuthorizationMixin):
             tenant_id=contract.tenant_id,
             current_user=current_user,
         )
-        # contract = await self.contract_repo.update(db, contract_id, payload)
-        # await db.commit()
-        # return contract
+
         try:
 
             contract = await self.contract_repo.update(db, contract_id, payload)
@@ -193,4 +190,4 @@ class ContractService(ResourceAuthorizationMixin):
         """
         msg = str(e.orig) if getattr(e, "orig", None) is not None else str(e)
         if "uq_active_contract_property" in msg or ("duplicate key value" in msg and "property_id" in msg):
-            raise ContractActiveError("An active contract already exists for the property")
+            raise ContractActiveError("An active contract already exists for this property")

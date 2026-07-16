@@ -400,19 +400,19 @@ class TestUpdateContract:
 
     async def test_translates_integrity_error_with_uq_constraint_name(self, mock_db):
         """
-        Reactivating a TERMINATED/EXPIRED contract (status -> ACTIVE) can hit the smae partial
+        Reactivating a TERMINATED/EXPIRED contract (status -> ACTIVE) can hit the same partial
         unique index create_contract does, since ContractUpdate can change status but not property_id.
         """
         contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
 
-        contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id)
+        contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="TERMINATED")
 
         class Repo(MockContractRepo):
             async def update(self, db, id, payload):
                 raise IntegrityError(
                     "UPDATE",
                     {},
-                    Exception('duplicate key value violates unique contraint "uq_active_contract_property"'),
+                    Exception('duplicate key value violates unique constraint "uq_active_contract_property"'),
                 )
 
         svc = ContractService(
@@ -427,7 +427,7 @@ class TestUpdateContract:
     async def test_translates_integrity_error_mentioning_property_id(self, mock_db):
         contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
 
-        contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id)
+        contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="TERMINATED")
 
         class Repo(MockContractRepo):
             async def update(self, db, id, payload):
