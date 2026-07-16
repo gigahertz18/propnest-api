@@ -81,6 +81,8 @@ async def update_contract(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ContractForbiddenError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except ContractActiveError:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Property already has an active contract")
 
 
 @router.delete(

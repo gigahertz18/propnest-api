@@ -135,6 +135,31 @@ class TestUpdateContractRoute:
         )
         assert response.status_code == 403
 
+    async def test_returns_409_when_reactivating_onto_property_with_active_contract(
+        self,
+        client,
+        db,
+        authenticate_admin,
+    ):
+        auth_ctx = await authenticate_admin()
+
+        prop = await make_property_model(db)
+
+        tenant1 = await make_tenant_model(db, email="t1-reactivate@example.com")
+        tenant2 = await make_tenant_model(db, email="t2-reactivate@example.com")
+
+        terminated_contract = await make_contract_model(db, prop.id, tenant1.id, status="TERMINATED")
+
+        await make_contract_model(db, prop.id, tenant2.id, status="ACTIVE")
+
+        response = await client.patch(
+            f"/api/v1/contracts/{terminated_contract.id}",
+            json={"status": "ACTIVE"},
+            headers=auth_ctx.headers,
+        )
+
+        assert response.status_code == 409
+
 
 @pytest.mark.asyncio
 class TestDeleteContractRoute:

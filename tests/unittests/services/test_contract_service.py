@@ -398,6 +398,73 @@ class TestUpdateContract:
 
         assert result is None
 
+    async def test_translates_integrity_error_with_uq_constraint_name(self, mock_db):
+        """
+        Reactivating a TERMINATED/EXPIRED contract (status -> ACTIVE) can hit the smae partial
+        unique index create_contract does, since ContractUpdate can change status but not property_id.
+        """
+        contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
+
+        contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id)
+
+        class Repo(MockContractRepo):
+            async def update(self, db, id, payload):
+                raise IntegrityError(
+                    "UPDATE",
+                    {},
+                    Exception('duplicate key value violates unique contraint "uq_active_contract_property"'),
+                )
+
+        svc = ContractService(
+            contract_repo=Repo({contract_id: contract}),
+            property_repo=MockReadOnlyRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())}),
+            tenant_repo=MockReadOnlyRepo({tenant_id: SimpleNamespace(id=tenant_id)}),
+        )
+
+        with pytest.raises(ContractActiveError):
+            await svc.update_contract(mock_db, contract_id, ContractUpdate(status="ACTIVE"), current_user=make_admin())
+
+    async def test_translates_integrity_error_mentioning_property_id(self, mock_db):
+        contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
+
+        contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id)
+
+        class Repo(MockContractRepo):
+            async def update(self, db, id, payload):
+                raise IntegrityError(
+                    "UPDATE",
+                    {},
+                    Exception('duplicate key value violates unique constraint "whatever" for property_id'),
+                )
+
+        svc = ContractService(
+            contract_repo=Repo({contract_id: contract}),
+            property_repo=MockReadOnlyRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())}),
+            tenant_repo=MockReadOnlyRepo({tenant_id: SimpleNamespace(id=tenant_id)}),
+        )
+
+        with pytest.raises(ContractActiveError):
+            await svc.update_contract(mock_db, contract_id, ContractUpdate(status="ACTIVE"), current_user=make_admin())
+
+    async def test_reraises_unrelated_integrity_errors(self, mock_db):
+        contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
+        contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="ACTIVE")
+
+        class Repo(MockContractRepo):
+            async def update(self, db, id, payload):
+                raise IntegrityError("UPDATE", {}, Exception("some other integrity problem"))
+
+        svc = ContractService(
+            contract_repo=Repo({contract_id: contract}),
+            property_repo=MockReadOnlyRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())}),
+            tenant_repo=MockReadOnlyRepo({tenant_id: SimpleNamespace(id=tenant_id)}),
+        )
+
+        with pytest.raises(IntegrityError):
+            await svc.update_contract(
+                mock_db, contract_id, ContractUpdate(rent_amount=Decimal("2000.00")), current_user=make_admin()
+            )
+
 
 # ─── delete_contract ─────────────────────────────────────────────────────────
 
