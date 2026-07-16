@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
 from uuid import UUID
 from sqlalchemy.exc import IntegrityError
@@ -36,7 +37,7 @@ class ContractService(ResourceAuthorizationMixin):
         self.property_repo = property_repo
         self.tenant_repo = tenant_repo
 
-    async def list_contracts(self, db: AsyncSession, skip: int = 0, limit: int = 100) -> list[Contract]:
+    async def list_contracts(self, db: AsyncSession, skip: int = 0, limit: int = 100) -> Sequence[Contract]:
         return await self.contract_repo.get_all(db, skip=skip, limit=limit)
 
     async def get_contract(self, db: AsyncSession, contract_id: UUID) -> Contract:
@@ -76,9 +77,10 @@ class ContractService(ResourceAuthorizationMixin):
             await db.commit()
             return contract
         except IntegrityError as e:
-            msg = str(e.orig) if getattr(e, "orig", None) is not None else str(e)
-            if "uq_active_contract_property" in msg or ("duplicate key value" in msg and "property_id" in msg):
-                raise ContractActiveError("An active contract already exists for this property")
+            # msg = str(e.orig) if getattr(e, "orig", None) is not None else str(e)
+            # if "uq_active_contract_property" in msg or ("duplicate key value" in msg and "property_id" in msg):
+            #     raise ContractActiveError("An active contract already exists for this property")
+            self._raise_if_active_contract_conflict(e)
             raise
 
     async def update_contract(
@@ -88,7 +90,12 @@ class ContractService(ResourceAuthorizationMixin):
         payload: ContractUpdate,
         current_user: User | None = None,
     ) -> Contract | None:
-
+        """
+        Rely on the DB here: ContractUpdate can't change property_id,
+        but it can flip `status` back to ACTIVE (e.g reactivating TERMINATED contract)
+        on a property that has since picked up a sifferent active contract.
+        Same partial unique index as create_contract, so translate the same way
+        """
         contract = await self.get_contract(db, contract_id)
 
         # this is for authorization only. no need to use the returned context
@@ -99,10 +106,17 @@ class ContractService(ResourceAuthorizationMixin):
             tenant_id=contract.tenant_id,
             current_user=current_user,
         )
+        # contract = await self.contract_repo.update(db, contract_id, payload)
+        # await db.commit()
+        # return contract
+        try:
 
-        contract = await self.contract_repo.update(db, contract_id, payload)
-        await db.commit()
-        return contract
+            contract = await self.contract_repo.update(db, contract_id, payload)
+            await db.commit()
+            return contract
+        except IntegrityError as e:
+            self._raise_if_active_contract_conflict(e)
+            raise
 
     async def delete_contract(
         self,
@@ -124,22 +138,22 @@ class ContractService(ResourceAuthorizationMixin):
         await db.commit()
         return contract
 
-    async def get_by_property(self, db: AsyncSession, property_id: UUID) -> list[Contract]:
+    async def get_by_property(self, db: AsyncSession, property_id: UUID) -> Sequence[Contract]:
         return await self.contract_repo.get_by_property(db, property_id)
 
     async def get_active_contract_by_property(self, db: AsyncSession, property_id: UUID) -> Contract | None:
         return await self.contract_repo.get_active_contract_by_property(db, property_id)
 
-    async def get_by_tenant(self, db: AsyncSession, tenant_id: UUID) -> list[Contract]:
+    async def get_by_tenant(self, db: AsyncSession, tenant_id: UUID) -> Sequence[Contract]:
         return await self.contract_repo.get_by_tenant(db, tenant_id)
 
-    async def get_by_status(self, db: AsyncSession, status: str) -> list[Contract]:
+    async def get_by_status(self, db: AsyncSession, status: str) -> Sequence[Contract]:
         return await self.contract_repo.get_by_status(db, status)
 
-    async def get_by_rental_type(self, db: AsyncSession, rental_type: RentalType) -> list[Contract]:
+    async def get_by_rental_type(self, db: AsyncSession, rental_type: RentalType) -> Sequence[Contract]:
         return await self.contract_repo.get_by_rental_type(db, rental_type)
 
-    async def get_by_booking_source(self, db: AsyncSession, booking_source: str) -> list[Contract]:
+    async def get_by_booking_source(self, db: AsyncSession, booking_source: str) -> Sequence[Contract]:
         return await self.contract_repo.get_by_booking_source(db, booking_source)
 
     async def _prepare_contract_context(
@@ -169,3 +183,14 @@ class ContractService(ResourceAuthorizationMixin):
             property_id=effective_property_id,
             tenant_id=effective_tenant_id,
         )
+
+    @staticmethod
+    def _raise_if_active_contract_conflict(e: IntegrityError) -> None:
+        """
+        Translate a violation of the `uq_active_contract_property` partial unique index
+        into the domain `ContractActiveError`. Shared by create_contract and update_contract since both can hit it
+        leaves unrelated IntegrityErrors for the caller to reraise as-is.
+        """
+        msg = str(e.orig) if getattr(e, "orig", None) is not None else str(e)
+        if "uq_active_contract_property" in msg or ("duplicate key value" in msg and "property_id" in msg):
+            raise ContractActiveError("An active contract already exists for the property")

@@ -1,15 +1,16 @@
-from uuid import UUID
+from collections.abc import Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
+from uuid import UUID
 
-from app.repositories.user import UserRepository
-from app.schemas.user import UserCreate, UserUpdate
 from app.models.user import User
+from app.schemas.user import UserCreate, UserUpdate
 from app.services.exceptions import (
     UserNotFoundError,
     EmailAlreadyExistsError,
     UsernameAlreadyExistsError,
 )
+from app.repositories.user import UserRepository
 
 
 class UserService:
@@ -24,7 +25,7 @@ class UserService:
     def __init__(self, user_repo: UserRepository) -> None:
         self.user_repo = user_repo
 
-    async def list_users(self, db: AsyncSession, skip: int = 0, limit: int = 100) -> list[User]:
+    async def list_users(self, db: AsyncSession, skip: int = 0, limit: int = 100) -> Sequence[User]:
         return await self.user_repo.get_all(db, skip=skip, limit=limit)
 
     async def get_user(self, db: AsyncSession, id: UUID) -> User:
