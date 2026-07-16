@@ -2,6 +2,7 @@ import pytest
 
 from io import BytesIO
 from types import SimpleNamespace
+from sqlalchemy.exc import IntegrityError
 from uuid import uuid4
 
 from app.services.document_service import DocumentService
@@ -816,6 +817,34 @@ class TestReplaceDocumentFile:
         assert "new.pdf" in storage.remove_calls
         assert "original.pdf" not in storage.remove_calls
 
+    async def test_reraises_original_db_error_when_cleanup_also_fails(self, mock_db):
+        doc_id, doc = self._make_doc("original.pdf")
+        svc = _make_service(documents={doc_id: doc})
+        payload = DocumentFileUpdate(
+            file_name="new.pdf",
+            file_type="application/pdf",
+            file_url="http://minio/bucket/new.pdf",
+        )
+
+        async def failing_update(*args, **kwargs):
+            raise IntegrityError("UPDATE", {}, Exception("constraint violation"))
+
+        svc.document_repo.update = failing_update
+
+        class FailingRemoveStorage(self.FakeStorageClient):
+            def remove_object(self, bucket, name):
+                raise Exception("MinIO unreachable")
+
+        with pytest.raises(IntegrityError):
+            await svc.replace_document_file(
+                mock_db,
+                doc_id,
+                payload,
+                storage_client=FailingRemoveStorage(),
+                file_obj=self._make_file_obj("new.pdf"),
+                current_user=make_admin(),
+            )
+
 
 @pytest.mark.asyncio
 class TestCreateDocumentStorageCleanupOnDbFailure:
@@ -874,6 +903,32 @@ class TestCreateDocumentStorageCleanupOnDbFailure:
 
         with pytest.raises(RuntimeError):
             await svc.create_document(mock_db, payload)  # no storage_client, no file_obj
+
+    async def test_reraises_original_db_error_when_cleanup_also_fails(self, mock_db):
+        class FailingCreateRepo(MockCRUDRepo):
+            async def create(self, db, payload):
+                raise IntegrityError("INSERT", {}, Exception("duplicate key"))
+
+        class FailingStorage:
+            def put_object(self, bucket, name, stream, length=None, content_type=None):
+                pass
+
+            def remove_object(self, bucket, name):
+                raise Exception("MinIO unreachable")
+
+        svc = DocumentService(document_repo=FailingCreateRepo())
+
+        payload = DocumentCreate(
+            file_name="test.pdf",
+            file_type="application/pdf",
+            file_url="documents/test.pdf",
+            property_id=None,
+            contract_id=None,
+            tenant_id=None,
+        )
+
+        with pytest.raises(IntegrityError):
+            await svc.create_document(mock_db, payload, storage_client=FailingStorage, file_obj=BytesIO(b"content"))
 
 
 @pytest.mark.asyncio
