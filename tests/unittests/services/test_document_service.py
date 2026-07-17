@@ -928,7 +928,7 @@ class TestCreateDocumentStorageCleanupOnDbFailure:
         )
 
         with pytest.raises(IntegrityError):
-            await svc.create_document(mock_db, payload, storage_client=FailingStorage, file_obj=BytesIO(b"content"))
+            await svc.create_document(mock_db, payload, storage_client=FailingStorage(), file_obj=BytesIO(b"content"))
 
 
 @pytest.mark.asyncio
