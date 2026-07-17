@@ -158,7 +158,13 @@ class DocumentService(ResourceAuthorizationMixin):
             return document
         except Exception:
             if storage_client is not None and file_obj is not None:
-                self._delete_from_storage(storage_client, resolved_payload.file_name)
+                try:
+                    self._delete_from_storage(storage_client, resolved_payload.file_name)
+                except DocumentDeletionError:
+                    logger.exception(
+                        f"Orphaned storage object {resolved_payload.file_name} could not be cleaned up "
+                        f"after DB write failure."
+                    )
             raise
 
     async def update_document(
@@ -256,7 +262,13 @@ class DocumentService(ResourceAuthorizationMixin):
             updated = await self.document_repo.update(db, doc_id, resolved_payload)
             await db.commit()
         except Exception:
-            self._delete_from_storage(storage_client, resolved_payload.file_name)
+            try:
+                self._delete_from_storage(storage_client, resolved_payload.file_name)
+            except DocumentDeletionError:
+                logger.exception(
+                    f"Orphaned storage object {resolved_payload.file_name} could not be cleaned up "
+                    f"after DB write failure."
+                )
             raise
 
         if old_file_name != resolved_payload.file_name:
