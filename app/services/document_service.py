@@ -272,7 +272,13 @@ class DocumentService(ResourceAuthorizationMixin):
             raise
 
         if old_file_name != resolved_payload.file_name:
-            self._delete_from_storage(storage_client, old_file_name)
+            try:
+                self._delete_from_storage(storage_client, old_file_name)
+            except DocumentDeletionError:
+                logger.exception(
+                    f"Oprhaned old storage object {old_file_name} could not be cleaned up "
+                    f"after successful document update; need manual/async cleanup."
+                )
 
         return updated
 
