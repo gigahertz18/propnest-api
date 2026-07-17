@@ -845,6 +845,33 @@ class TestReplaceDocumentFile:
                 current_user=make_admin(),
             )
 
+    async def test_returns_updated_document_when_old_file_cleanup_fails(self, mock_db):
+        """Upload and DB commit both succeed — the DB is already consistent
+        at that point, so a failure to delete the now-orphaned old file must
+        not turn a successful update into an error for the caller."""
+        doc_id, doc = self._make_doc("original.pdf")
+        svc = _make_service(documents={doc_id: doc})
+        payload = DocumentFileUpdate(
+            file_name="new.pdf",
+            file_type="application/pdf",
+            file_url="http://minio/bucket/new.pdf",
+        )
+
+        class FailingRemoveStorage(self.FakeStorageClient):
+            def remove_object(self, bucket, name):
+                raise Exception("MinIO unreachable")
+
+        result = await svc.replace_document_file(
+            mock_db,
+            doc_id,
+            payload,
+            storage_client=FailingRemoveStorage(),
+            file_obj=self._make_file_obj("new.pdf"),
+            current_user=make_admin(),
+        )
+
+        assert result.file_name == "new.pdf"
+
 
 @pytest.mark.asyncio
 class TestCreateDocumentStorageCleanupOnDbFailure:
