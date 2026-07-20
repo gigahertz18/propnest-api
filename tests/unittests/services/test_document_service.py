@@ -902,7 +902,12 @@ class TestCreateDocumentStorageCleanupOnDbFailure:
         )
 
         with pytest.raises(RuntimeError):
-            await svc.create_document(mock_db, payload, storage_client=TrackingStorage(), file_obj=BytesIO(b"content"))
+            await svc.create_document(
+                mock_db,
+                payload,
+                storage_client=TrackingStorage(),
+                file_obj=BytesIO(b"%PDF-1.4 content"),
+            )
 
         # assert deleted_calls == ["test.pdf"]
         assert deleted_calls == [svc._build_storage_key(fixed_id, "test.pdf")]
@@ -954,7 +959,12 @@ class TestCreateDocumentStorageCleanupOnDbFailure:
         )
 
         with pytest.raises(IntegrityError):
-            await svc.create_document(mock_db, payload, storage_client=FailingStorage(), file_obj=BytesIO(b"content"))
+            await svc.create_document(
+                mock_db,
+                payload,
+                storage_client=FailingStorage(),
+                file_obj=BytesIO(b"%PDF-1.4 content"),
+            )
 
 
 @pytest.mark.asyncio
@@ -976,7 +986,7 @@ class TestCreateDocumentStorageKeyIsolation:
             mock_db,
             payload,
             storage_client=storage,
-            file_obj=BytesIO(b"first"),
+            file_obj=BytesIO(b"%PDF-1.4 first"),
             current_user=make_admin(),
         )
 
@@ -984,7 +994,7 @@ class TestCreateDocumentStorageKeyIsolation:
             mock_db,
             payload,
             storage_client=storage,
-            file_obj=BytesIO(b"second"),
+            file_obj=BytesIO(b"%PDF-1.4 second"),
             current_user=make_admin(),
         )
 

@@ -429,7 +429,7 @@ class TestReplaceDocumentFileRoute:
 
         response = await client.put(
             f"/api/v1/documents/{doc.id}/file",
-            files={"file": ("", b"content", "application/pdf")},
+            files={"file": ("", b"%PDF-1.4 content", "application/pdf")},
             data={"file_type": "application/pdf"},
             headers=auth_ctx.headers,
         )
@@ -443,7 +443,7 @@ class TestReplaceDocumentFileRoute:
 
         response = await client.put(
             f"/api/v1/documents/{uuid.uuid4()}/file",
-            files={"file": ("new.pdf", b"content", "application/pdf")},
+            files={"file": ("new.pdf", b"%PDF-1.4 content", "application/pdf")},
             data={"file_type": "application/pdf"},
             headers=auth_ctx.headers,
         )
@@ -459,7 +459,7 @@ class TestReplaceDocumentFileRoute:
 
         response = await client.put(
             f"/api/v1/documents/{doc.id}/file",
-            files={"file": ("new.pdf", b"content", "application/pdf")},
+            files={"file": ("new.pdf", b"%PDF-1.4 content", "application/pdf")},
             data={"file_type": "application/pdf"},
             headers=outsider_ctx.headers,
         )
@@ -474,7 +474,7 @@ class TestReplaceDocumentFileRoute:
 
         response = await client.put(
             f"/api/v1/documents/{doc.id}/file",
-            files={"file": ("new.pdf", b"content", "application/pdf")},
+            files={"file": ("new.pdf", b"%PDF-1.4 content", "application/pdf")},
             data={"file_type": "application/pdf"},
             headers=auth_ctx.headers,
         )
@@ -486,7 +486,7 @@ class TestReplaceDocumentFileRoute:
 
         response = await client.put(
             f"/api/v1/documents/{doc.id}/file",
-            files={"file": ("new.pdf", b"content", "application/pdf")},
+            files={"file": ("new.pdf", b"%PDF-1.4 content", "application/pdf")},
             data={"file_type": "application/pdf"},
             headers=auth_ctx.headers,
         )
@@ -504,7 +504,7 @@ class TestReplaceDocumentFileRoute:
 
         response = await client.put(
             f"/api/v1/documents/{doc_id}/file",
-            files={"file": ("new.pdf", b"content", "application/pdf")},
+            files={"file": ("new.pdf", b"%PDF-1.4 content", "application/pdf")},
             data={"file_type": "application/pdf"},
             headers=auth_ctx.headers,
         )
