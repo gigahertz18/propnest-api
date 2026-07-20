@@ -26,6 +26,21 @@ class FailingStorage:
         raise RuntimeError("Network error")
 
 
+class FakeStorageClient:
+    def __init__(self, raise_on_put: Exception | None = None):
+        self.put_calls: list[str] = []
+        self.remove_calls: list[str] = []
+        self.raise_on_put = raise_on_put
+
+    def put_object(self, bucket, name, stream, length, content_type=None):
+        if self.raise_on_put:
+            raise self.raise_on_put
+        self.put_calls.append(name)
+
+    def remove_object(self, bucket, name):
+        self.remove_calls.append(name)
+
+
 class MockDocumentRepoWithScoping(MockCRUDRepo):
     """Adds get_all_for_manager for control-flow testing only — driven by
     a simple manager_id set directly on each mock record, not the real
@@ -103,12 +118,6 @@ class TestDocumentServiceClassAttributes:
 
 @pytest.mark.asyncio
 class TestCreateDocument:
-    """
-    Service-level equivalents of the TODO-marked tests in TestCreateDocumentRoute
-    in test_document_api.py. Each test here exercises DocumentService directly —
-    no HTTP client, no real DB. The paired API test can shrink to a one-liner
-    status-code assertion once these service tests are green.
-    """
 
     def _payload(self, **kwargs):
         defaults = dict(
@@ -534,27 +543,13 @@ class TestReplaceDocumentFile:
             tenant_id=kwargs.get("tenant_id"),
         )
 
-    class FakeStorageClient:
-        def __init__(self, raise_on_put: Exception | None = None):
-            self.put_calls: list[str] = []
-            self.remove_calls: list[str] = []
-            self.raise_on_put = raise_on_put
-
-        def put_object(self, bucket, name, stream, length, content_type=None):
-            if self.raise_on_put:
-                raise self.raise_on_put
-            self.put_calls.append(name)
-
-        def remove_object(self, bucket, name):
-            self.remove_calls.append(name)
-
     def _make_file_obj(self, filename="replacement.pdf"):
         return SimpleNamespace(content_type="application/pdf", file=BytesIO(b"%PDF-1.4 fake content"))
 
     async def test_replaces_file_and_returns_updated_document(self, mock_db):
         doc_id, doc = self._make_doc("original.pdf")
         svc = _make_service(documents={doc_id: doc})
-        storage = self.FakeStorageClient()
+        storage = FakeStorageClient()
         _, payload = self._make_doc("replacement.pdf")
         result = await svc.replace_document_file(
             mock_db,
@@ -566,13 +561,14 @@ class TestReplaceDocumentFile:
         )
 
         assert result.file_name == "replacement.pdf"
-        assert "replacement.pdf" in storage.put_calls
+        # assert "replacement.pdf" in storage.put_calls
+        assert svc._build_storage_key(doc_id, "replacement.pdf") in storage.put_calls
 
     async def test_deletes_old_storage_object_when_filename_changes(self, mock_db):
         """Old object must be removed from MinIO when the new filename
         differs — otherwise orphaned objects accumulate indefinitely."""
         doc_id, doc = self._make_doc("original.pdf")
-        storage = self.FakeStorageClient()
+        storage = FakeStorageClient()
         svc = _make_service(documents={doc_id: doc})
         _, payload = self._make_doc("replacement.pdf")
         await svc.replace_document_file(
@@ -584,13 +580,14 @@ class TestReplaceDocumentFile:
             current_user=make_admin(),
         )
 
-        assert "original.pdf" in storage.remove_calls
+        # assert "original.pdf" in storage.remove_calls
+        assert svc._build_storage_key(doc_id, "original.pdf") in storage.remove_calls
 
     async def test_does_not_delete_old_object_when_filename_is_the_same(self, mock_db):
         """Same filename → replace-in-place via put_object. Calling
         remove_object on it afterwards would delete the file just uploaded."""
         doc_id, doc = self._make_doc("same_name.pdf")
-        storage = self.FakeStorageClient()
+        storage = FakeStorageClient()
         svc = _make_service(documents={doc_id: doc})
         _, payload = self._make_doc("same_name.pdf")
         await svc.replace_document_file(
@@ -602,7 +599,8 @@ class TestReplaceDocumentFile:
             current_user=make_admin(),
         )
 
-        assert "same_name.pdf" not in storage.remove_calls
+        # assert "same_name.pdf" not in storage.remove_calls
+        assert svc._build_storage_key(doc_id, "same_name.pdf") not in storage.remove_calls
 
     async def test_manager_authorized_via_existing_property_can_replace(self, mock_db):
         """No relink requested — authorization falls back to the
@@ -610,7 +608,7 @@ class TestReplaceDocumentFile:
         manager_id = uuid4()
         prop_id = uuid4()
         doc_id, payload = self._make_doc(property_id=prop_id)
-        storage = self.FakeStorageClient()
+        storage = FakeStorageClient()
         svc = _make_service(
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)},
             documents={doc_id: payload},
@@ -635,7 +633,7 @@ class TestReplaceDocumentFile:
         new_prop_id = uuid4()
         doc_id, doc = self._make_doc(property_id=old_prop_id)
         _, new_doc = self._make_doc(file_name="new.pdf", property_id=new_prop_id)
-        storage = self.FakeStorageClient()
+        storage = FakeStorageClient()
         svc = _make_service(
             properties={
                 old_prop_id: SimpleNamespace(id=old_prop_id, manager_id=manager_id),
@@ -665,7 +663,7 @@ class TestReplaceDocumentFile:
         new_prop_id = uuid4()
         doc_id, doc = self._make_doc(property_id=old_prop_id)
         _, payload = self._make_doc(file_name="new.pdf", property_id=new_prop_id)
-        storage = self.FakeStorageClient()
+        storage = FakeStorageClient()
         svc = _make_service(
             properties={
                 old_prop_id: SimpleNamespace(id=old_prop_id, manager_id=old_manager_id),
@@ -690,7 +688,7 @@ class TestReplaceDocumentFile:
         """A relink property_id that doesn't exist must be caught before
         any storage call — mirrors create_document's existence checks."""
         doc_id, doc = self._make_doc()
-        storage = self.FakeStorageClient()
+        storage = FakeStorageClient()
         svc = _make_service(documents={doc_id: doc})
         _, payload = self._make_doc(file_name="new.pdf", property_id=uuid4())
         with pytest.raises(RelatedResourceNotFoundError):
@@ -706,7 +704,7 @@ class TestReplaceDocumentFile:
         assert storage.put_calls == []
 
     async def test_raise_not_found_on_nonexistent_document(self, mock_db):
-        storage = self.FakeStorageClient()
+        storage = FakeStorageClient()
         svc = _make_service()
         _, payload = self._make_doc(file_name="new.pdf")
 
@@ -724,7 +722,7 @@ class TestReplaceDocumentFile:
         prop_id = uuid4()
         doc_id, doc = self._make_doc(property_id=prop_id)
         _, payload = self._make_doc(file_name="new.pdf")
-        storage = self.FakeStorageClient()
+        storage = FakeStorageClient()
         svc = _make_service(
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
             documents={doc_id: doc},
@@ -744,7 +742,7 @@ class TestReplaceDocumentFile:
 
     async def test_manager_forbidden_on_fully_unlinked_document(self, mock_db):
         doc_id, doc = self._make_doc()  # no property, no contract
-        storage = self.FakeStorageClient()
+        storage = FakeStorageClient()
         svc = _make_service(documents={doc_id: doc})
         payload = DocumentFileUpdate(
             file_name="new.pdf",
@@ -765,7 +763,7 @@ class TestReplaceDocumentFile:
 
     async def test_storage_failure_raises_and_db_is_not_touched(self, mock_db):
         doc_id, doc = self._make_doc("original.pdf")
-        storage = self.FakeStorageClient(raise_on_put=Exception("MinIO down"))
+        storage = FakeStorageClient(raise_on_put=Exception("MinIO down"))
         svc = _make_service(documents={doc_id: doc})
         repo = svc.document_repo
         payload = DocumentFileUpdate(
@@ -791,7 +789,7 @@ class TestReplaceDocumentFile:
         must be removed from storage, and the OLD object must be left
         alone since the DB record was never actually changed."""
         doc_id, doc = self._make_doc("original.pdf")
-        storage = self.FakeStorageClient()
+        storage = FakeStorageClient()
         svc = _make_service(documents={doc_id: doc})
         payload = DocumentFileUpdate(
             file_name="new.pdf",
@@ -814,8 +812,8 @@ class TestReplaceDocumentFile:
                 current_user=make_admin(),
             )
 
-        assert "new.pdf" in storage.remove_calls
-        assert "original.pdf" not in storage.remove_calls
+        assert f"documents/{doc_id}_new.pdf" in storage.remove_calls
+        assert f"documents/{doc_id}_original.pdf" not in storage.remove_calls
 
     async def test_reraises_original_db_error_when_cleanup_also_fails(self, mock_db):
         doc_id, doc = self._make_doc("original.pdf")
@@ -831,7 +829,7 @@ class TestReplaceDocumentFile:
 
         svc.document_repo.update = failing_update
 
-        class FailingRemoveStorage(self.FakeStorageClient):
+        class FailingRemoveStorage(FakeStorageClient):
             def remove_object(self, bucket, name):
                 raise Exception("MinIO unreachable")
 
@@ -857,7 +855,7 @@ class TestReplaceDocumentFile:
             file_url="http://minio/bucket/new.pdf",
         )
 
-        class FailingRemoveStorage(self.FakeStorageClient):
+        class FailingRemoveStorage(FakeStorageClient):
             def remove_object(self, bucket, name):
                 raise Exception("MinIO unreachable")
 
@@ -875,11 +873,11 @@ class TestReplaceDocumentFile:
 
 @pytest.mark.asyncio
 class TestCreateDocumentStorageCleanupOnDbFailure:
-    """Covers create_document's Step 2 except block (lines 133-136):
-    if the DB write fails after a file was already uploaded, the
-    just-uploaded file must be deleted rather than left orphaned."""
 
-    async def test_deletes_orphaned_storage_object_when_db_write_fails(self, mock_db):
+    async def test_deletes_orphaned_storage_object_when_db_write_fails(self, mock_db, monkeypatch):
+        fixed_id = uuid4()
+        monkeypatch.setattr("app.services.document_service.uuid4", lambda: fixed_id)
+
         class FailingCreateRepo(MockCRUDRepo):
             async def create(self, db, payload):
                 raise RuntimeError("db write failed")
@@ -906,7 +904,8 @@ class TestCreateDocumentStorageCleanupOnDbFailure:
         with pytest.raises(RuntimeError):
             await svc.create_document(mock_db, payload, storage_client=TrackingStorage(), file_obj=BytesIO(b"content"))
 
-        assert deleted_calls == ["test.pdf"]
+        # assert deleted_calls == ["test.pdf"]
+        assert deleted_calls == [svc._build_storage_key(fixed_id, "test.pdf")]
 
     async def test_skips_cleanup_when_no_file_was_uploaded(self, mock_db):
         """Metadata-only creation (no storage_client/file_obj) has no
@@ -956,6 +955,45 @@ class TestCreateDocumentStorageCleanupOnDbFailure:
 
         with pytest.raises(IntegrityError):
             await svc.create_document(mock_db, payload, storage_client=FailingStorage(), file_obj=BytesIO(b"content"))
+
+
+@pytest.mark.asyncio
+class TestCreateDocumentStorageKeyIsolation:
+    async def test_same_filename_creates_distinct_storage_keys(self, mock_db):
+        storage = FakeStorageClient()
+        svc = _make_service()
+
+        payload = DocumentCreate(
+            file_name="lease.pdf",
+            file_type="application/pdf",
+            file_url="ignored-by-upload-path",
+            property_id=None,
+            contract_id=None,
+            tenant_id=None,
+        )
+
+        first = await svc.create_document(
+            mock_db,
+            payload,
+            storage_client=storage,
+            file_obj=BytesIO(b"first"),
+            current_user=make_admin(),
+        )
+
+        second = await svc.create_document(
+            mock_db,
+            payload,
+            storage_client=storage,
+            file_obj=BytesIO(b"second"),
+            current_user=make_admin(),
+        )
+
+        assert first.file_name == "lease.pdf"
+        assert second.file_name == "lease.pdf"
+        assert first.id != second.id
+        assert storage.put_calls[0] != storage.put_calls[1]
+        assert storage.put_calls[0] == svc._build_storage_key(first.id, "lease.pdf")
+        assert storage.put_calls[1] == svc._build_storage_key(second.id, "lease.pdf")
 
 
 @pytest.mark.asyncio

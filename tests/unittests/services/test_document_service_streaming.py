@@ -94,7 +94,7 @@ async def test_streams_file_and_passes_length_and_content_type(db, service):
 
     assert len(storage.calls) == 1
     call = storage.calls[0]
-    assert call["name"] == "test.pdf"
+    assert call["name"].endswith("_test.pdf")
     assert call["length"] == len(content)
     assert call["content_type"] == "application/pdf"
     assert created.file_name == "test.pdf"
@@ -113,7 +113,7 @@ async def test_streams_file_to_storage_and_reads_content(db, service):
     assert doc is not None
     assert len(storage.calls) == 1
     call = storage.calls[0]
-    assert call["name"] == payload.file_name
+    assert call["name"].endswith(f"_{payload.file_name}")
     assert call["data"] == content
     assert call["content_type"] == payload.file_type
 

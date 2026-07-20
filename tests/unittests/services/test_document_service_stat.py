@@ -25,6 +25,7 @@ async def test_create_document_uploads_to_storage_when_file_is_provided(mock_db)
     class RecordingStorage:
         def __init__(self):
             self.calls = []
+            self.removed = []
 
         def put_object(self, bucket, name, stream, length=None, content_type=None):
             self.calls.append(
@@ -36,9 +37,27 @@ async def test_create_document_uploads_to_storage_when_file_is_provided(mock_db)
                 }
             )
 
+        def remove_object(self, bucket, name):
+            self.removed.append(
+                {
+                    "bucket": bucket,
+                    "name": name,
+                }
+            )
+
     class FakeRepo:
         async def create(self, db, payload):
-            return SimpleNamespace(file_name=payload.file_name)
+            # return SimpleNamespace(file_name=payload.file_name)
+            data = payload.model_dump() if hasattr(payload, "model_dump") else payload
+            return SimpleNamespace(
+                id=data.get("id", uuid4()),
+                file_name=data["file_name"],
+                file_type=data["file_type"],
+                file_url=data["file_url"],
+                contract_id=data.get("contract_id"),
+                property_id=data.get("property_id"),
+                tenant_id=data.get("tenant_id"),
+            )
 
     storage = RecordingStorage()
     svc = DocumentService(document_repo=FakeRepo())  # type: ignore[arg-type]
@@ -47,9 +66,11 @@ async def test_create_document_uploads_to_storage_when_file_is_provided(mock_db)
 
     result = await svc.create_document(db=mock_db, payload=payload, storage_client=storage, file_obj=file_obj)
 
+    print(type(result))
     assert result.file_name == "a.pdf"
     assert len(storage.calls) == 1
-    assert storage.calls[0]["name"] == "a.pdf"
+    assert storage.calls[0]["name"].endswith("_a.pdf")
+    assert storage.calls[0]["name"].startswith("documents/")
 
 
 async def test_create_document_translates_storage_failures(mock_db):
