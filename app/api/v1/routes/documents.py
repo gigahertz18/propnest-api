@@ -93,13 +93,9 @@ async def upload_document(
 
     This endpoint keeps metadata in sync with the storage object.
     """
-    # Resolve the object URL before touching the DB —
-    # if the upload fails, no orphaned DB record is created.
-    object_url = document_service.build_object_url(file.filename)
     payload = DocumentCreate(
         file_name=file.filename,
         file_type=file_type,
-        file_url=object_url,
         contract_id=contract_id,
         property_id=property_id,
         tenant_id=tenant_id,
@@ -147,7 +143,6 @@ async def replace_document_file(
     payload = DocumentFileUpdate(
         file_name=file.filename,
         file_type=file_type,
-        file_url=document_service.build_object_url(file.filename),
         contract_id=contract_id,
         property_id=property_id,
         tenant_id=tenant_id,
