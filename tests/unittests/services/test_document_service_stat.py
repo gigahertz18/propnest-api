@@ -47,7 +47,6 @@ async def test_create_document_uploads_to_storage_when_file_is_provided(mock_db)
 
     class FakeRepo:
         async def create(self, db, payload):
-            # return SimpleNamespace(file_name=payload.file_name)
             data = payload.model_dump() if hasattr(payload, "model_dump") else payload
             return SimpleNamespace(
                 id=data.get("id", uuid4()),
@@ -62,7 +61,7 @@ async def test_create_document_uploads_to_storage_when_file_is_provided(mock_db)
     storage = RecordingStorage()
     svc = DocumentService(document_repo=FakeRepo())  # type: ignore[arg-type]
     payload = DocumentCreate(file_name="a.pdf", file_type="application/pdf", file_url="http://example.com/a.pdf")
-    file_obj = SimpleNamespace(content_type="application/pdf", file=BytesIO(b"hello"))
+    file_obj = SimpleNamespace(content_type="application/pdf", file=BytesIO(b"%PDF-1.4 hello"))
 
     result = await svc.create_document(db=mock_db, payload=payload, storage_client=storage, file_obj=file_obj)
 
@@ -80,7 +79,7 @@ async def test_create_document_translates_storage_failures(mock_db):
 
     svc = DocumentService(document_repo=SimpleNamespace())  # type: ignore[arg-type]
     payload = DocumentCreate(file_name="a.pdf", file_type="application/pdf", file_url="http://example.com/a.pdf")
-    file_obj = SimpleNamespace(content_type="application/pdf", file=BytesIO(b"hello"))
+    file_obj = SimpleNamespace(content_type="application/pdf", file=BytesIO(b"%PDF-1.4 hello"))
 
     with pytest.raises(DocumentUploadError):
         await svc.create_document(db=mock_db, payload=payload, storage_client=FailingStorage(), file_obj=file_obj)

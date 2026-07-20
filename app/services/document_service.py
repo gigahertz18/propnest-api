@@ -7,6 +7,7 @@ from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID, uuid4
 
+
 from app.repositories.document import DocumentRepository
 from app.repositories.contract import ContractRepository
 from app.repositories.property import PropertyRepository
@@ -49,8 +50,11 @@ class DocumentService(ResourceAuthorizationMixin):
     Optionally accepts a storage client (e.g., MinIO) for uploading files.
     When provided with a file-like object (`file_obj`) the service will perform
     basic MIME and size validation and stream the content to the storage
-    client. Errors are translated to domain exceptions so routes can respond
-    appropriately.
+    client. THe MIME type used for validation and storage is sniffed from the
+    file's own magic bytes/signnature - `file_obj.content_type` and
+    `payload.file_type` are request-supplied metadata adn are never trusted for this purpose,
+    sine both are attacker-controlled and neither reflects the actual bytes being uploaded.
+    Errors are translated to domain exceptions so routes can respond appropriately
     """
 
     # Default max file size (10 MB) and a small allowed MIME set for now.
@@ -63,6 +67,14 @@ class DocumentService(ResourceAuthorizationMixin):
         "application/msword",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     }
+
+    _SIGNATURE_PEEK_SIZE = 4096
+    _PDF_MAGIC = b"%PDF-"
+    _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+    _JPEG_MAGIC = b"\xff\xd8\xff"
+    _MSWORD_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+    _ZIP_MAGIC = b"PK\x03\x04"
+
     forbidden_error = DocumentForbiddenError
 
     def __init__(
@@ -359,39 +371,79 @@ class DocumentService(ResourceAuthorizationMixin):
     ) -> None:
         """
         Validate and stream file to storage. Raises DocumentUploadError on failure.
+        The file's real type is determined by sniffing its magic bytes/signature.
+        Never by trusting `file_obj.content_type` or `payload.file_type` alone.
+
         """
         bucket = settings.MINIO_BUCKET_NAME
 
-        content_type = getattr(file_obj, "content_type", None) or payload.file_type
-        if content_type and content_type not in self._ALLOWED_MIME:
+        stream = getattr(file_obj, "file", file_obj)
+        declared_type = getattr(file_obj, "content_type", None) or payload.file_type
+
+        # "image/jpg" is a non-standard but common alias for "image/jpeg"
+        # treat it as a match rather than a mismatch when sniffed as JPEG.
+        if declared_type == "image/jpg":
+            declared_type = "image/jpeg"
+
+        # Peek a small prefix first - enough to sniff the signature,
+        # so we can reject mislabled/oversized upload without buffering the whole body in memory.
+        prefix = stream.read(self._SIGNATURE_PEEK_SIZE)
+        sniffed_type = self._sniff_content_type(prefix)
+
+        if sniffed_type is None or sniffed_type not in self._ALLOWED_MIME:
+            logger.warning(
+                "Rejected upload %s: signature did not match an allowed type "
+                "(client declared content_type=%r, file_type=%r)",
+                payload.file_name,
+                getattr(file_obj, "content_type", None),
+                payload.file_type,
+            )
             raise DocumentUploadError("Unsupported file type")
 
-        stream = getattr(file_obj, "file", file_obj)
-        length = None
+        if sniffed_type != declared_type:
+            raise DocumentUploadError("File type mismatch")
 
-        try:
-            pos = stream.tell()
-            stream.seek(0, 2)
-            length = stream.tell()
-            stream.seek(pos)
-        except Exception:
-            data = stream.read()
-            stream = BytesIO(data)
-            length = len(data)
-
-        if length is not None and length > self._MAX_FILE_SIZE:
+        # Now read the remainder, capped one byte past the size limit
+        # so we can detect an oversized file without loading it all into memory.
+        remaining_cap = self._MAX_FILE_SIZE + 1 - len(prefix)
+        remainder = stream.read(remaining_cap) if remaining_cap > 0 else b""
+        data = prefix + remainder
+        if data is not None and len(data) > self._MAX_FILE_SIZE:
             raise DocumentUploadError("File too large")
 
         try:
             storage_client.put_object(
                 bucket,
                 storage_key,
-                stream,
-                length,
-                content_type=content_type,
+                BytesIO(data),
+                len(data),
+                content_type=sniffed_type,
             )
         except Exception as e:
             raise DocumentUploadError(f"Storage upload failed: {e}") from e
+
+    def _sniff_content_type(self, data: bytes) -> str | None:
+        """
+        Determine a file's actual MIME type from its magic bytes/signature.
+
+        `data` should be a prefix of the file (see `_SIGNATURE_PEEK_SIZE`).
+        Returns the sniffed MIME type, or None if the bytes don't match any recognized signature.
+        This method only identifies the type - callers still checks the restult against `_ALLOWED_MIME`.
+        """
+        if data.startswith(self._PDF_MAGIC):
+            return "application/pdf"
+        if data.startswith(self._PNG_MAGIC):
+            return "image/png"
+        if data.startswith(self._JPEG_MAGIC):
+            return "image/jpeg"
+        if data.startswith(self._MSWORD_MAGIC):
+            return "application/msword"
+        if data.startswith(self._ZIP_MAGIC):
+            # .docx (00XML) is a ZIP container and shares the ZIP magic;
+            # legacy .doc uses the OLE compound-file signature above instead,
+            # so the two never collides
+            return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        return None
 
     def _delete_from_storage(self, storage_client, storage_key: str) -> None:
         try:
