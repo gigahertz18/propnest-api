@@ -1,6 +1,7 @@
 import enum
 import uuid
 
+from app.db.constraints import sql_in_clause
 from app.db.session import Base
 from app.models.base import TimestampMixin
 from datetime import date
@@ -84,7 +85,7 @@ class Contract(Base, TimestampMixin):
     __table_args__ = (
         # Ensure booking_source is one of the accepted platforms.
         CheckConstraint(
-            "booking_source IN (" + ", ".join([repr(s) for s in BOOKING_SOURCE]) + ")",
+            sql_in_clause("booking_source", BOOKING_SOURCE),
             name="ck_contract_booking_source",
         ),
         # Dates: end_date must be strictly after start_date when provided.
