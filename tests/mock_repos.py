@@ -68,7 +68,15 @@ class MockCRUDRepo:
 
     async def create(self, db, payload):
         self.created_payloads.append(payload)
-        obj = SimpleNamespace(id=uuid4(), **payload.model_dump())
+        if hasattr(payload, "model_dump"):
+            data = payload.model_dump()
+        elif isinstance(payload, dict):
+            data = payload
+        else:
+            data = dict(payload)
+
+        obj_id = data.pop("id", uuid4())
+        obj = SimpleNamespace(id=obj_id, **data)
         self.records[obj.id] = obj
         return obj
 

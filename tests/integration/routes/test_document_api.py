@@ -280,6 +280,37 @@ class TestUploadDocumentRoute:
         )
         assert response.status_code == 403
 
+    async def test_same_filename_uploads_use_distinct_storage_keys(self, client, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+
+        storage = FakeStorageClient()
+        app.dependency_overrides[get_storage_client] = lambda: storage
+
+        response1 = await client.post(
+            "/api/v1/documents/upload",
+            files={"file": ("lease.pdf", b"%PDF-1.4 first", "application/pdf")},
+            data={"file_type": "application/pdf"},
+            headers=auth_ctx.headers,
+        )
+
+        response2 = await client.post(
+            "/api/v1/documents/upload",
+            files={"file": ("lease.pdf", b"%PDF-1.4 second", "application/pdf")},
+            data={"file_type": "application/pdf"},
+            headers=auth_ctx.headers,
+        )
+
+        assert response1.status_code == 201
+        assert response2.status_code == 201
+
+        first_key = storage.put_calls[0][0][1]
+        second_key = storage.put_calls[1][0][1]
+
+        assert first_key != second_key
+
+        assert first_key.endswith("_lease.pdf")
+        assert second_key.endswith("_lease.pdf")
+
 
 # ─── PATCH /documents/{id} ────────────────────────────────────────────────────
 

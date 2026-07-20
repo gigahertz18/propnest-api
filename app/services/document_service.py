@@ -1,9 +1,11 @@
 import logging
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from io import BytesIO
+from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from app.repositories.document import DocumentRepository
 from app.repositories.contract import ContractRepository
@@ -81,7 +83,7 @@ class DocumentService(ResourceAuthorizationMixin):
         current_user: User,
         skip: int = 0,
         limit: int = 100,
-    ) -> list[Document]:
+    ) -> Sequence[Document]:
         """Admins see every document. Managers only see documents tied to
         one of their own properties.
 
@@ -134,36 +136,46 @@ class DocumentService(ResourceAuthorizationMixin):
             current_user=current_user,
         )
 
+        doc_id = uuid4()
+        storage_key = self._build_storage_key(doc_id, payload.file_name)
+        file_url = (
+            self.build_object_url(storage_key)
+            if storage_client is not None and file_obj is not None
+            else payload.file_url
+        )
+
         resolved_payload = DocumentCreate(
             file_name=payload.file_name,
             file_type=payload.file_type,
-            file_url=payload.file_url,
+            file_url=file_url,
             property_id=ctx.property_id,
             contract_id=ctx.contract_id,
             tenant_id=ctx.tenant_id,
         )
+
+        create_payload = resolved_payload.model_dump()
+        create_payload["id"] = doc_id
         # Step 1: upload to storage first - before any DB write.
         # If this fails, nothing is written to the DB
         if storage_client is not None and file_obj is not None:
             try:
-                self._upload_to_storage(storage_client, resolved_payload, file_obj)
+                self._upload_to_storage(storage_client, storage_key, resolved_payload, file_obj)
             except Exception:
                 raise  # let route handle this - no DB record created
 
         # Step 2: write DB record only after upload succeeds
         # If this failes, attempt to clean up the orphaned storage object
         try:
-            document = await self.document_repo.create(db, resolved_payload)
+            document = await self.document_repo.create(db, create_payload)
             await db.commit()
             return document
         except Exception:
             if storage_client is not None and file_obj is not None:
                 try:
-                    self._delete_from_storage(storage_client, resolved_payload.file_name)
+                    self._delete_from_storage(storage_client, storage_key)
                 except DocumentDeletionError:
                     logger.exception(
-                        f"Orphaned storage object {resolved_payload.file_name} could not be cleaned up "
-                        f"after DB write failure."
+                        f"Orphaned storage object {storage_key} could not be cleaned up " f"after DB write failure."
                     )
             raise
 
@@ -231,52 +243,46 @@ class DocumentService(ResourceAuthorizationMixin):
             tenant_id=payload.tenant_id,
             current_user=current_user,
         )
+        storage_key = self._build_storage_key(doc_id, payload.file_name)
 
         resolved_payload = DocumentFileUpdate(
             file_name=payload.file_name,
             file_type=payload.file_type,
-            file_url=payload.file_url,
+            file_url=self.build_object_url(storage_key),
             property_id=ctx.property_id,
             contract_id=ctx.contract_id,
             tenant_id=ctx.tenant_id,
         )
 
-        old_file_name = doc.file_name
+        old_storage_key = self._build_storage_key(doc_id, doc.file_name)
 
         # Upload first — no DB write yet. _upload_to_storage only reads
         # file_name/file_type off its payload, so a SimpleNamespace avoids
         # needing a full DocumentCreate here.
         try:
-            self._upload_to_storage(storage_client, resolved_payload, file_obj)
+            self._upload_to_storage(storage_client, storage_key, resolved_payload, file_obj)
         except:
-            logger.exception("Storage upload failed for %s", resolved_payload.file_name)
+            logger.exception("Storage upload failed for %s", storage_key)
             raise
 
         try:
-            # DocumentUpdate no longer carries file_name/file_type/file_url
-            # (see app/schemas/document.py) — those are storage-derived and
-            # intentionally not part of the public relink-only schema.
-            # BaseRepository.update accepts a plain dict just as well as a
-            # Pydantic model, so we use one here rather than adding a
-            # second, internal-only schema just for this call site.
             updated = await self.document_repo.update(db, doc_id, resolved_payload)
             await db.commit()
         except Exception:
             try:
-                self._delete_from_storage(storage_client, resolved_payload.file_name)
+                self._delete_from_storage(storage_client, storage_key)
             except DocumentDeletionError:
                 logger.exception(
-                    f"Orphaned storage object {resolved_payload.file_name} could not be cleaned up "
-                    f"after DB write failure."
+                    f"Orphaned storage object {storage_key} could not be cleaned up " f"after DB write failure."
                 )
             raise
 
-        if old_file_name != resolved_payload.file_name:
+        if old_storage_key != storage_key:
             try:
-                self._delete_from_storage(storage_client, old_file_name)
+                self._delete_from_storage(storage_client, old_storage_key)
             except DocumentDeletionError:
                 logger.exception(
-                    f"Oprhaned old storage object {old_file_name} could not be cleaned up "
+                    f"Orphaned old storage object {old_storage_key} could not be cleaned up "
                     f"after successful document update; need manual/async cleanup."
                 )
 
@@ -302,12 +308,12 @@ class DocumentService(ResourceAuthorizationMixin):
         )
 
         savepoint = await db.begin_nested()
-
+        storage_key = self._build_storage_key(doc_id, doc.file_name)
         try:
             deleted = await self.document_repo.delete(db, doc_id)
 
             if deleted and storage_client is not None:
-                self._delete_from_storage(storage_client, doc.file_name)
+                self._delete_from_storage(storage_client, storage_key)
 
             await savepoint.commit()
             await db.commit()
@@ -323,30 +329,31 @@ class DocumentService(ResourceAuthorizationMixin):
     # Not yet called by any route — held here for an upcoming reporting
     # feature that will need documents filtered by contract/property/
     # tenant/type. If that feature is dropped, these should go with it.
-    async def get_by_contract(self, db: AsyncSession, contract_id: UUID) -> list[Document]:
+    async def get_by_contract(self, db: AsyncSession, contract_id: UUID) -> Sequence[Document]:
         return await self.document_repo.get_by_contract(db, contract_id)
 
-    async def get_by_property(self, db: AsyncSession, property_id: UUID) -> list[Document]:
+    async def get_by_property(self, db: AsyncSession, property_id: UUID) -> Sequence[Document]:
         return await self.document_repo.get_by_property(db, property_id)
 
-    async def get_by_tenant(self, db: AsyncSession, tenant_id: UUID) -> list[Document]:
+    async def get_by_tenant(self, db: AsyncSession, tenant_id: UUID) -> Sequence[Document]:
         return await self.document_repo.get_by_tenant(db, tenant_id)
 
-    async def get_by_type(self, db: AsyncSession, file_type: str) -> list[Document]:
+    async def get_by_type(self, db: AsyncSession, file_type: str) -> Sequence[Document]:
         return await self.document_repo.get_by_type(db, file_type)
 
-    def build_object_url(self, file_name: str) -> str:
+    def build_object_url(self, storage_key: str) -> str:
         """
         Build the public-facing URL for a stored object.
         Format : {endpoint}/{bucket}/{file_name}
         """
         endpoint = settings.MINIO_ENDPOINT.rstrip("/")
         bucket = settings.MINIO_BUCKET_NAME
-        return f"{endpoint}/{bucket}/{file_name}"
+        return f"{endpoint}/{bucket}/{storage_key}"
 
     def _upload_to_storage(
         self,
         storage_client,
+        storage_key: str,
         payload: DocumentCreate | DocumentFileUpdate,
         file_obj,
     ) -> None:
@@ -378,7 +385,7 @@ class DocumentService(ResourceAuthorizationMixin):
         try:
             storage_client.put_object(
                 bucket,
-                payload.file_name,
+                storage_key,
                 stream,
                 length,
                 content_type=content_type,
@@ -386,11 +393,11 @@ class DocumentService(ResourceAuthorizationMixin):
         except Exception as e:
             raise DocumentUploadError(f"Storage upload failed: {e}") from e
 
-    def _delete_from_storage(self, storage_client, file_name: str) -> None:
+    def _delete_from_storage(self, storage_client, storage_key: str) -> None:
         try:
-            storage_client.remove_object(settings.MINIO_BUCKET_NAME, file_name)
+            storage_client.remove_object(settings.MINIO_BUCKET_NAME, storage_key)
         except Exception as e:
-            logger.warning(f"Failed to cleanup orphaned. storage object after DB write failure: {file_name}")
+            logger.warning(f"Failed to cleanup orphaned. storage object after DB write failure: {storage_key}")
             raise DocumentDeletionError(f"File deletion failed: {e}")
 
     async def _prepare_document_context(
@@ -441,3 +448,8 @@ class DocumentService(ResourceAuthorizationMixin):
             contract_id=effective_contract_id,
             tenant_id=effective_tenant_id,
         )
+
+    def _build_storage_key(self, document_id: UUID, file_name: str) -> str:
+        filename = Path(file_name).name
+
+        return f"documents/{document_id}_{filename}"

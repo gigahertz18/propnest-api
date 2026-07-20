@@ -10,7 +10,7 @@ from app.schemas.base import BaseResponse
 class DocumentBase(BaseModel):
     file_name: str
     file_type: str
-    file_url: str
+    file_url: str | None = None
     contract_id: uuid.UUID | None = None
     property_id: uuid.UUID | None = None
     tenant_id: uuid.UUID | None = None
