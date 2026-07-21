@@ -34,13 +34,13 @@ async def get_db():
     """
     FastAPI dependency — yields a DB async session per request
 
-    Usage in a route:
-        def my_route(db: Session = Depends(get_db)):
+    Transaction ownership lives in the service layer:
+    - service methods commit after successful writes
+    - this dependency only rolls back on exception and closes the session
     """
     async with AsyncSessionLocal() as session:
         try:
             yield session
-            await session.commit()
         except Exception:
             await session.rollback()
             raise

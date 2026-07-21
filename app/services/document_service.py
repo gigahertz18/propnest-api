@@ -195,7 +195,7 @@ class DocumentService(ResourceAuthorizationMixin):
                     self._delete_from_storage(storage_client, storage_key)
                 except DocumentDeletionError:
                     logger.exception(
-                        f"Orphaned storage object {storage_key} could not be cleaned up " f"after DB write failure."
+                        f"Orphaned storage object {storage_key} could not be cleaned up after DB write failure."
                     )
             raise
 
@@ -293,7 +293,7 @@ class DocumentService(ResourceAuthorizationMixin):
                 self._delete_from_storage(storage_client, storage_key)
             except DocumentDeletionError:
                 logger.exception(
-                    f"Orphaned storage object {storage_key} could not be cleaned up " f"after DB write failure."
+                    f"Orphaned storage object {storage_key} could not be cleaned up after DB write failure."
                 )
             raise
 
