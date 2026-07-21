@@ -4,7 +4,7 @@ from datetime import date
 
 from sqlalchemy.exc import IntegrityError
 
-from app.repositories.tenant import tenant_repo
+from app.repositories.tenant import tenant_repo, TenantRepository
 from app.schemas.tenant import TenantCreate, TenantUpdate
 from tests.factories import make_tenant, make_tenant_model, make_user_model
 
@@ -241,6 +241,18 @@ class TestTenantRepositoryGetByFullName:
         result = await tenant_repo.get_by_full_name(db, "Nonexistent XYZ9999")
         assert result == []
 
+    async def test_limit_is_respected(self, db):
+        for i in range(5):
+            await make_tenant_model(db, full_name=f"Match Person {i}", email=f"matchp{i}@example.com")
+        result = await tenant_repo.get_by_full_name(db, "Match Person", limit=2)
+        assert len(result) == 2
+
+    async def test_skip_and_limit_paginate(self, db):
+        for i in range(5):
+            await make_tenant_model(db, full_name=f"Paginate {i}", email=f"paginate{i}@example.com")
+        result = await tenant_repo.get_by_full_name(db, "Paginate", skip=2, limit=2)
+        assert len(result) == 2
+
 
 @pytest.mark.asyncio
 class TestTenantRepositoryGetByOccupation:
@@ -274,6 +286,18 @@ class TestTenantRepositoryGetByOccupation:
         result = await tenant_repo.get_by_occupation(db, "Engineer")
         # Tenants with NULL occupation should not appear in filtered results
         assert all(t.occupation is not None for t in result)
+
+    async def test_limit_is_respected(self, db):
+        for i in range(5):
+            await make_tenant_model(db, occupation="Cashier", email=f"cashier{i}@example.com")
+        result = await tenant_repo.get_by_occupation(db, "Cashier", limit=2)
+        assert len(result) == 2
+
+    async def test_skip_and_limit_paginate(self, db):
+        for i in range(5):
+            await make_tenant_model(db, occupation="Chef", email=f"chef{i}@example.com")
+        result = await tenant_repo.get_by_occupation(db, "Chef", skip=2, limit=2)
+        assert len(result) == 2
 
 
 @pytest.mark.asyncio
@@ -339,3 +363,80 @@ class TestTenantRepositoryGetByDateOfBirth:
         await make_tenant_model(db, date_of_birth=date(1990, 1, 1), email="dob3@example.com")
         result = await tenant_repo.get_by_date_of_birth(db, date(1991, 1, 1))
         assert all(t.date_of_birth == date(1991, 1, 1) for t in result)
+
+    async def test_limit_is_respected(self, db):
+        dob = date(1995, 3, 3)
+        for i in range(5):
+            await make_tenant_model(db, date_of_birth=dob, email=f"dobmatch{i}@example.com")
+        result = await tenant_repo.get_by_date_of_birth(db, dob, limit=2)
+        assert len(result) == 2
+
+    async def test_skip_and_limit_paginate(self, db):
+        dob = date(1996, 4, 4)
+        for i in range(5):
+            await make_tenant_model(db, date_of_birth=dob, email=f"dobpage{i}@example.com")
+        result = await tenant_repo.get_by_date_of_birth(db, dob, skip=2, limit=2)
+        assert len(result) == 2
+
+
+@pytest.mark.asyncio
+class TestTenantRepositoryPaginationClamping:
+    """Asserts the skip/limit clamping on the three lookup methods without
+    needing 100+ DB rows to prove the upper bound — mirrors the clamp
+    already covered behaviorally for get_all/get_all_for_manager."""
+
+    @staticmethod
+    def _capture(monkeypatch):
+        captured = {}
+
+        async def fake_all(self, db, *criteria, **kwargs):
+            captured.update(kwargs)
+            return []
+
+        monkeypatch.setattr(TenantRepository, "_all", fake_all)
+        return captured
+
+    async def test_get_by_full_name_default_pagination(self, db, monkeypatch):
+        captured = self._capture(monkeypatch)
+        await tenant_repo.get_by_full_name(db, "x")
+        assert captured == {"offset": 0, "limit": 100}
+
+    async def test_get_by_full_name_clamps_oversized_limit(self, db, monkeypatch):
+        captured = self._capture(monkeypatch)
+        await tenant_repo.get_by_full_name(db, "x", limit=10_000)
+        assert captured["limit"] == 100
+
+    async def test_get_by_full_name_floors_negative_skip(self, db, monkeypatch):
+        captured = self._capture(monkeypatch)
+        await tenant_repo.get_by_full_name(db, "x", skip=-5)
+        assert captured["offset"] == 0
+
+    async def test_get_by_occupation_default_pagination(self, db, monkeypatch):
+        captured = self._capture(monkeypatch)
+        await tenant_repo.get_by_occupation(db, "x")
+        assert captured == {"offset": 0, "limit": 100}
+
+    async def test_get_by_occupation_clamps_oversized_limit(self, db, monkeypatch):
+        captured = self._capture(monkeypatch)
+        await tenant_repo.get_by_occupation(db, "x", limit=10_000)
+        assert captured["limit"] == 100
+
+    async def test_get_by_occupation_floors_negative_skip(self, db, monkeypatch):
+        captured = self._capture(monkeypatch)
+        await tenant_repo.get_by_occupation(db, "x", skip=-5)
+        assert captured["offset"] == 0
+
+    async def test_get_by_date_of_birth_default_pagination(self, db, monkeypatch):
+        captured = self._capture(monkeypatch)
+        await tenant_repo.get_by_date_of_birth(db, date(2000, 1, 1))
+        assert captured == {"offset": 0, "limit": 100}
+
+    async def test_get_by_date_of_birth_clamps_oversized_limit(self, db, monkeypatch):
+        captured = self._capture(monkeypatch)
+        await tenant_repo.get_by_date_of_birth(db, date(2000, 1, 1), limit=10_000)
+        assert captured["limit"] == 100
+
+    async def test_get_by_date_of_birth_floors_negative_skip(self, db, monkeypatch):
+        captured = self._capture(monkeypatch)
+        await tenant_repo.get_by_date_of_birth(db, date(2000, 1, 1), skip=-5)
+        assert captured["offset"] == 0
