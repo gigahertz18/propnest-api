@@ -48,6 +48,8 @@ app/
 
 **Why this split:** routes stay thin and testable in isolation; services hold the actual business rules and raise domain-specific exceptions (not HTTP exceptions) so they're reusable outside the web layer; repositories isolate persistence so the ORM can be swapped or mocked without touching business logic.
 
+**Transaction ownership:** service methods own database commits. The shared `get_db()` dependency only opens the session for the request and rolls back on exception; it does not commit.
+
 **Config** is environment-aware via a small class hierarchy (`BaseConfig` → `DevelopmentConfig` / `UnittestConfig` / staging / prod), so tests run against a dedicated test database and never touch dev data.
 
 ---
