@@ -12,7 +12,7 @@ class TestListContractRoute:
         auth_ctx = await authenticate_admin()
         response = await client.get("/api/v1/contracts/", headers=auth_ctx.headers)
         assert response.status_code == 200
-        assert response.json() == []
+        assert response.json() == {"items": [], "total": 0}
 
     async def test_returns_all_contracts(self, client, db, authenticate_admin):
         prop = await make_property_model(db)
@@ -23,7 +23,22 @@ class TestListContractRoute:
         auth_ctx = await authenticate_admin()
         response = await client.get("/api/v1/contracts/", headers=auth_ctx.headers)
         assert response.status_code == 200
-        assert len(response.json()) == 4
+        resp_data = response.json()
+        assert resp_data["total"] == 4
+        assert len(resp_data["items"]) == 4
+
+    async def test_total_stays_full_on_second_page(self, client, db, authenticate_admin):
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        for status in ("ACTIVE", "EXPIRED", "TERMINATED", "CANCELLED"):
+            await make_contract_model(db, prop.id, tenant.id, status=status)
+
+        auth_ctx = await authenticate_admin()
+        response = await client.get("/api/v1/contracts/?skip=2&limit=2", headers=auth_ctx.headers)
+        assert response.status_code == 200
+        resp_data = response.json()
+        assert resp_data["total"] == 4
+        assert len(resp_data["items"]) == 2
 
 
 @pytest.mark.asyncio

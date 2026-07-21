@@ -121,7 +121,8 @@ class TestListContracts:
 
         result = await svc.list_contracts(mock_db)
 
-        assert result == [c1, c2]
+        assert result.items == [c1, c2]
+        assert result.total == 2
 
     async def test_respects_skip_and_limit(self, mock_db):
         contracts = {uuid4(): SimpleNamespace(id=i) for i in range(5)}
@@ -129,7 +130,8 @@ class TestListContracts:
 
         result = await svc.list_contracts(mock_db, skip=1, limit=2)
 
-        assert len(result) == 2
+        assert len(result.items) == 2
+        assert result.total == 5
 
 
 # ─── create_contract ────────────────────────────────────────────────────────

@@ -1,14 +1,18 @@
+from __future__ import annotations
+
 from collections.abc import Sequence
 from datetime import date
 from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.tenant import TenantRepository
-from app.repositories.user import UserRepository
-from app.schemas.tenant import TenantCreate, TenantUpdate
+
 from app.models.tenant import Tenant
 from app.models.user import User, UserRole
+from app.repositories.tenant import TenantRepository
+from app.repositories.user import UserRepository
+from app.schemas.base import PaginatedResponse
+from app.schemas.tenant import TenantCreate, TenantUpdate
 from app.services.exceptions import (
     RelatedResourceNotFoundError,
     UserNotFoundError,
@@ -34,7 +38,7 @@ class TenantService:
         current_user: User,
         skip: int = 0,
         limit: int = 100,
-    ) -> Sequence[Tenant]:
+    ) -> PaginatedResponse[Tenant]:
         """Admins see every tenant. Managers only see tenants tied to
         their own properties, plus tenants nobody has attached to a
         property yet.
@@ -48,8 +52,13 @@ class TenantService:
         list for the incident this fixes.
         """
         if current_user.role == UserRole.MANAGER:
-            return await self.tenant_repo.get_all_for_manager(db, current_user.id, skip=skip, limit=limit)
-        return await self.tenant_repo.get_all(db, skip=skip, limit=limit)
+            items = await self.tenant_repo.get_all_for_manager(db, current_user.id, skip=skip, limit=limit)
+            total = await self.tenant_repo.count_all_for_manager(db, current_user.id)
+        else:
+            items = await self.tenant_repo.get_all(db, skip=skip, limit=limit)
+            total = await self.tenant_repo.count_all(db)
+
+        return PaginatedResponse(items=items, total=total)
 
     async def get_tenant(
         self,

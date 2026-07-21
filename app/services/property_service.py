@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 from collections.abc import Sequence
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
 from app.repositories.property import PropertyRepository
+from app.schemas.base import PaginatedResponse
 from app.schemas.property import PropertyCreate, PropertyUpdate
 from app.models.property import Property, PropertyStatus
 from app.models.user import User, UserRole
@@ -22,18 +25,23 @@ class PropertyService:
         current_user: User,
         skip: int = 0,
         limit: int = 100,
-    ) -> Sequence[Property]:
+    ) -> PaginatedResponse[Property]:
         """`current_user` is required — see TenantService.list_tenants'
         docstring for why an optional, silently-skippable auth parameter
         is a footgun this codebase has already been bitten by once."""
         if current_user.role == UserRole.MANAGER:
-            return await self.property_repo.get_all_for_manager(
+            items = await self.property_repo.get_all_for_manager(
                 db,
                 current_user.id,
                 skip=skip,
                 limit=limit,
             )
-        return await self.property_repo.get_all(db, skip=skip, limit=limit)
+            total = await self.property_repo.count_all_for_manager(db, current_user.id)
+        else:
+            items = await self.property_repo.get_all(db, skip=skip, limit=limit)
+            total = await self.property_repo.count_all(db)
+
+        return PaginatedResponse(items=items, total=total)
 
     async def get_property(self, db: AsyncSession, prop_id: UUID, current_user: User) -> Property:
         prop = await self.property_repo.get_by_id(db, prop_id)

@@ -25,7 +25,7 @@ class TestListTenantsRoute:
         ctx = await authenticate_manager()
         response = await client.get("/api/v1/tenants/", headers=ctx.headers)
         assert response.status_code == 200
-        assert response.json() == []
+        assert response.json() == {"items": [], "total": 0}
 
     async def test_admin_sees_all_tenants(self, client, db, authenticate_admin):
         ctx = await authenticate_admin()
@@ -34,7 +34,20 @@ class TestListTenantsRoute:
 
         response = await client.get("/api/v1/tenants/", headers=ctx.headers)
         assert response.status_code == 200
-        assert len(response.json()) == 2
+        resp_data = response.json()
+        assert resp_data["total"] == 2
+        assert len(resp_data["items"]) == 2
+
+    async def test_admin_sees_all_tenants_with_pagination(self, client, db, authenticate_admin):
+        ctx = await authenticate_admin()
+        await make_tenant_model(db, email="tenant_a@example.com")
+        await make_tenant_model(db, email="tenant_b@example.com")
+
+        response = await client.get("/api/v1/tenants/?skip=1&limit=1", headers=ctx.headers)
+        assert response.status_code == 200
+        resp_data = response.json()
+        assert resp_data["total"] == 2
+        assert len(resp_data["items"]) == 1
 
     async def test_manager_sees_unclaimed_and_own_tenants(self, client, db, authenticate_manager):
         ctx = await authenticate_manager()
@@ -48,7 +61,7 @@ class TestListTenantsRoute:
 
         response = await client.get("/api/v1/tenants/", headers=ctx.headers)
         assert response.status_code == 200
-        ids = {t["id"] for t in response.json()}
+        ids = {t["id"] for t in response.json()["items"]}
         assert ids == {str(unclaimed.id), str(owned.id)}
 
     async def test_regular_user_cannot_list_tenants(self, client, authenticate_user):

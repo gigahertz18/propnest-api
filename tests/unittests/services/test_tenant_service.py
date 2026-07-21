@@ -48,11 +48,16 @@ async def test_tenant_service_delegates_to_repo_methods(mock_db):
         async def get_by_date_of_birth(self, db, dob, skip=0, limit=100):
             return ["dob"]
 
+        async def count_all(self, db):
+            return 1
+
     repo = Repo()
     svc = TenantService(tenant_repo=repo)
     admin = SimpleNamespace(id=uuid4(), role=UserRole.ADMIN)
 
-    assert await svc.list_tenants(db=mock_db, current_user=admin) == ["t1"]
+    list_result = await svc.list_tenants(db=mock_db, current_user=admin)
+    assert list_result.items == ["t1"]
+    assert list_result.total == 1
     assert await svc.get_tenant(db=mock_db, id=1, current_user=admin) == "byid"
     assert await svc.create_tenant(db=mock_db, payload=None) == "created"
     assert await svc.update_tenant(db=mock_db, id=1, payload=None, current_user=admin) == "updated"
@@ -367,7 +372,8 @@ class TestTenantServiceAuthorization:
         svc = TenantService(tenant_repo=repo)
 
         result = await svc.list_tenants(mock_db, current_user=manager)
-        assert result == [owned]
+        assert result.items == [owned]
+        assert result.total == 1
 
     async def test_list_tenants_admin_sees_everything(self, mock_db):
         t1, t2 = _make_tenant(), _make_tenant()
@@ -376,7 +382,8 @@ class TestTenantServiceAuthorization:
         admin = _make_admin()
 
         result = await svc.list_tenants(mock_db, current_user=admin)
-        assert result == [t1, t2]
+        assert result.items == [t1, t2]
+        assert result.total == 2
 
     async def test_link_user_enforces_authorization(self, mock_db):
         tenant = _make_tenant()

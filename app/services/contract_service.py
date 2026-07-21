@@ -1,15 +1,18 @@
+from __future__ import annotations
+
 from collections.abc import Sequence
 from dataclasses import dataclass
 from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.contract import Contract, RentalType
+from app.models.user import User
 from app.repositories.contract import ContractRepository
 from app.repositories.property import PropertyRepository
 from app.repositories.tenant import TenantRepository
+from app.schemas.base import PaginatedResponse
 from app.schemas.contract import ContractCreate, ContractUpdate
-from app.models.contract import Contract, RentalType
-from app.models.user import User
 from app.services.base import ResourceAuthorizationMixin
 from app.services.exceptions import ContractActiveError, RelatedResourceNotFoundError, ContractForbiddenError
 
@@ -37,8 +40,11 @@ class ContractService(ResourceAuthorizationMixin):
         self.property_repo = property_repo
         self.tenant_repo = tenant_repo
 
-    async def list_contracts(self, db: AsyncSession, skip: int = 0, limit: int = 100) -> Sequence[Contract]:
-        return await self.contract_repo.get_all(db, skip=skip, limit=limit)
+    async def list_contracts(self, db: AsyncSession, skip: int = 0, limit: int = 100) -> PaginatedResponse[Contract]:
+        items = await self.contract_repo.get_all(db, skip=skip, limit=limit)
+        total = await self.contract_repo.count_all(db)
+
+        return PaginatedResponse(items=items, total=total)
 
     async def get_contract(self, db: AsyncSession, contract_id: UUID) -> Contract:
         contract = await self.contract_repo.get_by_id(db, contract_id)

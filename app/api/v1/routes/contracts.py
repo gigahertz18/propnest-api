@@ -1,13 +1,14 @@
-from uuid import UUID
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from uuid import UUID
 
+
+from app.core.dependencies import get_contract_service, require_manager_or_above
 from app.db.session import get_db
+from app.models.user import User
+from app.schemas.base import PaginatedResponse
 from app.schemas.contract import ContractCreate, ContractUpdate, ContractResponse
 from app.services.contract_service import ContractService
-from app.core.dependencies import get_contract_service, require_manager_or_above
-from app.models.user import User
 from app.services.exceptions import ContractActiveError, RelatedResourceNotFoundError, ContractForbiddenError
 
 router = APIRouter(prefix="/contracts", tags=["Contracts"])
@@ -15,7 +16,7 @@ router = APIRouter(prefix="/contracts", tags=["Contracts"])
 
 @router.get(
     "/",
-    response_model=list[ContractResponse],
+    response_model=PaginatedResponse[ContractResponse],
     dependencies=[Depends(require_manager_or_above)],
 )
 async def list_contracts(

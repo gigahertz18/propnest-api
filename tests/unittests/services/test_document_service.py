@@ -83,7 +83,8 @@ class TestListDocuments:
 
         result = await svc.list_documents(mock_db, current_user=admin)
 
-        assert result == [owned, other]
+        assert result.items == [owned, other]
+        assert result.total == 2
 
     async def test_manager_only_sees_documents_for_own_properties(self, mock_db):
         manager = make_manager()
@@ -93,7 +94,8 @@ class TestListDocuments:
 
         result = await svc.list_documents(mock_db, current_user=manager)
 
-        assert result == [owned]
+        assert result.items == [owned]
+        assert result.total == 1
 
 
 class TestDocumentServiceClassAttributes:

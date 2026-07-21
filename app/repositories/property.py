@@ -36,6 +36,12 @@ class PropertyRepository(BaseRepository[Property, PropertyCreate, PropertyUpdate
             limit=limit,
         )
 
+    async def count_all(self, db: AsyncSession) -> int:
+        return await self._count(db)
+
+    async def count_all_for_manager(self, db: AsyncSession, manager_id: UUID) -> int:
+        return await self._count(db, self.model.manager_id == manager_id)
+
 
 # Instantiate once — import this instance everywhere
 property_repo = PropertyRepository(Property)

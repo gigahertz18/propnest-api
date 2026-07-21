@@ -58,6 +58,9 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
 
         return await self._all(db, self.model.booking_source == booking_source)
 
+    async def count_all(self, db: AsyncSession) -> int:
+        return await self._count(db)
+
     async def get_active_contract_by_property(
         self,
         db: AsyncSession,

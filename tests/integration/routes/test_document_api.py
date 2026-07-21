@@ -43,7 +43,7 @@ class TestListDocumentsRoute:
         auth_ctx = await authenticate_manager()
         response = await client.get("/api/v1/documents/", headers=auth_ctx.headers)
         assert response.status_code == 200
-        assert response.json() == []
+        assert response.json() == {"items": [], "total": 0}
 
     async def test_admin_sees_all_documents(self, client, db, authenticate_admin):
         await make_document_model(db, file_name="a.pdf")
@@ -52,7 +52,20 @@ class TestListDocumentsRoute:
         auth_ctx = await authenticate_admin()
         response = await client.get("/api/v1/documents/", headers=auth_ctx.headers)
         assert response.status_code == 200
-        assert len(response.json()) == 2
+        resp_data = response.json()
+        assert resp_data["total"] == 2
+        assert len(resp_data["items"]) == 2
+
+    async def test_admin_sees_all_documents_with_pagination(self, client, db, authenticate_admin):
+        await make_document_model(db, file_name="a.pdf")
+        await make_document_model(db, file_name="b.pdf")
+
+        auth_ctx = await authenticate_admin()
+        response = await client.get("/api/v1/documents/?skip=1&limit=1", headers=auth_ctx.headers)
+        assert response.status_code == 200
+        resp_data = response.json()
+        assert resp_data["total"] == 2
+        assert len(resp_data["items"]) == 1
 
     async def test_manager_sees_only_documents_for_own_properties(self, client, db, authenticate_manager):
         auth_ctx = await authenticate_manager()
@@ -65,7 +78,7 @@ class TestListDocumentsRoute:
 
         response = await client.get("/api/v1/documents/", headers=auth_ctx.headers)
         assert response.status_code == 200
-        ids = {d["id"] for d in response.json()}
+        ids = {d["id"] for d in response.json()["items"]}
         assert ids == {str(owned_doc.id)}
 
     async def test_regular_user_cannot_list_documents(self, client, authenticate_user):

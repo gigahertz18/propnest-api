@@ -1,7 +1,7 @@
 import uuid
 
 from collections.abc import Sequence
-from sqlalchemy import select, or_, and_
+from sqlalchemy import select, or_, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.base import BaseRepository
@@ -87,6 +87,27 @@ class DocumentRepository(BaseRepository[Document, DocumentCreate, DocumentRelink
         )
         result = await db.execute(stmt)
         return result.scalars().all()
+
+    async def count_all(self, db: AsyncSession) -> int:
+        return await self._count(db)
+
+    async def count_all_for_manager(self, db: AsyncSession, manager_id: uuid.UUID) -> int:
+        owned_property_ids = select(Property.id).where(Property.manager_id == manager_id)
+
+        stmt = (
+            select(func.count())
+            .select_from(Document)
+            .outerjoin(Contract, Contract.id == Document.contract_id)
+            .where(
+                or_(
+                    and_(Document.property_id.is_not(None), Document.property_id.in_(owned_property_ids)),
+                    and_(Document.contract_id.is_not(None), Contract.property_id.in_(owned_property_ids)),
+                )
+            )
+        )
+
+        result = await db.execute(stmt)
+        return int(result.scalar_one())
 
 
 # Instantiate once — import this instance everywhere

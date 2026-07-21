@@ -192,7 +192,7 @@ class TestTenantRepositoryGetByEmail:
         # Documents current behaviour — no uniqueness enforced at DB level
         await make_tenant_model(db, email="dup@example.com", full_name="First")
         await make_tenant_model(db, email="dup@example.com", full_name="Second")
-        result = tenant_repo.get_by_email(db, "dup@example.com")
+        result = await tenant_repo.get_by_email(db, "dup@example.com")
         assert result is not None
 
 

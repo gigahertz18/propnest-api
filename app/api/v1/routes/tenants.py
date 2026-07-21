@@ -1,24 +1,24 @@
-from uuid import UUID
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from uuid import UUID
 
+from app.core.dependencies import get_tenant_service, require_manager_or_above, get_current_user
 from app.db.session import get_db
 from app.models.user import User
+from app.schemas.base import PaginatedResponse
 from app.schemas.tenant import TenantCreate, TenantUpdate, TenantResponse, TenantLinkUser
-from app.services.tenant_service import TenantService
-from app.core.dependencies import get_tenant_service, require_manager_or_above, get_current_user
 from app.services.exceptions import (
     RelatedResourceNotFoundError,
     UserNotFoundError,
     TenantAlreadyLinkedError,
     TenantForbiddenError,
 )
+from app.services.tenant_service import TenantService
 
 router = APIRouter(prefix="/tenants", tags=["Tenants"])
 
 
-@router.get("/", response_model=list[TenantResponse], dependencies=[Depends(get_current_user)])
+@router.get("/", response_model=PaginatedResponse[TenantResponse], dependencies=[Depends(get_current_user)])
 async def list_tenants(
     skip: int = 0,
     limit: int = 100,

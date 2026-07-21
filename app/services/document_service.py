@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 
 from collections.abc import Sequence
@@ -8,13 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID, uuid4
 
 
+from app.core.config import settings
+from app.models.document import Document
+from app.models.user import User, UserRole
 from app.repositories.document import DocumentRepository
 from app.repositories.contract import ContractRepository
 from app.repositories.property import PropertyRepository
 from app.repositories.tenant import TenantRepository
+from app.schemas.base import PaginatedResponse
 from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate
-from app.models.document import Document
-from app.models.user import User, UserRole
 from app.services.base import ResourceAuthorizationMixin
 from app.services.exceptions import (
     DocumentUploadError,
@@ -22,7 +26,6 @@ from app.services.exceptions import (
     RelatedResourceNotFoundError,
     DocumentDeletionError,
 )
-from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +98,7 @@ class DocumentService(ResourceAuthorizationMixin):
         current_user: User,
         skip: int = 0,
         limit: int = 100,
-    ) -> Sequence[Document]:
+    ) -> PaginatedResponse[Document]:
         """Admins see every document. Managers only see documents tied to
         one of their own properties.
 
@@ -104,8 +107,13 @@ class DocumentService(ResourceAuthorizationMixin):
         silently-skippable auth parameter is a footgun this codebase has
         already been bitten by once."""
         if current_user.role == UserRole.MANAGER:
-            return await self.document_repo.get_all_for_manager(db, current_user.id, skip=skip, limit=limit)
-        return await self.document_repo.get_all(db, skip=skip, limit=limit)
+            items = await self.document_repo.get_all_for_manager(db, current_user.id, skip=skip, limit=limit)
+            total = await self.document_repo.count_all_for_manager(db, current_user.id)
+        else:
+            items = await self.document_repo.get_all(db, skip=skip, limit=limit)
+            total = await self.document_repo.count_all(db)
+
+        return PaginatedResponse(items=items, total=total)
 
     async def get_document(
         self,
