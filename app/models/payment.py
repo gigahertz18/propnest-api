@@ -2,6 +2,8 @@ import uuid
 from datetime import datetime, timezone
 from sqlalchemy import ForeignKey, Numeric, DateTime, String, Uuid, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db.constraints import sql_in_clause
 from app.db.session import Base
 from app.models.base import TimestampMixin
 
@@ -37,7 +39,7 @@ class Payment(Base, TimestampMixin):
 
     __table_args__ = (
         CheckConstraint(
-            f"payment_method IN {PAYMENT_METHODS}",
+            sql_in_clause("payment_method", PAYMENT_METHODS),
             name="ck_payment_method",
         ),
     )
