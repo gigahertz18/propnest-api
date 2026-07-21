@@ -154,6 +154,12 @@ class TenantRepository(BaseRepository[Tenant, TenantCreate, TenantUpdate]):
         result = await db.execute(stmt)
         return result.scalar() is not None
 
+    async def count_all(self, db: AsyncSession) -> int:
+        return await self._count(db)
+
+    async def count_all_for_manager(self, db: AsyncSession, manager_id: uuid.UUID) -> int:
+        return await self._count(db, self._accessible_by_manager_clause(manager_id))
+
 
 # Instantiate once — import this instance everywhere
 tenant_repo = TenantRepository(Tenant)

@@ -1,10 +1,10 @@
 from collections.abc import Sequence
 from typing import Generic, TypeVar, Type
-from sqlalchemy import select, Select
+from sqlalchemy import select, Select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.session import Base
-
 from uuid import UUID
+
+from app.db.session import Base
 
 ModelType = TypeVar("ModelType", bound=Base)
 CreateSchema = TypeVar("CreateSchema")
@@ -65,6 +65,20 @@ class BaseRepository(Generic[ModelType, CreateSchema, UpdateSchema]):
         result = await db.execute(self._build_query(*criteria, **kwargs))
 
         return result.scalars().all()
+
+    async def _count(
+        self,
+        db: AsyncSession,
+        *criteria,
+    ) -> int:
+        statement = select(func.count()).select_from(self.model)
+
+        if criteria:
+            statement = statement.where(*criteria)
+
+        result = await db.execute(statement)
+
+        return int(result.scalar_one())
 
     async def get_all(
         self,

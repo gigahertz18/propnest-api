@@ -1,10 +1,11 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
 from app.core.dependencies import require_admin, get_property_service, require_manager_or_above
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.models.user import User
+from app.schemas.base import PaginatedResponse
 from app.schemas.property import PropertyCreate, PropertyUpdate, PropertyResponse
 from app.services.property_service import PropertyService
 from app.services.exceptions import RelatedResourceNotFoundError, PropertyAlreadyExistsError, PropertyForbiddenError
@@ -14,7 +15,7 @@ router = APIRouter(prefix="/properties", tags=["Properties"])
 
 @router.get(
     "/",
-    response_model=list[PropertyResponse],
+    response_model=PaginatedResponse[PropertyResponse],
 )
 async def list_properties(
     skip: int = 0,

@@ -111,3 +111,12 @@ class MockCRUDRepo:
             for record in self.records.values()
             if all(getattr(record, field, None) == value for field, value in filters.items())
         ]
+
+    async def count_all(self, db):
+        return len(self.records)
+
+    async def count_all_for_manager(self, db, manager_id):
+        return len(await self.get_all_for_manager(db, manager_id))
+
+    async def get_all_for_manager(self, db, manager_id):
+        raise NotImplementedError

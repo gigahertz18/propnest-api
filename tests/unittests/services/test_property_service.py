@@ -34,11 +34,15 @@ class TestListProperties:
     async def test_returns_all_properties(self, mock_db):
         prop = SimpleNamespace(id=uuid4())
         svc = _make_service({prop.id: prop})
-        assert await svc.list_properties(mock_db, current_user=_admin()) == [prop]
+        result = await svc.list_properties(mock_db, current_user=_admin())
+        assert result.items == [prop]
+        assert result.total == 1
 
     async def test_returns_empty_list_when_none_exist(self, mock_db):
         svc = _make_service()
-        assert await svc.list_properties(mock_db, current_user=_admin()) == []
+        result = await svc.list_properties(mock_db, current_user=_admin())
+        assert result.items == []
+        assert result.total == 0
 
     async def test_admin_sees_all_properties(self, mock_db):
         admin = SimpleNamespace(id=uuid4(), role=UserRole.ADMIN)
@@ -48,7 +52,8 @@ class TestListProperties:
 
         result = await svc.list_properties(mock_db, current_user=admin)
 
-        assert result == [owned_prop, other_prop]
+        assert result.items == [owned_prop, other_prop]
+        assert result.total == 2
 
     async def test_current_user_is_required(self, mock_db):
         """current_user has no default — a caller that forgets to pass it
@@ -71,7 +76,8 @@ class TestListProperties:
 
         result = await svc.list_properties(mock_db, current_user=manager)
 
-        assert result == [owned]
+        assert result.items == [owned]
+        assert result.total == 1
 
 
 @pytest.mark.asyncio

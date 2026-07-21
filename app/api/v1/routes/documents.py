@@ -1,17 +1,17 @@
-from uuid import UUID
-
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
+from uuid import UUID
 
-from app.db.session import get_db
-from app.models.user import User
-from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate, DocumentResponse
-from app.services.document_service import DocumentService
 from app.core.dependencies import (
     get_document_service,
     require_manager_or_above,
     get_storage_client,
 )
+from app.db.session import get_db
+from app.models.user import User
+from app.schemas.base import PaginatedResponse
+from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate, DocumentResponse
+from app.services.document_service import DocumentService
 from app.services.exceptions import (
     DocumentDeletionError,
     DocumentUploadError,
@@ -24,7 +24,7 @@ router = APIRouter(prefix="/documents", tags=["Documents"])
 
 @router.get(
     "/",
-    response_model=list[DocumentResponse],
+    response_model=PaginatedResponse[DocumentResponse],
 )
 async def list_documents(
     skip: int = 0,

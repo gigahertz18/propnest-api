@@ -13,7 +13,7 @@ class TestListPropertiesRoute:
         ctx = await authenticate_admin()
         response = await client.get("/api/v1/properties/", headers=ctx.headers)
         assert response.status_code == 200
-        assert response.json() == []
+        assert response.json() == {"items": [], "total": 0}
 
     async def test_returns_all_properties(self, client, db, authenticate_admin):
         ctx = await authenticate_admin()
@@ -22,7 +22,20 @@ class TestListPropertiesRoute:
 
         response = await client.get("/api/v1/properties/", headers=ctx.headers)
         assert response.status_code == 200
-        assert len(response.json()) == 2
+        resp_data = response.json()
+        assert resp_data["total"] == 2
+        assert len(resp_data["items"]) == 2
+
+    async def test_returns_all_properties_with_pagination(self, client, db, authenticate_admin):
+        ctx = await authenticate_admin()
+        await make_property_model(db, name="Unit A")
+        await make_property_model(db, name="Unit B")
+
+        response = await client.get("/api/v1/properties/?skip=1&limit=1", headers=ctx.headers)
+        assert response.status_code == 200
+        resp_data = response.json()
+        assert resp_data["total"] == 2
+        assert len(resp_data["items"]) == 1
 
 
 @pytest.mark.asyncio
