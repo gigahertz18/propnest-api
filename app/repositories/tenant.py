@@ -41,25 +41,53 @@ class TenantRepository(BaseRepository[Tenant, TenantCreate, TenantUpdate]):
         self,
         db: AsyncSession,
         full_name: str,
+        skip: int = 0,
+        limit: int = 100,
     ) -> Sequence[Tenant]:
-        # return db.query(self.model).filter(self.model.full_name.ilike(f"%{full_name}%")).all()
-        return await self._all(db, self.model.full_name.ilike(f"%{full_name}%"))
+
+        skip = max(0, skip)
+        limit = min(max(0, limit), 100)
+
+        return await self._all(
+            db,
+            self.model.full_name.ilike(f"%{full_name}%"),
+            offset=skip,
+            limit=limit,
+        )
 
     async def get_by_occupation(
         self,
         db: AsyncSession,
         occupation: str,
+        skip: int = 0,
+        limit: int = 100,
     ) -> Sequence[Tenant]:
-        # return db.query(self.model).filter(self.model.occupation.ilike(f"%{occupation}%")).all()
-        return await self._all(db, self.model.occupation.ilike(f"%{occupation}%"))
+        skip = max(0, skip)
+        limit = min(max(0, limit), 100)
+
+        return await self._all(
+            db,
+            self.model.occupation.ilike(f"%{occupation}%"),
+            offset=skip,
+            limit=limit,
+        )
 
     async def get_by_date_of_birth(
         self,
         db: AsyncSession,
         date_of_birth: date,
+        skip: int = 0,
+        limit: int = 100,
     ) -> Sequence[Tenant]:
-        # return db.query(self.model).filter(self.model.date_of_birth == date_of_birth).all()
-        return await self._all(db, self.model.date_of_birth == date_of_birth)
+        skip = max(0, skip)
+        limit = min(max(0, limit), 100)
+
+        return await self._all(
+            db,
+            self.model.date_of_birth == date_of_birth,
+            offset=skip,
+            limit=limit,
+        )
 
     async def get_by_user_id(
         self,

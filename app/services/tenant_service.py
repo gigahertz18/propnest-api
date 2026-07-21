@@ -104,14 +104,47 @@ class TenantService:
     async def get_by_phone_number(self, db: AsyncSession, phone_number: str) -> Tenant | None:
         return await self.tenant_repo.get_by_phone_number(db, phone_number)
 
-    async def get_by_full_name(self, db: AsyncSession, full_name: str) -> Sequence[Tenant]:
-        return await self.tenant_repo.get_by_full_name(db, full_name)
+    async def get_by_full_name(
+        self,
+        db: AsyncSession,
+        full_name: str,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Sequence[Tenant]:
+        return await self.tenant_repo.get_by_full_name(
+            db,
+            full_name,
+            skip=skip,
+            limit=limit,
+        )
 
-    async def get_by_occupation(self, db: AsyncSession, occupation: str) -> Sequence[Tenant]:
-        return await self.tenant_repo.get_by_occupation(db, occupation)
+    async def get_by_occupation(
+        self,
+        db: AsyncSession,
+        occupation: str,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Sequence[Tenant]:
+        return await self.tenant_repo.get_by_occupation(
+            db,
+            occupation,
+            skip=skip,
+            limit=limit,
+        )
 
-    async def get_by_date_of_birth(self, db: AsyncSession, date_of_birth: date) -> Sequence[Tenant]:
-        return await self.tenant_repo.get_by_date_of_birth(db, date_of_birth)
+    async def get_by_date_of_birth(
+        self,
+        db: AsyncSession,
+        date_of_birth: date,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Sequence[Tenant]:
+        return await self.tenant_repo.get_by_date_of_birth(
+            db,
+            date_of_birth,
+            skip=skip,
+            limit=limit,
+        )
 
     async def get_by_user_id(self, db: AsyncSession, user_id: UUID) -> Tenant | None:
         return await self.tenant_repo.get_by_user_id(db, user_id)

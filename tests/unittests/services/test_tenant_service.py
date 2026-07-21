@@ -39,13 +39,13 @@ async def test_tenant_service_delegates_to_repo_methods(mock_db):
         async def get_by_phone_number(self, db, phone_number):
             return "phone"
 
-        async def get_by_full_name(self, db, full_name):
+        async def get_by_full_name(self, db, full_name, skip=0, limit=100):
             return ["name"]
 
-        async def get_by_occupation(self, db, occupation):
+        async def get_by_occupation(self, db, occupation, skip=0, limit=100):
             return ["occ"]
 
-        async def get_by_date_of_birth(self, db, dob):
+        async def get_by_date_of_birth(self, db, dob, skip=0, limit=100):
             return ["dob"]
 
     repo = Repo()
@@ -63,6 +63,37 @@ async def test_tenant_service_delegates_to_repo_methods(mock_db):
     assert await svc.get_by_occupation(db=mock_db, occupation="o") == ["occ"]
 
     assert await svc.get_by_date_of_birth(db=mock_db, date_of_birth=date(2000, 1, 1)) == ["dob"]
+
+
+async def test_tenant_service_forwards_pagination_defaults(mock_db):
+    """Default skip/limit are applied when the caller doesn't specify them,
+    and custom values are forwarded unchanged to the repo."""
+    captured = {}
+
+    class Repo:
+        async def get_by_full_name(self, db, full_name, skip=0, limit=100):
+            captured["full_name"] = (skip, limit)
+            return []
+
+        async def get_by_occupation(self, db, occupation, skip=0, limit=100):
+            captured["occupation"] = (skip, limit)
+            return []
+
+        async def get_by_date_of_birth(self, db, dob, skip=0, limit=100):
+            captured["dob"] = (skip, limit)
+            return []
+
+    svc = TenantService(tenant_repo=Repo())
+
+    await svc.get_by_full_name(db=mock_db, full_name="n")
+    await svc.get_by_occupation(db=mock_db, occupation="o")
+    await svc.get_by_date_of_birth(db=mock_db, date_of_birth=date(2000, 1, 1))
+    assert captured["full_name"] == (0, 100)
+    assert captured["occupation"] == (0, 100)
+    assert captured["dob"] == (0, 100)
+
+    await svc.get_by_full_name(db=mock_db, full_name="n", skip=10, limit=5)
+    assert captured["full_name"] == (10, 5)
 
 
 class MockTenantRepo(MockCRUDRepo):
