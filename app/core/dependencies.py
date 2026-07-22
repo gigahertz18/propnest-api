@@ -1,27 +1,34 @@
 import logging
+
+from minio import Minio
+from urllib.parse import urlparse
 from uuid import UUID
+
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.session import get_db
-from app.core.security import decode_access_token
-from app.core.config import settings
-from app.repositories.user import user_repo
-from app.models.user import User, UserRole
-from app.services.auth_service import AuthService
-from app.repositories.property import property_repo
-from app.repositories.contract import contract_repo
-from app.repositories.tenant import tenant_repo
-from app.repositories.document import document_repo
 
-from app.services.user_service import UserService
-from app.services.property_service import PropertyService
+from app.core.config import settings
+from app.core.security import decode_access_token
+from app.db.session import get_db
+
+from app.models.user import User, UserRole
+
+from app.repositories.contract import contract_repo
+from app.repositories.document import document_repo
+from app.repositories.property import property_repo
+from app.repositories.payment import payment_repo
+from app.repositories.tenant import tenant_repo
+from app.repositories.user import user_repo
+
+from app.services.auth_service import AuthService
 from app.services.contract_service import ContractService
-from app.services.tenant_service import TenantService
 from app.services.document_service import DocumentService
-from minio import Minio
-from urllib.parse import urlparse
+from app.services.payment_service import PaymentService
+from app.services.property_service import PropertyService
+from app.services.tenant_service import TenantService
+from app.services.user_service import UserService
 
 logger = logging.getLogger(__name__)
 bearer_scheme = HTTPBearer()
@@ -149,6 +156,14 @@ def get_document_service() -> DocumentService:
         property_repo=property_repo,
         contract_repo=contract_repo,
         tenant_repo=tenant_repo,
+    )
+
+
+def get_payment_service() -> PaymentService:
+    return PaymentService(
+        payment_repo=payment_repo,
+        contract_repo=contract_repo,
+        property_repo=property_repo,
     )
 
 

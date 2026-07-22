@@ -1,13 +1,15 @@
 import uuid
 
-from datetime import date
+from datetime import date, datetime, timezone
 from types import SimpleNamespace
-from app.models.property import Property, PropertyStatus
-from app.models.user import User, UserRole
-from app.models.contract import Contract, RentalType as ContractRentalType
-from app.models.tenant import Tenant
-from app.models.document import Document
+
 from app.core.security import hash_password
+from app.models.contract import Contract, RentalType as ContractRentalType
+from app.models.document import Document
+from app.models.payment import Payment
+from app.models.property import Property, PropertyStatus
+from app.models.tenant import Tenant
+from app.models.user import User, UserRole
 
 
 def make_property(
@@ -85,6 +87,18 @@ async def make_admin_model(db, **kwargs) -> User:
         "username": "adminuser",
         "email": "admin@example.com",
         "role": UserRole.ADMIN,
+    }
+    defaults.update(kwargs)
+    return await make_user_model(db, **defaults)
+
+
+async def make_manager_model(db, **kwargs) -> User:
+    """Shortcut to create a manager user in the test DB."""
+    defaults = {
+        "full_name": "Manager User",
+        "username": "mgruser",
+        "email": "mgr@example.com",
+        "role": UserRole.MANAGER,
     }
     defaults.update(kwargs)
     return await make_user_model(db, **defaults)
@@ -225,6 +239,39 @@ async def make_document_model(db, **kwargs) -> Document:
         id=uuid.uuid4(),
         **{k: v for k, v in data.items()},
     )
+    db.add(obj)
+    await db.flush()
+    await db.refresh(obj)
+    return obj
+
+
+# ─── Payment ──────────────────────────────────────────────────────────────────
+
+
+def make_payment(
+    contract_id: uuid.UUID | None = None,
+    amount: float = 15000.00,
+    paid_at: datetime | None = None,
+    payment_method: str | None = "cash",
+    status: str = "PAID",
+) -> dict:
+    """Returns a dict matching PaymentCreate schema."""
+    return {
+        "contract_id": contract_id,
+        "amount": amount,
+        "paid_at": paid_at or datetime.now(timezone.utc),
+        "payment_method": payment_method,
+        "status": status,
+    }
+
+
+async def make_payment_model(db, contract_id: uuid.UUID, **kwargs) -> Payment:
+    """
+    Creates and persists a Payment directly in the test DB.
+    Requires a pre-existing contract id (FK constraint).
+    """
+    data = make_payment(contract_id=contract_id, **kwargs)
+    obj = Payment(id=uuid.uuid4(), **data)
     db.add(obj)
     await db.flush()
     await db.refresh(obj)
