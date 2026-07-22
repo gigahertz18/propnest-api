@@ -106,9 +106,9 @@ class TestDocumentRepositoryGetManyByIds:
         doc_b = await make_document_model(db, file_name="b.pdf")
 
         result = await document_repo.get_many_by_ids(db, [doc_a.id, doc_b.id])
-        result_ids = [doc.id for doc in result]
+        result_ids = {doc.id for doc in result}
 
-        assert result_ids == [doc_a.id, doc_b.id]
+        assert result_ids == {doc_a.id, doc_b.id}
 
     async def test_duplicate_ids_do_not_produce_duplicate_rows(self, db):
         doc = await make_document_model(db)
@@ -124,9 +124,9 @@ class TestDocumentRepositoryGetManyByIds:
         missing_id = uuid.uuid4()
         result = await document_repo.get_many_by_ids(db, [doc.id, missing_id])
 
-        result_ids = [doc.id for doc in result]
+        result_ids = {doc.id for doc in result}
 
-        assert result_ids == [doc.id]
+        assert result_ids == {doc.id}
 
     async def test_all_ids_missing_returns_empty_sequence(self, db):
         result = await document_repo.get_many_by_ids(db, [uuid.uuid4(), uuid.uuid4()])
@@ -140,7 +140,7 @@ class TestDocumentRepositoryGetManyByIds:
 
         assert len(result) == 1
         assert result[0].id == doc_a.id
-        assert doc_b.id not in [doc.id for doc in result]
+        assert doc_b.id not in {doc.id for doc in result}
 
 
 # ─── create ───────────────────────────────────────────────────────────────────
