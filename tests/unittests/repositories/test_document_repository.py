@@ -89,6 +89,60 @@ class TestDocumentRepositoryGetById:
         assert result is None
 
 
+# ─── get_many_by_id ───────────────────────────────────────────────────────────
+#
+# get_many_by_ids lives on BaseRepository, not DocumentRepository - exercised
+# here through document_repo since it's inherited, not overridden.
+@pytest.mark.asyncio
+class TestDocumentRepositoryGetManyByIds:
+    async def test_empty_id_list_returns_empty_sequence(self, db):
+        await make_document_model(db)
+        result = await document_repo.get_many_by_ids(db, [])
+
+        assert result == []
+
+    async def test_returns_matching_rows_for_given_ids(self, db):
+        doc_a = await make_document_model(db, file_name="a.pdf")
+        doc_b = await make_document_model(db, file_name="b.pdf")
+
+        result = await document_repo.get_many_by_ids(db, [doc_a.id, doc_b.id])
+        result_ids = {doc.id for doc in result}
+
+        assert result_ids == {doc_a.id, doc_b.id}
+
+    async def test_duplicate_ids_do_not_produce_duplicate_rows(self, db):
+        doc = await make_document_model(db)
+
+        result = await document_repo.get_many_by_ids(db, [doc.id, doc.id, doc.id])
+
+        assert len(result) == 1
+        assert result[0].id == doc.id
+
+    async def test_missing_ids_are_absent_without_error(self, db):
+        doc = await make_document_model(db)
+
+        missing_id = uuid.uuid4()
+        result = await document_repo.get_many_by_ids(db, [doc.id, missing_id])
+
+        result_ids = {doc.id for doc in result}
+
+        assert result_ids == {doc.id}
+
+    async def test_all_ids_missing_returns_empty_sequence(self, db):
+        result = await document_repo.get_many_by_ids(db, [uuid.uuid4(), uuid.uuid4()])
+        assert result == []
+
+    async def test_does_not_return_unrelated_rows(self, db):
+        doc_a = await make_document_model(db, file_name="a.pdf")
+        doc_b = await make_document_model(db, file_name="b.pdf")
+
+        result = await document_repo.get_many_by_ids(db, [doc_a.id])
+
+        assert len(result) == 1
+        assert result[0].id == doc_a.id
+        assert doc_b.id not in {doc.id for doc in result}
+
+
 # ─── create ───────────────────────────────────────────────────────────────────
 
 
