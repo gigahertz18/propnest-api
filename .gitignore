@@ -225,4 +225,4 @@ repomix*
 tests/coverage
 
 logs
-github_issues.txt
+github_issues*.txt
