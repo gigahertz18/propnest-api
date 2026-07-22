@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 from sqlalchemy import ForeignKey, Numeric, DateTime, String, Uuid, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -22,7 +23,7 @@ class Payment(Base, TimestampMixin):
 
     contract_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("contracts.id"), index=True)
 
-    amount: Mapped[float] = mapped_column(Numeric(12, 2))
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
 
     paid_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
