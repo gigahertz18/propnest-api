@@ -32,7 +32,7 @@ class PropertyRepository(BaseRepository[Property, PropertyCreate, PropertyUpdate
         return await self._all(
             db,
             self.model.manager_id == manager_id,
-            skip=skip,
+            offset=skip,
             limit=limit,
         )
 

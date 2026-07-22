@@ -36,6 +36,23 @@ class TestListPropertiesRoute:
         resp_data = response.json()
         assert resp_data["total"] == 2
         assert len(resp_data["items"]) == 1
+    
+    async def test_manager_can_list_only_owned_properties(self, client, db, authenticate_manager):
+        mgr_ctx = await authenticate_manager()
+        other_mgr = await authenticate_manager(username="other_mgr", email="other_mgr@example.com")
+        
+        await make_property_model(db, name="Owned A", manager_id=mgr_ctx.user.id)
+        await make_property_model(db, name="Owned B", manager_id=mgr_ctx.user.id)
+        await make_property_model(db, name="Owned Other", manager_id=other_mgr.user.id)
+        
+        response = await client.get("/api/v1/properties/?skip=1&limit=1", headers=mgr_ctx.headers)
+        
+        assert response.status_code == 200
+        resp_data = response.json()
+        
+        assert resp_data["total"] == 2
+        assert len(resp_data["items"]) == 1
+        assert resp_data["items"][0]["manager_id"] == str(mgr_ctx.user.id)
 
 
 @pytest.mark.asyncio
