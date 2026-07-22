@@ -101,6 +101,21 @@ class BaseRepository(Generic[ModelType, CreateSchema, UpdateSchema]):
             self.model.id == id,
         )
 
+    async def get_many_by_ids(
+        self,
+        db: AsyncSession,
+        ids: Sequence[UUID],
+    ) -> Sequence[ModelType]:
+        """
+        Fetch several rows by id in a single query.
+
+        Used any time a caller needs more than one specific row by id instead of looping over `get_by_id` N times.
+        """
+        if not ids:
+            return []
+
+        return await self._all(db, self.model.id.in_(ids))
+
     async def create(self, db: AsyncSession, payload: CreateSchema) -> ModelType:
         # Accept either a Pydantic model (with `model_dump`) or a plain dict
         if hasattr(payload, "model_dump"):
