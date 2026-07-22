@@ -104,18 +104,19 @@ class TestPropertyRepositoryCustomQueries:
         result = await property_repo.get_by_status(db, PropertyStatus.vacant)
         assert len(result) == 1
 
+
 @pytest.mark.asyncio
 class TestPropertyRepositoryGetAllForManager:
     async def test_returns_paginated_manager_properties(self, db):
         manager = await make_manager_model(db)
         other_mgr = await make_manager_model(db, username="other_mgr", email="other_mgr@example.com")
-        
+
         for i in range(5):
             await make_property_model(db, name=f"Owned {i}", manager_id=manager.id)
-        
+
         await make_property_model(db, name="Other owned", manager_id=other_mgr.id)
-        
+
         result = await property_repo.get_all_for_manager(db, manager.id, skip=2, limit=2)
-        
+
         assert len(result) == 2
         assert all(prop.manager_id == manager.id for prop in result)
