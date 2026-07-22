@@ -153,3 +153,13 @@ class TenantAlreadyLinkedError(ServiceException):
     different user, or the user is already linked to a different tenant."""
 
     pass
+
+
+# ─── Payment Related Exception ──────────────────────────────────────────────
+class PaymentForbiddenError(ResourceForbiddenError):
+    """
+    Raised when a payment operation is attempted by a manager who doesn't own the property
+    tied to the payments's contract
+    """
+
+    pass
