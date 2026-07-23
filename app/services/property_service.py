@@ -6,18 +6,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
 from app.repositories.property import PropertyRepository
+from app.repositories.user import UserRepository
 from app.schemas.base import PaginatedResponse
 from app.schemas.property import PropertyCreate, PropertyUpdate
 from app.models.property import Property, PropertyStatus
 from app.models.user import User, UserRole
-from app.services.exceptions import RelatedResourceNotFoundError, PropertyAlreadyExistsError, PropertyForbiddenError
+from app.services.exceptions import (
+    RelatedResourceNotFoundError,
+    PropertyAlreadyExistsError,
+    PropertyForbiddenError,
+    UserNotFoundError,
+    PropertyManagerAssignmentError,
+)
 
 
 class PropertyService:
     """Thin business layer for `Property` operations."""
 
-    def __init__(self, property_repo: PropertyRepository) -> None:
+    def __init__(self, property_repo: PropertyRepository, user_repo: UserRepository | None = None) -> None:
         self.property_repo = property_repo
+        self.user_repo = user_repo
 
     async def list_properties(
         self,
@@ -89,6 +97,49 @@ class PropertyService:
     async def delete_property(self, db: AsyncSession, prop_id: UUID, current_user: User) -> Property:
         await self.get_property(db, prop_id, current_user=current_user)
         prop = await self.property_repo.delete(db, prop_id)
+        await db.commit()
+        return prop
+
+    async def assign_manager(
+        self,
+        db: AsyncSession,
+        prop_id: UUID,
+        manager_id: UUID,
+        current_user: User,
+    ) -> Property:
+        """
+        Assign a manager to a property. Admin-only at the route layer.
+
+        This is the only code path that populates `Property.manager_id`
+        outside of direct DB writes in tests — every manager-scoped
+        authorization check in the app (`ResourceAuthorizationMixin`,
+        `PropertyService.get_property`, and the manager-scoped list/get
+        across Contract/Document/Payment) depends on this field being set
+        through here.
+
+        There is no unassign path: reassigning simply overwrites the
+        current `manager_id` rather than clearing it in between contracts.
+
+        Raises:
+            RelatedResourceNotFoundError: bubbled up from `get_property`
+                if `prop_id` doesn't exist.
+            UserNotFoundError: if `manager_id` doesn't reference an
+                existing user.
+            UserNotManagerError: if the referenced user exists but doesn't
+                have the MANAGER role.
+        """
+        if self.user_repo is None:
+            raise RuntimeError(f"{type(self).__name__}.assign_manager requires user_repo to be injected.")
+
+        prop = await self.get_property(db, prop_id, current_user=current_user)
+
+        manager = await self.user_repo.get_by_id(db, manager_id)
+        if not manager:
+            raise UserNotFoundError(f"User {manager_id} not found.")
+        if manager.role != UserRole.MANAGER:
+            raise PropertyManagerAssignmentError(f"User {manager_id} does not have the manager role.")
+
+        prop = await self.property_repo.update(db, prop_id, {"manager_id": manager_id})
         await db.commit()
         return prop
 

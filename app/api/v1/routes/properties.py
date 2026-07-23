@@ -6,9 +6,15 @@ from app.core.dependencies import require_admin, get_property_service, require_m
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.base import PaginatedResponse
-from app.schemas.property import PropertyCreate, PropertyUpdate, PropertyResponse
+from app.schemas.property import PropertyCreate, PropertyUpdate, PropertyResponse, PropertyAssignManager
 from app.services.property_service import PropertyService
-from app.services.exceptions import RelatedResourceNotFoundError, PropertyAlreadyExistsError, PropertyForbiddenError
+from app.services.exceptions import (
+    RelatedResourceNotFoundError,
+    PropertyAlreadyExistsError,
+    PropertyForbiddenError,
+    UserNotFoundError,
+    PropertyManagerAssignmentError,
+)
 
 router = APIRouter(prefix="/properties", tags=["Properties"])
 
@@ -94,3 +100,36 @@ async def delete_property(
         await property_service.delete_property(db, property_id, current_user=current_user)
     except RelatedResourceNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.patch(
+    "/{property_id}/assign-manager",
+    response_model=PropertyResponse,
+)
+async def assign_manager(
+    property_id: UUID,
+    payload: PropertyAssignManager,
+    db: AsyncSession = Depends(get_db),
+    property_service: PropertyService = Depends(get_property_service),
+    current_user: User = Depends(require_admin),
+):
+    """
+    Assign a manager to a property. Admin only.
+
+    This is the only code path that populates `Property.manager_id`
+    through the API — every manager-scoped authorization check across
+    Property, Contract, Document, and Payment depends on it being set this
+    way. Reassigning simply overwrites the previous manager; a property is
+    expected to be reassigned when a new contract goes active rather than
+    explicitly unassigned in between.
+    """
+
+    try:
+        return await property_service.assign_manager(db, property_id, payload.manager_id, current_user)
+
+    except RelatedResourceNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except UserNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except PropertyManagerAssignmentError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

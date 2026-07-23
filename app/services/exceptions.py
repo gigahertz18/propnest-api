@@ -44,6 +44,15 @@ class UserNotFoundError(ServiceException):
     pass
 
 
+class PropertyManagerAssignmentError(ServiceException):
+    """
+    Raised when a manager assignment references a user who exists
+    but does not have a MANAGER role.
+    """
+
+    pass
+
+
 class EmailAlreadyExistsError(ServiceException):
     """Raised when trying to create/update a user with a duplicate email."""
 

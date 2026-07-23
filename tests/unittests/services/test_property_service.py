@@ -8,9 +8,15 @@ from sqlalchemy.exc import IntegrityError
 from app.models.property import PropertyStatus
 from app.models.user import UserRole
 from app.services.property_service import PropertyService
-from app.services.exceptions import RelatedResourceNotFoundError, PropertyAlreadyExistsError, PropertyForbiddenError
+from app.services.exceptions import (
+    RelatedResourceNotFoundError,
+    PropertyAlreadyExistsError,
+    PropertyForbiddenError,
+    UserNotFoundError,
+    PropertyManagerAssignmentError,
+)
 from app.schemas.property import PropertyCreate, PropertyUpdate
-from tests.mock_repos import MockCRUDRepo
+from tests.mock_repos import MockCRUDRepo, MockReadOnlyRepo
 
 
 class MockPropertyRepo(MockCRUDRepo):
@@ -21,8 +27,25 @@ class MockPropertyRepo(MockCRUDRepo):
         return await self._filter_by(manager_id=manager_id)
 
 
-def _make_service(properties=None) -> PropertyService:
-    return PropertyService(property_repo=MockPropertyRepo(properties or {}))
+def _make_service(properties=None, users=None) -> PropertyService:
+    if properties is None:
+        property_repo = MockPropertyRepo({})
+    elif isinstance(properties, dict):
+        property_repo = MockPropertyRepo(properties)
+    else:
+        property_repo = properties
+
+    if users is None:
+        user_repo = None
+    elif isinstance(users, dict):
+        user_repo = MockReadOnlyRepo(users)
+    else:
+        user_repo = users
+
+    return PropertyService(
+        property_repo=property_repo,
+        user_repo=user_repo,
+    )
 
 
 def _admin() -> SimpleNamespace:
@@ -33,7 +56,7 @@ def _admin() -> SimpleNamespace:
 class TestListProperties:
     async def test_returns_all_properties(self, mock_db):
         prop = SimpleNamespace(id=uuid4())
-        svc = _make_service({prop.id: prop})
+        svc = _make_service(properties={prop.id: prop})
         result = await svc.list_properties(mock_db, current_user=_admin())
         assert result.items == [prop]
         assert result.total == 1
@@ -48,7 +71,7 @@ class TestListProperties:
         admin = SimpleNamespace(id=uuid4(), role=UserRole.ADMIN)
         owned_prop = SimpleNamespace(id=uuid4(), manager_id=uuid4())
         other_prop = SimpleNamespace(id=uuid4(), manager_id=uuid4())
-        svc = _make_service({owned_prop.id: owned_prop, other_prop.id: other_prop})
+        svc = _make_service(properties={owned_prop.id: owned_prop, other_prop.id: other_prop})
 
         result = await svc.list_properties(mock_db, current_user=admin)
 
@@ -62,7 +85,7 @@ class TestListProperties:
         authorization was silently skippable when current_user was
         omitted."""
         prop = SimpleNamespace(id=uuid4(), manager_id=uuid4())
-        svc = _make_service({prop.id: prop})
+        svc = _make_service(properties={prop.id: prop})
 
         with pytest.raises(TypeError):
             await svc.list_properties(mock_db)
@@ -72,7 +95,7 @@ class TestListProperties:
         manager = SimpleNamespace(id=manager_id, role=UserRole.MANAGER)
         owned = SimpleNamespace(id=uuid4(), manager_id=manager_id)
         other = SimpleNamespace(id=uuid4(), manager_id=uuid4())
-        svc = _make_service({owned.id: owned, other.id: other})
+        svc = _make_service(properties={owned.id: owned, other.id: other})
 
         result = await svc.list_properties(mock_db, current_user=manager)
 
@@ -84,7 +107,7 @@ class TestListProperties:
 class TestGetProperty:
     async def test_returns_property_when_found(self, mock_db):
         prop = SimpleNamespace(id=uuid4())
-        svc = _make_service({prop.id: prop})
+        svc = _make_service(properties={prop.id: prop})
         assert await svc.get_property(mock_db, prop.id, current_user=_admin()) is prop
 
     async def test_raises_when_not_found(self, mock_db):
@@ -94,14 +117,14 @@ class TestGetProperty:
 
     async def test_current_user_is_required(self, mock_db):
         prop = SimpleNamespace(id=uuid4(), manager_id=uuid4())
-        svc = _make_service({prop.id: prop})
+        svc = _make_service(properties={prop.id: prop})
         with pytest.raises(TypeError):
             await svc.get_property(mock_db, prop.id)
 
     async def test_admin_bypasses_ownership_check(self, mock_db):
         prop = SimpleNamespace(id=uuid4(), manager_id=uuid4())
         admin = SimpleNamespace(id=uuid4(), role=UserRole.ADMIN)
-        svc = _make_service({prop.id: prop})
+        svc = _make_service(properties={prop.id: prop})
 
         assert await svc.get_property(mock_db, prop.id, current_user=admin) is prop
 
@@ -109,14 +132,14 @@ class TestGetProperty:
         manager_id = uuid4()
         prop = SimpleNamespace(id=uuid4(), manager_id=manager_id)
         manager = SimpleNamespace(id=manager_id, role=UserRole.MANAGER)
-        svc = _make_service({prop.id: prop})
+        svc = _make_service(properties={prop.id: prop})
 
         assert await svc.get_property(mock_db, prop.id, current_user=manager) is prop
 
     async def test_manager_cannot_get_another_managers_property(self, mock_db):
         prop = SimpleNamespace(id=uuid4(), manager_id=uuid4())
         manager = SimpleNamespace(id=uuid4(), role=UserRole.MANAGER)
-        svc = _make_service({prop.id: prop})
+        svc = _make_service(properties={prop.id: prop})
 
         with pytest.raises(PropertyForbiddenError):
             await svc.get_property(mock_db, prop.id, current_user=manager)
@@ -143,7 +166,7 @@ class TestCreateProperty:
                     Exception('duplicate key value violates unique constraint "uq_property_name_address"'),
                 )
 
-        svc = PropertyService(property_repo=FailingRepo())
+        svc = _make_service(properties=FailingRepo())
         payload = PropertyCreate(name="Unit A", address="123 Main St")
 
         with pytest.raises(PropertyAlreadyExistsError):
@@ -154,7 +177,7 @@ class TestCreateProperty:
             async def create(self, db, payload):
                 raise IntegrityError("INSERT", {}, Exception("some unrelated constraint violation"))
 
-        svc = PropertyService(property_repo=FailingRepo())
+        svc = _make_service(properties=FailingRepo())
         payload = PropertyCreate(name="Unit A", address="123 Main St")
 
         with pytest.raises(IntegrityError):
@@ -165,7 +188,7 @@ class TestCreateProperty:
 class TestUpdateProperty:
     async def test_updates_existing_property(self, mock_db):
         prop = SimpleNamespace(id=uuid4(), name="Old Name", address="Old Address")
-        svc = PropertyService(property_repo=MockPropertyRepo({prop.id: prop}))
+        svc = _make_service(properties={prop.id: prop})
         payload = PropertyUpdate(name="New Name")
 
         updated = await svc.update_property(mock_db, prop.id, payload, current_user=_admin())
@@ -180,7 +203,7 @@ class TestUpdateProperty:
 
     async def test_current_user_is_required(self, mock_db):
         prop = SimpleNamespace(id=uuid4())
-        svc = PropertyService(property_repo=MockPropertyRepo({prop.id: prop}))
+        svc = _make_service(properties={prop.id: prop})
         with pytest.raises(TypeError):
             await svc.update_property(mock_db, prop.id, PropertyUpdate(name="New Name"))
 
@@ -194,7 +217,7 @@ class TestUpdateProperty:
             async def update(self, db, id, payload):
                 return None
 
-        svc = PropertyService(property_repo=Repo({prop.id: prop}))
+        svc = _make_service(properties=Repo({prop.id: prop}))
 
         result = await svc.update_property(mock_db, prop.id, PropertyUpdate(name="New Name"), current_user=_admin())
 
@@ -211,7 +234,8 @@ class TestUpdateProperty:
                     Exception('duplicate key value violates unique constraint "uq_property_name_address"'),
                 )
 
-        svc = PropertyService(property_repo=FailingRepo({prop.id: prop}))
+        # svc = PropertyService(property_repo=FailingRepo({prop.id: prop}))
+        svc = _make_service(properties=FailingRepo({prop.id: prop}))
 
         with pytest.raises(PropertyAlreadyExistsError):
             await svc.update_property(
@@ -225,7 +249,7 @@ class TestUpdateProperty:
             async def update(self, db, id, payload):
                 raise IntegrityError("UPDATE", {}, Exception("some unrelated constraint violation"))
 
-        svc = PropertyService(property_repo=FailingRepo({prop.id: prop}))
+        svc = _make_service(properties=FailingRepo({prop.id: prop}))
 
         with pytest.raises(IntegrityError):
             await svc.update_property(mock_db, prop.id, PropertyUpdate(name="Unit A"), current_user=_admin())
@@ -235,7 +259,8 @@ class TestUpdateProperty:
 class TestDeleteProperty:
     async def test_deletes_existing_property(self, mock_db):
         prop = SimpleNamespace(id=uuid4())
-        svc = PropertyService(property_repo=MockPropertyRepo({prop.id: prop}))
+
+        svc = _make_service(properties={prop.id: prop})
 
         deleted = await svc.delete_property(mock_db, prop.id, current_user=_admin())
 
@@ -249,7 +274,8 @@ class TestDeleteProperty:
 
     async def test_current_user_is_required(self, mock_db):
         prop = SimpleNamespace(id=uuid4())
-        svc = PropertyService(property_repo=MockPropertyRepo({prop.id: prop}))
+
+        svc = _make_service(properties={prop.id: prop})
         with pytest.raises(TypeError):
             await svc.delete_property(mock_db, prop.id)
 
@@ -260,7 +286,7 @@ class TestDeleteProperty:
             async def delete(self, db, id):
                 return None
 
-        svc = PropertyService(property_repo=Repo({prop.id: prop}))
+        svc = _make_service(properties=Repo({prop.id: prop}))
 
         result = await svc.delete_property(mock_db, prop.id, current_user=_admin())
 
@@ -271,10 +297,101 @@ class TestDeleteProperty:
 class TestGetByStatus:
     async def test_delegates_to_repo(self, mock_db):
         prop = SimpleNamespace(id=uuid4(), status=PropertyStatus.vacant)
-        svc = _make_service({prop.id: prop})
+        svc = _make_service(properties={prop.id: prop})
         assert await svc.get_by_status(mock_db, PropertyStatus.vacant) == [prop]
 
     async def test_returns_empty_list_when_none_match(self, mock_db):
         prop = SimpleNamespace(id=uuid4(), status=PropertyStatus.occupied)
-        svc = _make_service({prop.id: prop})
+        svc = _make_service(properties={prop.id: prop})
         assert await svc.get_by_status(mock_db, PropertyStatus.vacant) == []
+
+
+@pytest.mark.asyncio
+class TestAssignManager:
+    async def test_assigns_manager_successfully(self, mock_db):
+        prop = SimpleNamespace(id=uuid4(), manager_id=None)
+        manager_id = uuid4()
+        manager_user = SimpleNamespace(id=manager_id, role=UserRole.MANAGER)
+
+        svc = _make_service(
+            properties={prop.id: prop},
+            users={manager_id: manager_user},
+        )
+
+        updated = await svc.assign_manager(mock_db, prop.id, manager_id, current_user=_admin())
+
+        assert updated.manager_id == manager_id
+        assert mock_db.commit.called
+
+    async def test_reassigns_overwriting_previous_manager(self, mock_db):
+        old_manager_id = uuid4()
+        new_manager_id = uuid4()
+        prop = SimpleNamespace(id=uuid4(), manager_id=old_manager_id)
+        new_manager_user = SimpleNamespace(id=new_manager_id, role=UserRole.MANAGER)
+
+        svc = _make_service(
+            properties={prop.id: prop},
+            users={new_manager_id: new_manager_user},
+        )
+
+        updated = await svc.assign_manager(mock_db, prop.id, new_manager_id, current_user=_admin())
+
+        assert updated.manager_id == new_manager_id
+
+    async def test_raises_when_property_not_found(self, mock_db):
+
+        manager_id = uuid4()
+        svc = _make_service(users={manager_id: SimpleNamespace(id=manager_id, role=UserRole.MANAGER)})
+        with pytest.raises(RelatedResourceNotFoundError):
+            await svc.assign_manager(mock_db, uuid4(), manager_id, current_user=_admin())
+
+    async def test_raises_when_manager_user_not_found(self, mock_db):
+        prop = SimpleNamespace(id=uuid4(), manager_id=None)
+        svc = _make_service(properties={prop.id: prop}, users={})
+
+        with pytest.raises(UserNotFoundError):
+            await svc.assign_manager(mock_db, prop.id, uuid4(), current_user=_admin())
+
+    async def test_raises_when_assignee_is_not_a_manager(self, mock_db):
+        prop = SimpleNamespace(id=uuid4(), manager_id=None)
+        regular_user_id = uuid4()
+        regular_user = SimpleNamespace(id=regular_user_id, role=UserRole.USER)
+
+        svc = _make_service(
+            properties={prop.id: prop},
+            users={regular_user_id: regular_user},
+        )
+        with pytest.raises(PropertyManagerAssignmentError):
+            await svc.assign_manager(mock_db, prop.id, regular_user_id, current_user=_admin())
+
+    async def test_raises_when_assignee_is_an_admin(self, mock_db):
+        prop = SimpleNamespace(id=uuid4(), manager_id=None)
+        admin_id = uuid4()
+        admin_user = SimpleNamespace(id=admin_id, role=UserRole.ADMIN)
+
+        svc = _make_service(
+            properties={prop.id: prop},
+            users={admin_id: admin_user},
+        )
+
+        with pytest.raises(PropertyManagerAssignmentError):
+            await svc.assign_manager(mock_db, prop.id, admin_id, current_user=_admin())
+
+    async def test_current_user_is_required(self, mock_db):
+        prop = SimpleNamespace(id=uuid4(), manager_id=None)
+        manager_id = uuid4()
+
+        svc = _make_service(
+            properties={prop.id: prop},
+            users={manager_id: SimpleNamespace(id=manager_id, role=UserRole.MANAGER)},
+        )
+        with pytest.raises(TypeError):
+            await svc.assign_manager(mock_db, prop.id, manager_id)
+
+    async def test_raises_runtime_error_when_user_repo_not_injected(self, mock_db):
+        prop = SimpleNamespace(id=uuid4(), manager_id=None)
+
+        svc = _make_service(properties={prop.id: prop})
+
+        with pytest.raises(RuntimeError):
+            await svc.assign_manager(mock_db, prop.id, uuid4(), current_user=_admin())
