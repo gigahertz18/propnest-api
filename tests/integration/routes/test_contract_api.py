@@ -8,6 +8,7 @@ from tests.factories import (
     make_property_model,
     make_tenant_model,
     make_payment_model,
+    make_document_model,
 )
 
 
@@ -208,6 +209,16 @@ class TestDeleteContractRoute:
         tenant = await make_tenant_model(db)
         contract = await make_contract_model(db, prop.id, tenant.id)
         await make_payment_model(db, contract.id)
+
+        response = await client.delete(f"/api/v1/contracts/{contract.id}", headers=auth_ctx.headers)
+        assert response.status_code == 409
+
+    async def test_returns_409_when_contract_has_document(self, client, db, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, prop.id, tenant.id)
+        await make_document_model(db, contract_id=contract.id)
 
         response = await client.delete(f"/api/v1/contracts/{contract.id}", headers=auth_ctx.headers)
         assert response.status_code == 409
