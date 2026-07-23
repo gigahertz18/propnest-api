@@ -4,6 +4,9 @@ import uuid
 from tests.factories import (
     make_property,
     make_property_model,
+    make_tenant_model,
+    make_contract_model,
+    make_document_model,
 )
 
 
@@ -209,6 +212,32 @@ class TestDeletePropertyRoute:
             headers=ctx.headers,
         )
         assert response.status_code == 404
+
+    async def test_returns_409_when_property_has_contract(self, client, db, authenticate_admin):
+        ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        await make_contract_model(db, prop.id, tenant.id)
+
+        response = await client.delete(
+            f"/api/v1/properties/{prop.id}",
+            headers=ctx.headers,
+        )
+        assert response.status_code == 409
+
+    async def test_returns_409_when_property_has_document(self, client, db, authenticate_admin):
+        """Property is blocked by a document alone, independent of any contract —
+        `documents.property_id` has no `ondelete`, distinct from the
+        `contracts.property_id RESTRICT` case covered above."""
+        ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        await make_document_model(db, property_id=prop.id)
+
+        response = await client.delete(
+            f"/api/v1/properties/{prop.id}",
+            headers=ctx.headers,
+        )
+        assert response.status_code == 409
 
 
 @pytest.mark.asyncio

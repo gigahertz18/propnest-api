@@ -8,6 +8,7 @@ from tests.factories import (
     make_user_model,
     make_property_model,
     make_contract_model,
+    make_document_model,
 )
 
 
@@ -250,6 +251,31 @@ class TestDeleteTenantRoute:
             headers=ctx.headers,
         )
         assert response.status_code == 404
+
+    async def test_returns_409_when_tenant_has_document(self, client, db, authenticate_manager):
+        ctx = await authenticate_manager()
+        tenant = await make_tenant_model(db)
+        await make_document_model(db, tenant_id=tenant.id)
+
+        response = await client.delete(
+            f"/api/v1/tenants/{tenant.id}",
+            headers=ctx.headers,
+        )
+        assert response.status_code == 409
+
+    async def test_returns_409_when_tenant_has_contract(self, client, db, authenticate_manager):
+        """Tenant is blocked by a contract alone — contracts.tenant_id is
+        RESTRICT, distinct from the documents.tenant_id case above."""
+        ctx = await authenticate_manager()
+        prop = await make_property_model(db, manager_id=ctx.user.id)
+        tenant = await make_tenant_model(db)
+        await make_contract_model(db, property_id=prop.id, tenant_id=tenant.id)
+
+        response = await client.delete(
+            f"/api/v1/tenants/{tenant.id}",
+            headers=ctx.headers,
+        )
+        assert response.status_code == 409
 
     async def test_regular_user_cannot_delete(self, client, db, authenticate_user):
         ctx = await authenticate_user()

@@ -14,6 +14,7 @@ from app.services.exceptions import (
     PropertyForbiddenError,
     UserNotFoundError,
     PropertyManagerAssignmentError,
+    PropertyInUseError,
 )
 
 router = APIRouter(prefix="/properties", tags=["Properties"])
@@ -100,6 +101,8 @@ async def delete_property(
         await property_service.delete_property(db, property_id, current_user=current_user)
     except RelatedResourceNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except PropertyInUseError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
 @router.patch(

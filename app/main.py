@@ -1,9 +1,11 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from app.core.config import settings
 from app.core.logging import setup_logging
@@ -76,6 +78,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ─── Exception Handlers ───────────────────────────────────
+@app.exception_handler(IntegrityError)
+async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
+    """
+    Last-resort safety net for FK/unique-constraint violations that reach
+    the route layer without being translated into a domain exception first.
+    Services should still catch IntegrityError explicitly and raise a
+    specific exception where the failure mode is known (see
+    app/services/exceptions.py) — this handler exists so a future
+    relationship that's missed in a service degrades into a 409 instead of
+    a bare, unhandled 500.
+    """
+    logger.warning("Unhandled IntegrityError reached the global handler: %s", exc)
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={"detail": "This action conflicts with existing related records and cannot be completed."},
+    )
+
 
 # ─── Routers ──────────────────────────────────────────────
 app.include_router(auth.router, prefix=settings.API_V1_PREFIX)

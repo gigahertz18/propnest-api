@@ -9,6 +9,7 @@ from app.services.exceptions import (
     UserNotFoundError,
     EmailAlreadyExistsError,
     UsernameAlreadyExistsError,
+    ManagerAssignedToPropertyError,
 )
 from uuid import UUID
 
@@ -143,3 +144,5 @@ async def delete_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User {user_id} not found",
         )
+    except ManagerAssignedToPropertyError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))

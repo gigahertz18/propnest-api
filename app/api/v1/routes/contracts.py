@@ -9,7 +9,12 @@ from app.models.user import User
 from app.schemas.base import PaginatedResponse
 from app.schemas.contract import ContractCreate, ContractUpdate, ContractResponse
 from app.services.contract_service import ContractService
-from app.services.exceptions import ContractActiveError, RelatedResourceNotFoundError, ContractForbiddenError
+from app.services.exceptions import (
+    ContractActiveError,
+    RelatedResourceNotFoundError,
+    ContractForbiddenError,
+    ContractInUseError,
+)
 
 router = APIRouter(prefix="/contracts", tags=["Contracts"])
 
@@ -102,3 +107,5 @@ async def delete_contract(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ContractForbiddenError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except ContractInUseError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))

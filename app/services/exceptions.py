@@ -172,3 +172,38 @@ class PaymentForbiddenError(ResourceForbiddenError):
     """
 
     pass
+
+
+# ─── Delete conflicts (FK protection) ───────────────────────────────────────
+# Raised when a delete is rejected by the DB because a dependent row still
+# references the target (RESTRICT/NO ACTION foreign keys with no
+# compensating handling — see contracts.property_id/tenant_id,
+# documents.contract_id/property_id/tenant_id, payments.contract_id, and
+# properties.manager_id). Each service catches the resulting IntegrityError
+# on delete and translates it into one of these; routes map them to 409.
+class PropertyInUseError(ServiceException):
+    """Raised when deleting a property that is still referenced by a
+    contract or document."""
+
+    pass
+
+
+class ContractInUseError(ServiceException):
+    """Raised when deleting a contract that is still referenced by a
+    payment or document."""
+
+    pass
+
+
+class TenantInUseError(ServiceException):
+    """Raised when deleting a tenant that is still referenced by a
+    contract or document."""
+
+    pass
+
+
+class ManagerAssignedToPropertyError(ServiceException):
+    """Raised when deleting a user who is still assigned as manager_id
+    on one or more properties."""
+
+    pass

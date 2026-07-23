@@ -12,6 +12,7 @@ from app.services.exceptions import (
     UserNotFoundError,
     TenantAlreadyLinkedError,
     TenantForbiddenError,
+    TenantInUseError,
 )
 from app.services.tenant_service import TenantService
 
@@ -93,6 +94,8 @@ async def delete_tenant(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except TenantForbiddenError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except TenantInUseError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
 @router.put(

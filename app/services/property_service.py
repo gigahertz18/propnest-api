@@ -12,11 +12,12 @@ from app.schemas.property import PropertyCreate, PropertyUpdate
 from app.models.property import Property, PropertyStatus
 from app.models.user import User, UserRole
 from app.services.exceptions import (
-    RelatedResourceNotFoundError,
     PropertyAlreadyExistsError,
     PropertyForbiddenError,
-    UserNotFoundError,
     PropertyManagerAssignmentError,
+    PropertyInUseError,
+    RelatedResourceNotFoundError,
+    UserNotFoundError,
 )
 
 
@@ -96,9 +97,15 @@ class PropertyService:
 
     async def delete_property(self, db: AsyncSession, prop_id: UUID, current_user: User) -> Property:
         await self.get_property(db, prop_id, current_user=current_user)
-        prop = await self.property_repo.delete(db, prop_id)
-        await db.commit()
-        return prop
+        try:
+            prop = await self.property_repo.delete(db, prop_id)
+            await db.commit()
+            return prop
+        except IntegrityError as e:
+            raise PropertyInUseError(
+                f"Property {prop_id} cannot be deleted because it is still referenced by an "
+                "existing contract or document."
+            ) from e
 
     async def assign_manager(
         self,
