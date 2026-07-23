@@ -3,10 +3,10 @@ import uuid
 
 from app.models.user import UserRole
 from tests.factories import (
-    make_user_model, 
-    make_contract_model, 
-    make_property_model, 
-    make_tenant_model, 
+    make_user_model,
+    make_contract_model,
+    make_property_model,
+    make_tenant_model,
     make_payment_model,
 )
 

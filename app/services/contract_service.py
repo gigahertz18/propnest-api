@@ -14,7 +14,12 @@ from app.repositories.tenant import TenantRepository
 from app.schemas.base import PaginatedResponse
 from app.schemas.contract import ContractCreate, ContractUpdate
 from app.services.base import ResourceAuthorizationMixin
-from app.services.exceptions import ContractActiveError, RelatedResourceNotFoundError, ContractForbiddenError
+from app.services.exceptions import (
+    ContractActiveError,
+    ContractForbiddenError,
+    ContractInUseError,
+    RelatedResourceNotFoundError,
+)
 
 
 @dataclass(frozen=True)
@@ -137,9 +142,15 @@ class ContractService(ResourceAuthorizationMixin):
             current_user=current_user,
         )
 
-        contract = await self.contract_repo.delete(db, contract_id)
-        await db.commit()
-        return contract
+        try:
+            contract = await self.contract_repo.delete(db, contract_id)
+            await db.commit()
+            return contract
+        except IntegrityError as e:
+            raise ContractInUseError(
+                f"Contract {contract_id} cannot be deleted because it is still referenced by "
+                "an existing payment or document."
+            ) from e
 
     async def get_by_property(self, db: AsyncSession, property_id: UUID) -> Sequence[Contract]:
         return await self.contract_repo.get_by_property(db, property_id)

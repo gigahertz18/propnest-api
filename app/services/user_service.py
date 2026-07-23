@@ -9,6 +9,7 @@ from app.services.exceptions import (
     UserNotFoundError,
     EmailAlreadyExistsError,
     UsernameAlreadyExistsError,
+    ManagerAssignedToPropertyError,
 )
 from app.repositories.user import UserRepository
 
@@ -91,5 +92,11 @@ class UserService:
 
         if not user:
             raise UserNotFoundError("User not found")
-        await db.commit()
+
+        try:
+            await db.commit()
+        except IntegrityError as e:
+            raise ManagerAssignedToPropertyError(
+                f"User {id} cannot be deleted because they are still assigned as manager " "on one or more properties."
+            ) from e
         return user

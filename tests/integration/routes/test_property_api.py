@@ -211,7 +211,7 @@ class TestDeletePropertyRoute:
             headers=ctx.headers,
         )
         assert response.status_code == 404
-    
+
     async def test_returns_409_when_property_has_contract(self, client, db, authenticate_admin):
         ctx = await authenticate_admin()
         prop = await make_property_model(db)

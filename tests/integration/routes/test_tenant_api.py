@@ -251,7 +251,7 @@ class TestDeleteTenantRoute:
             headers=ctx.headers,
         )
         assert response.status_code == 404
-        
+
     async def test_returns_409_when_tenant_has_document(self, client, db, authenticate_manager):
         ctx = await authenticate_manager()
         tenant = await make_tenant_model(db)
@@ -262,7 +262,7 @@ class TestDeleteTenantRoute:
             headers=ctx.headers,
         )
         assert response.status_code == 409
-        
+
     async def test_regular_user_cannot_delete(self, client, db, authenticate_user):
         ctx = await authenticate_user()
         tenant = await make_tenant_model(db)

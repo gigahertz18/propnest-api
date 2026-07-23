@@ -174,8 +174,6 @@ class PaymentForbiddenError(ResourceForbiddenError):
     pass
 
 
-
-
 # ─── Delete conflicts (FK protection) ───────────────────────────────────────
 # Raised when a delete is rejected by the DB because a dependent row still
 # references the target (RESTRICT/NO ACTION foreign keys with no

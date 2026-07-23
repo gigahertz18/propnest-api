@@ -18,6 +18,7 @@ from app.services.exceptions import (
     UserNotFoundError,
     TenantAlreadyLinkedError,
     TenantForbiddenError,
+    TenantInUseError,
 )
 
 
@@ -103,9 +104,15 @@ class TenantService:
         current_user: User,
     ) -> Tenant:
         await self.get_tenant(db, id, current_user=current_user)
-        tenant = await self.tenant_repo.delete(db, id)
-        await db.commit()
-        return tenant
+
+        try:
+            tenant = await self.tenant_repo.delete(db, id)
+            await db.commit()
+            return tenant
+        except IntegrityError as e:
+            raise TenantInUseError(
+                f"Tenant {id} cannot be deleted because it is still referenced by an " "existing contract or document."
+            ) from e
 
     async def get_by_email(self, db: AsyncSession, email: str) -> Tenant | None:
         return await self.tenant_repo.get_by_email(db, email)
