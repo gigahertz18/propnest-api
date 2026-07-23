@@ -139,11 +139,18 @@ def get_user_service() -> UserService:
 
 
 def get_property_service() -> PropertyService:
-    return PropertyService(property_repo=property_repo)
+    return PropertyService(
+        property_repo=property_repo,
+        user_repo=user_repo,
+    )
 
 
 def get_contract_service() -> ContractService:
-    return ContractService(contract_repo=contract_repo, property_repo=property_repo, tenant_repo=tenant_repo)
+    return ContractService(
+        contract_repo=contract_repo,
+        property_repo=property_repo,
+        tenant_repo=tenant_repo,
+    )
 
 
 def get_tenant_service() -> TenantService:

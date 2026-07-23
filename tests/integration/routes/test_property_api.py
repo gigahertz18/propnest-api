@@ -209,3 +209,122 @@ class TestDeletePropertyRoute:
             headers=ctx.headers,
         )
         assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+class TestAssignManagerRoute:
+    async def test_admin_assigns_manager_successfully(self, client, db, authenticate_admin, authenticate_manager):
+        admin_ctx = await authenticate_admin()
+        mgr_ctx = await authenticate_manager()
+
+        prop = await make_property_model(db)
+
+        response = await client.patch(
+            f"/api/v1/properties/{prop.id}/assign-manager",
+            json={"manager_id": str(mgr_ctx.user.id)},
+            headers=admin_ctx.headers,
+        )
+
+        assert response.status_code == 200
+        assert response.json()["manager_id"] == str(mgr_ctx.user.id)
+
+    async def test_assigned_manager_can_then_list_and_access_property(
+        self, client, db, authenticate_admin, authenticate_manager
+    ):
+        admin_ctx = await authenticate_admin()
+        mgr_ctx = await authenticate_manager()
+        prop = await make_property_model(db)
+
+        assign_response = await client.patch(
+            f"/api/v1/properties/{prop.id}/assign-manager",
+            json={"manager_id": str(mgr_ctx.user.id)},
+            headers=admin_ctx.headers,
+        )
+
+        assert assign_response.status_code == 200
+
+        list_response = await client.get("/api/v1/properties/", headers=mgr_ctx.headers)
+        assert list_response.status_code == 200
+        list_data = list_response.json()
+        assert list_data["total"] == 1
+        assert list_data["items"][0]["id"] == str(prop.id)
+
+    async def test_reassigning_overwrites_previous_manager(
+        self,
+        client,
+        db,
+        authenticate_admin,
+        authenticate_manager,
+    ):
+        admin_ctx = await authenticate_admin()
+        mgr_ctx = await authenticate_manager()
+        second_mgr_ctx = await authenticate_manager(username="mgr2", email="mgr2@example.com")
+
+        prop = await make_property_model(db, manager_id=mgr_ctx.user.id)
+
+        response = await client.patch(
+            f"/api/v1/properties/{prop.id}/assign-manager",
+            json={"manager_id": str(second_mgr_ctx.user.id)},
+            headers=admin_ctx.headers,
+        )
+
+        assert response.status_code == 200
+        assert response.json()["manager_id"] == str(second_mgr_ctx.user.id)
+
+        first_mgr_access = await client.get(f"/api/v1/properties/{prop.id}", headers=mgr_ctx.headers)
+        assert first_mgr_access.status_code == 403
+
+    async def test_returns_404_when_property_not_found(self, client, authenticate_admin, authenticate_manager):
+        admin_ctx = await authenticate_admin()
+        mgr_ctx = await authenticate_manager()
+
+        response = await client.patch(
+            f"/api/v1/properties/{uuid.uuid4()}/assign-manager",
+            json={"manager_id": str(mgr_ctx.user.id)},
+            headers=admin_ctx.headers,
+        )
+
+        assert response.status_code == 404
+
+    async def test_returns_404_when_assignee_user_does_not_exist(self, client, db, authenticate_admin):
+        admin_ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+
+        response = await client.patch(
+            f"/api/v1/properties/{prop.id}/assign-manager",
+            json={"manager_id": str(uuid.uuid4())},
+            headers=admin_ctx.headers,
+        )
+
+        assert response.status_code == 404
+
+    async def test_returns_400_when_assignee_is_not_a_manager(
+        self,
+        client,
+        db,
+        authenticate_admin,
+        authenticate_user,
+    ):
+        admin_ctx = await authenticate_admin()
+        user_ctx = await authenticate_user()
+        prop = await make_property_model(db)
+
+        response = await client.patch(
+            f"/api/v1/properties/{prop.id}/assign-manager",
+            json={"manager_id": str(user_ctx.user.id)},
+            headers=admin_ctx.headers,
+        )
+
+        assert response.status_code == 400
+
+    async def test_returns_403_when_caller_is_not_admin(self, client, db, authenticate_manager):
+        mgr_ctx = await authenticate_manager()
+        prop = await make_property_model(db)
+
+        response = await client.patch(
+            f"/api/v1/properties/{prop.id}/assign-manager",
+            json={"manager_id": str(mgr_ctx.user.id)},
+            headers=mgr_ctx.headers,
+        )
+
+        assert response.status_code == 403

@@ -42,3 +42,16 @@ class PropertyResponse(PropertyBase, BaseResponse):
     manager_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
+
+
+# ─── Assign Manager ───────────────────────────────────────
+class PropertyAssignManager(BaseModel):
+    """Request body for assigning a manager to a property.
+
+    Admin-only, at the route layer. There is no corresponding unassign —
+    a property keeps its last-assigned manager between contracts and gets
+    reassigned (overwriting the previous value) the next time a new
+    contract goes active.
+    """
+
+    manager_id: uuid.UUID
