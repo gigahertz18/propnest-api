@@ -263,6 +263,20 @@ class TestDeleteTenantRoute:
         )
         assert response.status_code == 409
 
+    async def test_returns_409_when_tenant_has_contract(self, client, db, authenticate_manager):
+        """Tenant is blocked by a contract alone — contracts.tenant_id is
+        RESTRICT, distinct from the documents.tenant_id case above."""
+        ctx = await authenticate_manager()
+        prop = await make_property_model(db, manager_id=ctx.user.id)
+        tenant = await make_tenant_model(db)
+        await make_contract_model(db, property_id=prop.id, tenant_id=tenant.id)
+
+        response = await client.delete(
+            f"/api/v1/tenants/{tenant.id}",
+            headers=ctx.headers,
+        )
+        assert response.status_code == 409
+
     async def test_regular_user_cannot_delete(self, client, db, authenticate_user):
         ctx = await authenticate_user()
         tenant = await make_tenant_model(db)
