@@ -11,6 +11,8 @@ from app.schemas.base import PaginatedResponse
 from app.schemas.property import PropertyCreate, PropertyUpdate
 from app.models.property import Property, PropertyStatus
 from app.models.user import User, UserRole
+from app.services.base import ResourceAuthorizationMixin
+from app.services.utils import integrity_error_message
 from app.services.exceptions import (
     PropertyAlreadyExistsError,
     PropertyForbiddenError,
@@ -21,7 +23,7 @@ from app.services.exceptions import (
 )
 
 
-class PropertyService:
+class PropertyService(ResourceAuthorizationMixin):
     """Thin business layer for `Property` operations."""
 
     def __init__(self, property_repo: PropertyRepository, user_repo: UserRepository | None = None) -> None:
@@ -35,22 +37,8 @@ class PropertyService:
         skip: int = 0,
         limit: int = 100,
     ) -> PaginatedResponse[Property]:
-        """`current_user` is required — see TenantService.list_tenants'
-        docstring for why an optional, silently-skippable auth parameter
-        is a footgun this codebase has already been bitten by once."""
-        if current_user.role == UserRole.MANAGER:
-            items = await self.property_repo.get_all_for_manager(
-                db,
-                current_user.id,
-                skip=skip,
-                limit=limit,
-            )
-            total = await self.property_repo.count_all_for_manager(db, current_user.id)
-        else:
-            items = await self.property_repo.get_all(db, skip=skip, limit=limit)
-            total = await self.property_repo.count_all(db)
-
-        return PaginatedResponse(items=items, total=total)
+        """Admins see every property; managers only see their own."""
+        return await self._list_scoped_by_manager(db, current_user, self.property_repo, skip, limit)
 
     async def get_property(self, db: AsyncSession, prop_id: UUID, current_user: User) -> Property:
         prop = await self.property_repo.get_by_id(db, prop_id)
@@ -68,8 +56,7 @@ class PropertyService:
             await db.commit()
             return prop
         except IntegrityError as e:
-            msg = str(e.orig) if getattr(e, "orig", None) is not None else str(e)
-            if "uq_property_name_address" in msg:
+            if "uq_property_name_address" in integrity_error_message(e):
                 raise PropertyAlreadyExistsError(
                     f"A property named '{payload.name}' at '{payload.address}' already exists."
                 )
@@ -78,20 +65,16 @@ class PropertyService:
     async def update_property(
         self, db: AsyncSession, prop_id: UUID, payload: PropertyUpdate, current_user: User
     ) -> Property:
-        # Today update/delete are admin-only at the route layer, so this
-        # check always bypasses in practice — but it's threaded through
-        # explicitly so the code stays correct the moment that route
-        # requirement is ever loosened to manager-or-above, rather than
-        # silently allowing a manager to touch any property because
-        # nobody remembered to wire this up at that point.
+        """Update/delete are admin-only at the route layer for now, so this
+        always bypasses in practice - kept explicit so the code stays
+        correct if that route requirement is ever loosened"""
         await self.get_property(db, prop_id, current_user=current_user)
         try:
             prop = await self.property_repo.update(db, prop_id, payload)
             await db.commit()
             return prop
         except IntegrityError as e:
-            msg = str(e.orig) if getattr(e, "orig", None) is not None else str(e)
-            if "uq_property_name_address" in msg:
+            if "uq_property_name_address" in integrity_error_message(e):
                 raise PropertyAlreadyExistsError("A property with this name and address already exists.")
             raise
 
@@ -116,24 +99,17 @@ class PropertyService:
     ) -> Property:
         """
         Assign a manager to a property. Admin-only at the route layer.
-
-        This is the only code path that populates `Property.manager_id`
-        outside of direct DB writes in tests — every manager-scoped
-        authorization check in the app (`ResourceAuthorizationMixin`,
-        `PropertyService.get_property`, and the manager-scoped list/get
-        across Contract/Document/Payment) depends on this field being set
-        through here.
-
+        The only path that populates `Property.manager_id` outside of
+        direct DB writes in tests — every manager-scoped authorization
+        check in the app depends on this field being set through here.
+        No unassign path: reassigning overwrites the current manager_id.
         There is no unassign path: reassigning simply overwrites the
         current `manager_id` rather than clearing it in between contracts.
 
         Raises:
-            RelatedResourceNotFoundError: bubbled up from `get_property`
-                if `prop_id` doesn't exist.
-            UserNotFoundError: if `manager_id` doesn't reference an
-                existing user.
-            UserNotManagerError: if the referenced user exists but doesn't
-                have the MANAGER role.
+            RelatedResourceNotFoundError: `prop_id` doesn't exist.
+            UserNotFoundError: `manager_id` doesn't reference an existing user.
+            PropertyManagerAssignmentError: the referenced user isn't a MANAGER.
         """
         if self.user_repo is None:
             raise RuntimeError(f"{type(self).__name__}.assign_manager requires user_repo to be injected.")

@@ -13,6 +13,8 @@ from app.repositories.tenant import TenantRepository
 from app.repositories.user import UserRepository
 from app.schemas.base import PaginatedResponse
 from app.schemas.tenant import TenantCreate, TenantUpdate
+from app.services.base import ResourceAuthorizationMixin
+from app.services.utils import integrity_error_message
 from app.services.exceptions import (
     RelatedResourceNotFoundError,
     UserNotFoundError,
@@ -22,7 +24,7 @@ from app.services.exceptions import (
 )
 
 
-class TenantService:
+class TenantService(ResourceAuthorizationMixin):
     """Business logic for `Tenant` entities."""
 
     def __init__(
@@ -40,26 +42,10 @@ class TenantService:
         skip: int = 0,
         limit: int = 100,
     ) -> PaginatedResponse[Tenant]:
-        """Admins see every tenant. Managers only see tenants tied to
-        their own properties, plus tenants nobody has attached to a
-        property yet.
-
-        `current_user` is required, not optional: every caller (route or
-        otherwise) must be explicit about who's asking, so a call site
-        that forgets to pass it fails loudly with a TypeError instead of
-        silently returning everything to nobody-in-particular. That
-        silent-bypass shape is exactly what let Tenant/Document
-        authorization regress unnoticed once already — see the P0 task
-        list for the incident this fixes.
-        """
-        if current_user.role == UserRole.MANAGER:
-            items = await self.tenant_repo.get_all_for_manager(db, current_user.id, skip=skip, limit=limit)
-            total = await self.tenant_repo.count_all_for_manager(db, current_user.id)
-        else:
-            items = await self.tenant_repo.get_all(db, skip=skip, limit=limit)
-            total = await self.tenant_repo.count_all(db)
-
-        return PaginatedResponse(items=items, total=total)
+        """Admins see every tenant; managers only see tenants tied to
+        their own properties, plus ones nobody has attached to a
+        property yet."""
+        return await self._list_scoped_by_manager(db, current_user, self.tenant_repo, skip, limit)
 
     async def get_tenant(
         self,
@@ -111,7 +97,7 @@ class TenantService:
             return tenant
         except IntegrityError as e:
             raise TenantInUseError(
-                f"Tenant {id} cannot be deleted because it is still referenced by an " "existing contract or document."
+                f"Tenant {id} cannot be deleted because it is still referenced by an existing contract or document."
             ) from e
 
     async def get_by_email(self, db: AsyncSession, email: str) -> Tenant | None:
@@ -173,14 +159,11 @@ class TenantService:
         current_user: User,
     ) -> Tenant:
         """
-        Link a tenant to a portal-access `User` account.
-
-        Nullable + unique on `tenant.user_id` means a tenant can exist
-        before they have portal access, and get linked/invited later.
-        Both sides of the 1:1 are checked explicitly so callers get a
-        specific domain exception rather than a raw `IntegrityError` —
-        the unique constraint on `tenant.user_id` remains as the final
-        backstop against races between concurrent requests.
+        Link a tenant to a portal-access `User` account. Nullable +
+        unique on `tenant.user_id` lets a tenant exist before they have
+        portal access. Both sides of the 1:1 are checked explicitly for
+        a specific domain exception; the DB constraint remains the
+        final backstop against concurrent-request races.
         """
         tenant = await self.get_tenant(db, tenant_id, current_user=current_user)
 
@@ -201,7 +184,7 @@ class TenantService:
             return tenant
         except IntegrityError as e:
             await db.rollback()
-            msg = str(e.orig) if getattr(e, "orig", None) is not None else str(e)
+            msg = integrity_error_message(e)
             if "ix_tenants_user_id" in msg or "tenants_user_id" in msg:
                 raise TenantAlreadyLinkedError(f"User {user_id} is already linked to a different tenant.")
             raise
