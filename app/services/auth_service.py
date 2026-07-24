@@ -74,7 +74,3 @@ class AuthService:
                 "username": user.username,
             }
         )
-
-
-# Note: no module-level AuthService singleton here. Use a FastAPI dependency
-# (`get_auth_service`) to construct/override in tests.

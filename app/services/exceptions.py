@@ -119,6 +119,18 @@ class DocumentDeletionError(ServiceException):
     pass
 
 
+class DocumentStorageInconsistentError(ServiceException):
+    """Raised when a document's DB row was committed pointing at a new
+    storage key, but promoting the staged upload to that key afterward
+    failed. Unlike DocumentUploadError (nothing was persisted — safe to
+    retry the whole operation) or DocumentDeletionError (an old,
+    no-longer-referenced object couldn't be removed — cosmetic orphan),
+    this means the document row and its backing storage are genuinely
+    out of sync and need manual or async remediation."""
+
+    pass
+
+
 class DocumentForbiddenError(ResourceForbiddenError):
     """Raised when a document is acccessed by an unauthorized user"""
 

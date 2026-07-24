@@ -9,6 +9,7 @@ from app.services.document_service import DocumentService
 from app.services.exceptions import (
     RelatedResourceNotFoundError,
     DocumentForbiddenError,
+    DocumentStorageInconsistentError,
     DocumentUploadError,
     ResourceForbiddenError,
 )
@@ -31,14 +32,17 @@ class FakeStorageClient:
         self.put_calls: list[str] = []
         self.remove_calls: list[str] = []
         self.raise_on_put = raise_on_put
+        self.objects: dict[str, bytes] = {}
 
     def put_object(self, bucket, name, stream, length, content_type=None):
         if self.raise_on_put:
             raise self.raise_on_put
         self.put_calls.append(name)
+        self.objects[name] = stream.read()
 
     def remove_object(self, bucket, name):
         self.remove_calls.append(name)
+        self.objects.pop(name, None)
 
 
 class MockDocumentRepoWithScoping(MockCRUDRepo):
@@ -787,9 +791,10 @@ class TestReplaceDocumentFile:
         assert repo.updated_payloads == []
 
     async def test_new_storage_object_cleaned_up_when_db_update_fails(self, mock_db):
-        """Upload succeeds, DB update raises → the newly uploaded object
-        must be removed from storage, and the OLD object must be left
-        alone since the DB record was never actually changed."""
+        """Upload succeeds (to a staging key), DB update raises → the
+        staged object must be removed from storage, and neither the OLD
+        nor the NEW canonical key is ever touched — promotion never
+        happens because the DB record was never actually changed."""
         doc_id, doc = self._make_doc("original.pdf")
         storage = FakeStorageClient()
         svc = _make_service(documents={doc_id: doc})
@@ -814,8 +819,87 @@ class TestReplaceDocumentFile:
                 current_user=make_admin(),
             )
 
-        assert f"documents/{doc_id}_new.pdf" in storage.remove_calls
-        assert f"documents/{doc_id}_original.pdf" not in storage.remove_calls
+        new_key = f"documents/{doc_id}_new.pdf"
+        old_key = f"documents/{doc_id}_original.pdf"
+        assert new_key not in storage.put_calls
+        assert new_key not in storage.remove_calls
+        assert old_key not in storage.remove_calls
+        staged_removals = [k for k in storage.remove_calls if k.startswith(f"documents/_staging/{doc_id}_")]
+        assert len(staged_removals) == 1
+
+    async def test_original_file_survives_failed_db_update_with_unchanged_filename(self, mock_db):
+        """The exact regression this fix targets: replacing a document's
+        file while KEEPING its filename means the 'new' and 'old'
+        canonical keys are the literal same string. If the DB update then
+        fails, the original bytes at that key must still be there
+        afterward — the service must never write to it before the commit
+        succeeds."""
+        doc_id, doc = self._make_doc("same_name.pdf")
+        storage = FakeStorageClient()
+        canonical_key = f"documents/{doc_id}_same_name.pdf"
+        storage.objects[canonical_key] = b"%PDF-1.4 original content"
+
+        svc = _make_service(documents={doc_id: doc})
+        payload = DocumentFileUpdate(
+            file_name="same_name.pdf",
+            file_type="application/pdf",
+            file_url="http://minio/bucket/same_name.pdf",
+        )
+
+        async def failing_update(*args, **kwargs):
+            raise RuntimeError("DB connection lost")
+
+        svc.document_repo.update = failing_update
+
+        with pytest.raises(RuntimeError):
+            await svc.replace_document_file(
+                mock_db,
+                doc_id,
+                payload,
+                storage_client=storage,
+                file_obj=self._make_file_obj("same_name.pdf"),
+                current_user=make_admin(),
+            )
+
+        # The original object at the canonical key was never touched.
+        assert storage.objects[canonical_key] == b"%PDF-1.4 original content"
+        assert canonical_key not in storage.remove_calls
+        assert canonical_key not in storage.put_calls
+
+    async def test_promotion_failure_after_commit_raises_storage_inconsistent_error(self, mock_db):
+        """DB commit succeeds, but writing the staged bytes to the
+        canonical key afterward fails (e.g. a transient storage blip) →
+        this must surface as DocumentStorageInconsistentError, distinct
+        from DocumentUploadError (nothing was persisted) and
+        DocumentDeletionError (an orphan couldn't be cleaned up)."""
+        doc_id, doc = self._make_doc("original.pdf")
+        svc = _make_service(documents={doc_id: doc})
+        payload = DocumentFileUpdate(
+            file_name="new.pdf",
+            file_type="application/pdf",
+            file_url="http://minio/bucket/new.pdf",
+        )
+
+        class FailsOnSecondPut(FakeStorageClient):
+            def __init__(self):
+                super().__init__()
+                self._puts = 0
+
+            def put_object(self, bucket, name, stream, length, content_type=None):
+                self._puts += 1
+                if self._puts >= 2:
+                    raise RuntimeError("MinIO blip")
+                super().put_object(bucket, name, stream, length, content_type)
+
+        with pytest.raises(DocumentStorageInconsistentError):
+            await svc.replace_document_file(
+                mock_db,
+                doc_id,
+                payload,
+                storage_client=FailsOnSecondPut(),
+                file_obj=self._make_file_obj("new.pdf"),
+                current_user=make_admin(),
+            )
 
     async def test_reraises_original_db_error_when_cleanup_also_fails(self, mock_db):
         doc_id, doc = self._make_doc("original.pdf")

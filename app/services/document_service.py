@@ -23,6 +23,7 @@ from app.services.base import ResourceAuthorizationMixin
 from app.services.exceptions import (
     DocumentUploadError,
     DocumentForbiddenError,
+    DocumentStorageInconsistentError,
     RelatedResourceNotFoundError,
     DocumentDeletionError,
 )
@@ -242,15 +243,27 @@ class DocumentService(ResourceAuthorizationMixin):
         Replace the file behind an existing document, optionally updating its
         property, contract, or tenant association.
 
-        The operation uploads the new file, updates the document record, and
-        removes the old file after a successful commit. If the database update
-        fails after the upload, the newly uploaded file is deleted to prevent
-        orphaned storage objects.
+        The new file is uploaded to a one-off staging key first, so the
+        document's *current* file is never written to until the database
+        update has actually committed. Only after that commit succeeds is
+        the staged upload promoted to the document's canonical storage
+        key — and only then is the old file (if its key differs from the
+        new one) removed. If the database update fails, only the staging
+        object is deleted; the original file is left completely
+        untouched — including when the replacement keeps the same
+        filename, where the "new" and "old" canonical keys are the same
+        string and would otherwise be destroyed before the DB write was
+        even confirmed.
 
         Raises:
             RelatedResourceNotFoundError: The document or a related resource was not found.
             DocumentForbiddenError: The current user is not authorized to modify the document.
-            DocumentUploadError: Uploading the new file failed.
+            DocumentUploadError: Uploading the new file failed (nothing was persisted).
+            DocumentStorageInconsistentError: The database commit succeeded but promoting
+                the staged upload to its canonical key then failed. The document row now
+                points at a storage key that doesn't hold the new content yet — this needs
+                manual/async remediation (the staged bytes are still at the staging key
+                named in the error, pending cleanup).
             DocumentDeletionError: Deleting the old file from storage failed.
         """
         doc = await self.get_document(db, doc_id, current_user=current_user)
@@ -276,12 +289,25 @@ class DocumentService(ResourceAuthorizationMixin):
 
         old_storage_key = self._build_storage_key(doc_id, doc.file_name)
 
-        # Upload first — no DB write yet. _upload_to_storage only reads
-        # file_name/file_type off its payload, so a SimpleNamespace avoids
-        # needing a full DocumentCreate here.
+        # Read + validate once, so the same bytes can be written to a
+        # storage key more than once without re-reading file_obj (it's a
+        # single-pass stream).
         try:
-            self._upload_to_storage(storage_client, storage_key, resolved_payload, file_obj)
-        except:
+            data, content_type = self._read_and_validate_upload(resolved_payload, file_obj)
+        except Exception:
+            logger.exception("Storage upload failed for %s", storage_key)
+            raise
+
+        # Upload to a one-off staging key — never directly to storage_key.
+        # storage_key can be identical to old_storage_key (unchanged
+        # filename), and old_storage_key is where the CURRENT,
+        # still-DB-referenced file lives until the update below actually
+        # commits. Writing new bytes there first would destroy that file
+        # before we know whether we're keeping it.
+        staging_key = self._build_staging_key(doc_id)
+        try:
+            self._put_object(storage_client, staging_key, data, content_type)
+        except Exception:
             logger.exception("Storage upload failed for %s", storage_key)
             raise
 
@@ -290,12 +316,35 @@ class DocumentService(ResourceAuthorizationMixin):
             await db.commit()
         except Exception:
             try:
-                self._delete_from_storage(storage_client, storage_key)
+                self._delete_from_storage(storage_client, staging_key)
             except DocumentDeletionError:
                 logger.exception(
-                    f"Orphaned storage object {storage_key} could not be cleaned up after DB write failure."
+                    f"Orphaned staging object {staging_key} could not be cleaned up after DB write failure."
                 )
             raise
+
+        # DB commit succeeded — only now is it safe to touch the
+        # canonical key(s). Promote the staged upload to become the
+        # document's actual file, whether or not that key happens to
+        # equal old_storage_key.
+        try:
+            self._put_object(storage_client, storage_key, data, content_type)
+        except DocumentUploadError as exc:
+            logger.critical(
+                f"Document {doc_id} was committed with file_url pointing at "
+                f"{storage_key}, but promoting staged upload {staging_key} to "
+                f"that key failed; the document row and storage are now "
+                f"inconsistent and need manual repair. Staged content is "
+                f"still at {staging_key} pending cleanup."
+            )
+            raise DocumentStorageInconsistentError(
+                f"Document {doc_id} committed but promoting {staging_key} to {storage_key} failed: {exc}"
+            ) from exc
+
+        try:
+            self._delete_from_storage(storage_client, staging_key)
+        except DocumentDeletionError:
+            logger.exception(f"Staging object {staging_key} could not be cleaned up after successful promotion.")
 
         if old_storage_key != storage_key:
             try:
@@ -383,8 +432,23 @@ class DocumentService(ResourceAuthorizationMixin):
         Never by trusting `file_obj.content_type` or `payload.file_type` alone.
 
         """
-        bucket = settings.MINIO_BUCKET_NAME
 
+        data, content_type = self._read_and_validate_upload(payload, file_obj)
+        self._put_object(storage_client, storage_key, data, content_type)
+
+    def _read_and_validate_upload(
+        self,
+        payload: DocumentCreate | DocumentFileUpdate,
+        file_obj,
+    ) -> tuple[bytes, str]:
+        """
+        Read `file_obj` fully into memory and validate it, without touching
+        storage. Returns `(data, sniffed_content_type)` so the same
+        validated bytes can be written to more than one storage key —
+        see `replace_document_file`, which stages an upload before
+        promoting it to its canonical key. Raises DocumentUploadError on
+        any validation failure.
+        """
         stream = getattr(file_obj, "file", file_obj)
         declared_type = getattr(file_obj, "content_type", None) or payload.file_type
 
@@ -419,13 +483,25 @@ class DocumentService(ResourceAuthorizationMixin):
         if data is not None and len(data) > self._MAX_FILE_SIZE:
             raise DocumentUploadError("File too large")
 
+        return data, sniffed_type
+
+    def _put_object(
+        self,
+        storage_client,
+        storage_key: str,
+        data: bytes,
+        content_type: str,
+    ) -> None:
+        """Write already-validated bytes to `storage_key`. Raises
+        DocumentUploadError on failure."""
+        bucket = settings.MINIO_BUCKET_NAME
         try:
             storage_client.put_object(
                 bucket,
                 storage_key,
                 BytesIO(data),
                 len(data),
-                content_type=sniffed_type,
+                content_type=content_type,
             )
         except Exception as e:
             raise DocumentUploadError(f"Storage upload failed: {e}") from e
@@ -513,3 +589,14 @@ class DocumentService(ResourceAuthorizationMixin):
         filename = Path(file_name).name
 
         return f"documents/{document_id}_{filename}"
+
+    def _build_staging_key(self, document_id: UUID) -> str:
+        """
+        Build a one-off key for a staged upload — never a document's
+        canonical key. Namespaced under `documents/_staging/`, a segment
+        `_build_storage_key` can never itself produce (it only ever
+        yields `documents/{document_id}_{filename}`), and suffixed with a
+        random token so concurrent replacements of the same document
+        can't collide with each other.
+        """
+        return f"documents/_staging/{document_id}_{uuid4().hex}"
