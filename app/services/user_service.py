@@ -4,14 +4,15 @@ from sqlalchemy.exc import IntegrityError
 from uuid import UUID
 
 from app.models.user import User
+from app.repositories.user import UserRepository
 from app.schemas.user import UserCreate, UserUpdate
+from app.services.utils import integrity_error_message
 from app.services.exceptions import (
     UserNotFoundError,
     EmailAlreadyExistsError,
     UsernameAlreadyExistsError,
     ManagerAssignedToPropertyError,
 )
-from app.repositories.user import UserRepository
 
 
 class UserService:
@@ -43,22 +44,19 @@ class UserService:
             raise UsernameAlreadyExistsError("A user with this username already exists")
 
         # Create may still fail under concurrent requests due to DB unique
-        # constraints. Translate IntegrityError into domain exceptions.
+        # constraints - translate IntegrityError into domain exceptions.
         try:
             user = await self.user_repo.create(db, payload)
             await db.commit()
             return user
         except IntegrityError as e:
-            # Inspect DB driver's error message to determine which unique
-            # constraint was violated. This is defensive and intentionally
-            # tolerant across DB drivers.
-            msg = str(e.orig) if getattr(e, "orig", None) is not None else str(e)
+            msg = integrity_error_message(e)
             if "email" in msg or "users_email" in msg or "users_email_key" in msg:
                 raise EmailAlreadyExistsError("A user with this email already exists")
             if "username" in msg or "users_username" in msg or "users_username_key" in msg:
                 raise UsernameAlreadyExistsError("A user with this username already exists")
-            # Unknown integrity problem — re-raise as a generic username/email
-            # collision to avoid leaking DB details to route layer.
+            # Unknown constraint - treat as a generic collision rather
+            # than leaking DB drtails to the route layer
             raise EmailAlreadyExistsError("A user with this email or username already exists")
 
     async def update_user(self, db: AsyncSession, id: UUID, payload: UserUpdate) -> User:
@@ -75,7 +73,7 @@ class UserService:
         try:
             user = await self.user_repo.update(db, id, payload)
         except IntegrityError as e:
-            msg = str(e.orig) if getattr(e, "orig", None) is not None else str(e)
+            msg = integrity_error_message(e)
             if "email" in msg or "users_email" in msg:
                 raise EmailAlreadyExistsError("A user with this email already exists")
             if "username" in msg or "users_username" in msg:
@@ -97,6 +95,6 @@ class UserService:
             await db.commit()
         except IntegrityError as e:
             raise ManagerAssignedToPropertyError(
-                f"User {id} cannot be deleted because they are still assigned as manager " "on one or more properties."
+                f"User {id} cannot be deleted because they are still assigned as manager on one or more properties."
             ) from e
         return user

@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 
 from app.core.config import settings
 from app.models.document import Document
-from app.models.user import User, UserRole
+from app.models.user import User
 from app.repositories.document import DocumentRepository
 from app.repositories.contract import ContractRepository
 from app.repositories.property import PropertyRepository
@@ -52,13 +52,13 @@ class DocumentService(ResourceAuthorizationMixin):
     """Business logic for `Document` entities.
 
     Optionally accepts a storage client (e.g., MinIO) for uploading files.
-    When provided with a file-like object (`file_obj`) the service will perform
-    basic MIME and size validation and stream the content to the storage
-    client. THe MIME type used for validation and storage is sniffed from the
-    file's own magic bytes/signnature - `file_obj.content_type` and
-    `payload.file_type` are request-supplied metadata adn are never trusted for this purpose,
-    sine both are attacker-controlled and neither reflects the actual bytes being uploaded.
-    Errors are translated to domain exceptions so routes can respond appropriately
+    When given a file-like object (`file_obj`), the service validates
+    MIME/size and streams it to storage. The MIME type used for
+    validation is sniffed from the file's own magic bytes/signature —
+    `file_obj.content_type` and `payload.file_type` are request-supplied
+    metadata and are never trusted for this, since both are
+    attacker-controlled and neither reflects the actual bytes uploaded.
+    Errors are translated to domain exceptions so routes can respond appropriately.
     """
 
     # Default max file size (10 MB) and a small allowed MIME set for now.
@@ -100,21 +100,9 @@ class DocumentService(ResourceAuthorizationMixin):
         skip: int = 0,
         limit: int = 100,
     ) -> PaginatedResponse[Document]:
-        """Admins see every document. Managers only see documents tied to
-        one of their own properties.
-
-        `current_user` is required, not optional — see
-        TenantService.list_tenants' docstring for why an optional,
-        silently-skippable auth parameter is a footgun this codebase has
-        already been bitten by once."""
-        if current_user.role == UserRole.MANAGER:
-            items = await self.document_repo.get_all_for_manager(db, current_user.id, skip=skip, limit=limit)
-            total = await self.document_repo.count_all_for_manager(db, current_user.id)
-        else:
-            items = await self.document_repo.get_all(db, skip=skip, limit=limit)
-            total = await self.document_repo.count_all(db)
-
-        return PaginatedResponse(items=items, total=total)
+        """Admins see every document; managers only see documents tied
+        to one of their own properties."""
+        return await self._list_scoped_by_manager(db, current_user, self.document_repo, skip, limit)
 
     async def get_document(
         self,
@@ -240,31 +228,23 @@ class DocumentService(ResourceAuthorizationMixin):
         current_user: User | None = None,
     ) -> Document | None:
         """
-        Replace the file behind an existing document, optionally updating its
-        property, contract, or tenant association.
+        Replace the file behind an existing document, optionally
+        updating its property/contract/tenant association.
 
-        The new file is uploaded to a one-off staging key first, so the
-        document's *current* file is never written to until the database
-        update has actually committed. Only after that commit succeeds is
-        the staged upload promoted to the document's canonical storage
-        key — and only then is the old file (if its key differs from the
-        new one) removed. If the database update fails, only the staging
-        object is deleted; the original file is left completely
-        untouched — including when the replacement keeps the same
-        filename, where the "new" and "old" canonical keys are the same
-        string and would otherwise be destroyed before the DB write was
-        even confirmed.
+        Upload flow: stage the new file under a one-off key, commit the
+        DB update, then promote the staged bytes to the canonical key
+        and remove the old file. The document's *current* file is never
+        touched until the DB update commits, so any failure along the
+        way leaves the original file intact — even when the new and old
+        filenames are the same and would otherwise share a key.
 
         Raises:
-            RelatedResourceNotFoundError: The document or a related resource was not found.
-            DocumentForbiddenError: The current user is not authorized to modify the document.
-            DocumentUploadError: Uploading the new file failed (nothing was persisted).
-            DocumentStorageInconsistentError: The database commit succeeded but promoting
-                the staged upload to its canonical key then failed. The document row now
-                points at a storage key that doesn't hold the new content yet — this needs
-                manual/async remediation (the staged bytes are still at the staging key
-                named in the error, pending cleanup).
-            DocumentDeletionError: Deleting the old file from storage failed.
+            RelatedResourceNotFoundError: document or related resource not found.
+            DocumentForbiddenError: current_user not authorized.
+            DocumentUploadError: uploading the new file failed (nothing persisted).
+            DocumentStorageInconsistentError: DB committed but promoting the staged
+                upload to its canonical key failed — needs manual remediation.
+            DocumentDeletionError: deleting the old file from storage failed.
         """
         doc = await self.get_document(db, doc_id, current_user=current_user)
 
@@ -277,6 +257,7 @@ class DocumentService(ResourceAuthorizationMixin):
             current_user=current_user,
         )
         storage_key = self._build_storage_key(doc_id, payload.file_name)
+        old_storage_key = self._build_storage_key(doc_id, doc.file_name)
 
         resolved_payload = DocumentFileUpdate(
             file_name=payload.file_name,
@@ -287,33 +268,49 @@ class DocumentService(ResourceAuthorizationMixin):
             tenant_id=ctx.tenant_id,
         )
 
-        old_storage_key = self._build_storage_key(doc_id, doc.file_name)
+        # Read once so the same bytes can be written to more than one
+        # storage key without re-reading file_obj (single-pass stream)
+        data, content_type = self._read_and_validate_upload(resolved_payload, file_obj)
 
-        # Read + validate once, so the same bytes can be written to a
-        # storage key more than once without re-reading file_obj (it's a
-        # single-pass stream).
-        try:
-            data, content_type = self._read_and_validate_upload(resolved_payload, file_obj)
-        except Exception:
-            logger.exception("Storage upload failed for %s", storage_key)
-            raise
-
-        # Upload to a one-off staging key — never directly to storage_key.
-        # storage_key can be identical to old_storage_key (unchanged
-        # filename), and old_storage_key is where the CURRENT,
-        # still-DB-referenced file lives until the update below actually
-        # commits. Writing new bytes there first would destroy that file
-        # before we know whether we're keeping it.
+        # Stage to one-off key first - never directly to storage_key,
+        # which may equal old_storage_key (unchanged filename) and is
+        # where the current, still-DB-reference file lives until the update below commits
         staging_key = self._build_staging_key(doc_id)
-        try:
-            self._put_object(storage_client, staging_key, data, content_type)
-        except Exception:
-            logger.exception("Storage upload failed for %s", storage_key)
-            raise
+        self._put_object(storage_client, staging_key, data, content_type)
 
+        updated = await self._commit_file_replacement(
+            db,
+            doc_id,
+            resolved_payload,
+            storage_client,
+            staging_key,
+        )
+        self._promote_staged_upload(
+            storage_client,
+            doc_id,
+            staging_key,
+            storage_key,
+            data,
+            content_type,
+        )
+        self._finalize_replacement_cleanup(storage_client, staging_key, old_storage_key, storage_key)
+
+        return updated
+
+    async def _commit_file_replacement(
+        self,
+        db: AsyncSession,
+        doc_id: UUID,
+        resolved_payload: DocumentFileUpdate,
+        storage_client,
+        staging_key: str,
+    ) -> Document | None:
+        """Commit the DB update; on failure, remove the now-orphaned
+        staging object and re-raise the original error."""
         try:
             updated = await self.document_repo.update(db, doc_id, resolved_payload)
             await db.commit()
+            return updated
         except Exception:
             try:
                 self._delete_from_storage(storage_client, staging_key)
@@ -323,28 +320,43 @@ class DocumentService(ResourceAuthorizationMixin):
                 )
             raise
 
-        # DB commit succeeded — only now is it safe to touch the
-        # canonical key(s). Promote the staged upload to become the
-        # document's actual file, whether or not that key happens to
-        # equal old_storage_key.
+    def _promote_staged_upload(
+        self,
+        storage_client,
+        doc_id: UUID,
+        staging_key: str,
+        storage_key: str,
+        data: bytes,
+        content_type: str,
+    ) -> None:
+        """DB commit succeeded - promote the staged bytes to the
+        canonical key. Failure here means the row and storage are out of sync
+        and need manual repair."""
+
         try:
             self._put_object(storage_client, storage_key, data, content_type)
         except DocumentUploadError as exc:
             logger.critical(
-                f"Document {doc_id} was committed with file_url pointing at "
-                f"{storage_key}, but promoting staged upload {staging_key} to "
-                f"that key failed; the document row and storage are now "
-                f"inconsistent and need manual repair. Staged content is "
-                f"still at {staging_key} pending cleanup."
+                f"Promoting staged upload {staging_key} to {storage_key} for Document {doc_id} failed; "
+                f"DB and Storage are now inconsistent. Please investigate."
             )
-            raise DocumentStorageInconsistentError(
-                f"Document {doc_id} committed but promoting {staging_key} to {storage_key} failed: {exc}"
-            ) from exc
+            raise DocumentStorageInconsistentError(f"File replacement failed: {exc}") from exc
+
+    def _finalize_replacement_cleanup(
+        self,
+        storage_client,
+        staging_key: str,
+        old_storage_key: str,
+        storage_key: str,
+    ) -> None:
+        """Best-effort cleanup after a successful promotion: remove the staging object,
+        and the old file if its key differs from the new one. Failures are logged,
+        not riased - the document is already correctly updated."""
 
         try:
             self._delete_from_storage(storage_client, staging_key)
         except DocumentDeletionError:
-            logger.exception(f"Staging object {staging_key} could not be cleaned up after successful promotion.")
+            logger.exception(f"Staging object {staging_key} could not be cleaned up after succesful promotion.")
 
         if old_storage_key != storage_key:
             try:
@@ -352,10 +364,8 @@ class DocumentService(ResourceAuthorizationMixin):
             except DocumentDeletionError:
                 logger.exception(
                     f"Orphaned old storage object {old_storage_key} could not be cleaned up "
-                    f"after successful document update; need manual/async cleanup."
+                    f"after successful document update; needs manual cleanup."
                 )
-
-        return updated
 
     async def delete_document(
         self,
@@ -426,12 +436,10 @@ class DocumentService(ResourceAuthorizationMixin):
         payload: DocumentCreate | DocumentFileUpdate,
         file_obj,
     ) -> None:
-        """
-        Validate and stream file to storage. Raises DocumentUploadError on failure.
-        The file's real type is determined by sniffing its magic bytes/signature.
-        Never by trusting `file_obj.content_type` or `payload.file_type` alone.
-
-        """
+        """Validate and stream file to storage. Raises
+        DocumentUploadError on failure. The real type is sniffed from
+        magic bytes, never trusted from `file_obj.content_type` or
+        `payload.file_type` alone."""
 
         data, content_type = self._read_and_validate_upload(payload, file_obj)
         self._put_object(storage_client, storage_key, data, content_type)
@@ -441,14 +449,12 @@ class DocumentService(ResourceAuthorizationMixin):
         payload: DocumentCreate | DocumentFileUpdate,
         file_obj,
     ) -> tuple[bytes, str]:
-        """
-        Read `file_obj` fully into memory and validate it, without touching
-        storage. Returns `(data, sniffed_content_type)` so the same
-        validated bytes can be written to more than one storage key —
-        see `replace_document_file`, which stages an upload before
-        promoting it to its canonical key. Raises DocumentUploadError on
-        any validation failure.
-        """
+        """Read `file_obj` fully into memory and validate it, without
+        touching storage. Returns `(data, sniffed_content_type)` so the
+        same validated bytes can be written to more than one storage key
+        (see `replace_document_file`). Raises DocumentUploadError on
+        any validation failure."""
+
         stream = getattr(file_obj, "file", file_obj)
         declared_type = getattr(file_obj, "content_type", None) or payload.file_type
 
@@ -507,13 +513,11 @@ class DocumentService(ResourceAuthorizationMixin):
             raise DocumentUploadError(f"Storage upload failed: {e}") from e
 
     def _sniff_content_type(self, data: bytes) -> str | None:
-        """
-        Determine a file's actual MIME type from its magic bytes/signature.
+        """Determine a file's actual MIME type from its magic
+        bytes/signature (`data` is a prefix — see
+        `_SIGNATURE_PEEK_SIZE`). Returns None if unrecognized; callers
+        still check the result against `_ALLOWED_MIME`."""
 
-        `data` should be a prefix of the file (see `_SIGNATURE_PEEK_SIZE`).
-        Returns the sniffed MIME type, or None if the bytes don't match any recognized signature.
-        This method only identifies the type - callers still checks the restult against `_ALLOWED_MIME`.
-        """
         if data.startswith(self._PDF_MAGIC):
             return "application/pdf"
         if data.startswith(self._PNG_MAGIC):
@@ -533,7 +537,7 @@ class DocumentService(ResourceAuthorizationMixin):
         try:
             storage_client.remove_object(settings.MINIO_BUCKET_NAME, storage_key)
         except Exception as e:
-            logger.warning(f"Failed to cleanup orphaned. storage object after DB write failure: {storage_key}")
+            logger.warning(f"Failed to cleanup orphaned storage object after DB write failure: {storage_key}")
             raise DocumentDeletionError(f"File deletion failed: {e}")
 
     async def _prepare_document_context(
@@ -546,18 +550,13 @@ class DocumentService(ResourceAuthorizationMixin):
         tenant_id: UUID | None = None,
         current_user: User | None = None,
     ) -> DocumentContext:
-        """
-        Prepare a DocumentContext for a document operation.
-
-        - Resolves the property/contract/tenant context.
-        - Validates that any provided property_id, contract_id, or tenant_id exist.
-        - Authorizes the current_user against the resolved property/contract.
+        """Resolve the property/contract/tenant context, validate any
+        provided ids exist, and authorize current_user against the
+        resolved property/contract.
 
         Raises:
-            RelatedResourceNotFoundError: if any provided property_id,
-                contract_id, or tenant_id doesn't exist.
-            DocumentForbiddenError: if current_user isn't authorized to
-                manage the resolved property/contract.
+            RelatedResourceNotFoundError: an id was provided but doesn't exist.
+            DocumentForbiddenError: current_user isn't authorized.
         """
         effective_property_id = property_id if property_id is not None else doc.property_id if doc else None
         effective_contract_id = contract_id if contract_id is not None else doc.contract_id if doc else None
@@ -591,12 +590,8 @@ class DocumentService(ResourceAuthorizationMixin):
         return f"documents/{document_id}_{filename}"
 
     def _build_staging_key(self, document_id: UUID) -> str:
-        """
-        Build a one-off key for a staged upload — never a document's
-        canonical key. Namespaced under `documents/_staging/`, a segment
-        `_build_storage_key` can never itself produce (it only ever
-        yields `documents/{document_id}_{filename}`), and suffixed with a
-        random token so concurrent replacements of the same document
-        can't collide with each other.
-        """
+        """Build a one-off key for a staged upload — never a document's
+        canonical key. Namespaced under `documents/_staging/` (a prefix
+        `_build_storage_key` never produces) and suffixed with a random
+        token so concurrent replacements can't collide."""
         return f"documents/_staging/{document_id}_{uuid4().hex}"
