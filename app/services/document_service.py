@@ -432,52 +432,6 @@ class DocumentService(ResourceAuthorizationMixin):
         Never by trusting `file_obj.content_type` or `payload.file_type` alone.
 
         """
-        # bucket = settings.MINIO_BUCKET_NAME
-
-        # stream = getattr(file_obj, "file", file_obj)
-        # declared_type = getattr(file_obj, "content_type", None) or payload.file_type
-
-        # # "image/jpg" is a non-standard but common alias for "image/jpeg"
-        # # treat it as a match rather than a mismatch when sniffed as JPEG.
-        # if declared_type == "image/jpg":
-        #     declared_type = "image/jpeg"
-
-        # # Peek a small prefix first - enough to sniff the signature,
-        # # so we can reject mislabled/oversized upload without buffering the whole body in memory.
-        # prefix = stream.read(self._SIGNATURE_PEEK_SIZE)
-        # sniffed_type = self._sniff_content_type(prefix)
-
-        # if sniffed_type is None or sniffed_type not in self._ALLOWED_MIME:
-        #     logger.warning(
-        #         "Rejected upload %s: signature did not match an allowed type "
-        #         "(client declared content_type=%r, file_type=%r)",
-        #         payload.file_name,
-        #         getattr(file_obj, "content_type", None),
-        #         payload.file_type,
-        #     )
-        #     raise DocumentUploadError("Unsupported file type")
-
-        # if sniffed_type != declared_type:
-        #     raise DocumentUploadError("File type mismatch")
-
-        # # Now read the remainder, capped one byte past the size limit
-        # # so we can detect an oversized file without loading it all into memory.
-        # remaining_cap = self._MAX_FILE_SIZE + 1 - len(prefix)
-        # remainder = stream.read(remaining_cap) if remaining_cap > 0 else b""
-        # data = prefix + remainder
-        # if data is not None and len(data) > self._MAX_FILE_SIZE:
-        #     raise DocumentUploadError("File too large")
-
-        # try:
-        #     storage_client.put_object(
-        #         bucket,
-        #         storage_key,
-        #         BytesIO(data),
-        #         len(data),
-        #         content_type=sniffed_type,
-        #     )
-        # except Exception as e:
-        #     raise DocumentUploadError(f"Storage upload failed: {e}") from e
 
         data, content_type = self._read_and_validate_upload(payload, file_obj)
         self._put_object(storage_client, storage_key, data, content_type)
