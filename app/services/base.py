@@ -43,10 +43,6 @@ class ResourceAuthorizationMixin:
             raise RuntimeError(f"{type(self).__name__}._get_document requires document_repo to be injected.")
         return await self.document_repo.get_by_id(db, document_id)
 
-    @staticmethod
-    def _not_found(entity: str, entity_id: UUID) -> RelatedResourceNotFoundError:
-        return RelatedResourceNotFoundError(f"{entity} {entity_id} not found.")
-
     async def _resolve_property(
         self,
         db: AsyncSession,
@@ -63,18 +59,18 @@ class ResourceAuthorizationMixin:
         if property_id is not None:
             prop = await self._get_property(db, property_id)
             if prop is None:
-                raise self._not_found("Property", property_id)
+                raise RelatedResourceNotFoundError(f"Property {property_id} not found.")
             return prop
 
         if contract_id is None:
             return None
         contract = await self._get_contract(db, contract_id)
         if contract is None:
-            raise self._not_found("Contract", contract_id)
+            raise RelatedResourceNotFoundError(f"Contract {contract_id} not found.")
 
         prop = await self._get_property(db, contract.property_id)
         if prop is None:
-            raise self._not_found("Property", contract.property_id)
+            raise RelatedResourceNotFoundError(f"Property {property_id} not found.")
 
         return prop
 
@@ -100,20 +96,17 @@ class ResourceAuthorizationMixin:
         if property_id is not None:
             prop = await self._get_property(db, property_id)
             if prop is None:
-                # raise RelatedResourceNotFoundError(f"Property {property_id} not found.")
-                raise self._not_found("Property", property_id)
+                raise RelatedResourceNotFoundError(f"Property {property_id} not found.")
 
         if contract_id is not None:
             contract = await self._get_contract(db, contract_id)
             if contract is None:
-                # raise RelatedResourceNotFoundError(f"Contract {contract_id} not found.")
-                raise self._not_found("Contract", contract_id)
+                raise RelatedResourceNotFoundError(f"Contract {contract_id} not found.")
 
         if tenant_id is not None:
             tenant = await self._get_tenant(db, tenant_id)
             if tenant is None:
-                # raise RelatedResourceNotFoundError(f"Tenant {tenant_id} not found.")
-                raise self._not_found("Tenant", tenant_id)
+                raise RelatedResourceNotFoundError(f"Tenant {tenant_id} not found.")
 
     async def _authorize_user_to_property(
         self,
