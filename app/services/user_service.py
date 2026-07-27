@@ -37,27 +37,22 @@ class UserService:
         return user
 
     async def create_user(self, db: AsyncSession, payload: UserCreate) -> User:
-        # Pre-check to provide fast feedback in the common case
+        # Pre-check for fast feedback in the common case
         if await self.user_repo.get_by_email(db, payload.email):
             raise EmailAlreadyExistsError("A user with this email already exists")
         if await self.user_repo.get_by_username(db, payload.username):
             raise UsernameAlreadyExistsError("A user with this username already exists")
 
-        # Create may still fail under concurrent requests due to DB unique
-        # constraints - translate IntegrityError into domain exceptions.
+        # Concurrent requests can still race past the pre-check - translate
+        # the resulting IntegrityError into a domain exception
         try:
             user = await self.user_repo.create(db, payload)
             await db.commit()
             return user
         except IntegrityError as e:
-            msg = integrity_error_message(e)
-            if "email" in msg or "users_email" in msg or "users_email_key" in msg:
-                raise EmailAlreadyExistsError("A user with this email already exists")
-            if "username" in msg or "users_username" in msg or "users_username_key" in msg:
-                raise UsernameAlreadyExistsError("A user with this username already exists")
-            # Unknown constraint - treat as a generic collision rather
-            # than leaking DB drtails to the route layer
-            raise EmailAlreadyExistsError("A user with this email or username already exists")
+            self._raise_conflict(
+                e, default=EmailAlreadyExistsError("A user with this email or username already exists")
+            )
 
     async def update_user(self, db: AsyncSession, id: UUID, payload: UserUpdate) -> User:
         if payload.email is not None:
@@ -73,12 +68,7 @@ class UserService:
         try:
             user = await self.user_repo.update(db, id, payload)
         except IntegrityError as e:
-            msg = integrity_error_message(e)
-            if "email" in msg or "users_email" in msg:
-                raise EmailAlreadyExistsError("A user with this email already exists")
-            if "username" in msg or "users_username" in msg:
-                raise UsernameAlreadyExistsError("A user with this username already exists")
-            raise
+            self._raise_conflict(e)
 
         if not user:
             raise UserNotFoundError("User not found")
@@ -98,3 +88,18 @@ class UserService:
                 f"User {id} cannot be deleted because they are still assigned as manager on one or more properties."
             ) from e
         return user
+
+    @staticmethod
+    def _raise_conflict(e: IntegrityError, default: Exception | None = None) -> None:
+        """
+        Translate an email/username unique-constraint violation into the matching domain exception.
+        `default`, if given, is raised for an unrecognized constraint instead of re-raising `e`.
+        """
+        msg = integrity_error_message(e)
+        if "email" in msg:
+            raise EmailAlreadyExistsError("A user with this email already exists") from e
+        if "username" in msg:
+            raise UsernameAlreadyExistsError("A user with this username already exists") from e
+        if default:
+            raise default from e
+        raise

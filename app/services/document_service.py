@@ -52,13 +52,10 @@ class DocumentService(ResourceAuthorizationMixin):
     """Business logic for `Document` entities.
 
     Optionally accepts a storage client (e.g., MinIO) for uploading files.
-    When given a file-like object (`file_obj`), the service validates
-    MIME/size and streams it to storage. The MIME type used for
-    validation is sniffed from the file's own magic bytes/signature —
-    `file_obj.content_type` and `payload.file_type` are request-supplied
-    metadata and are never trusted for this, since both are
-    attacker-controlled and neither reflects the actual bytes uploaded.
-    Errors are translated to domain exceptions so routes can respond appropriately.
+    Given a file-like object (`file_obj`), the service validates MIME/size
+    and streams it to storage. The MIME type is sniffed from the file's own mgaic bytes,
+    never trusted frmo `file_obj.content_type` or `payload.file_type`. Errors are translated
+    to domain exceptions for the route layer.
     """
 
     # Default max file size (10 MB) and a small allowed MIME set for now.
@@ -232,18 +229,16 @@ class DocumentService(ResourceAuthorizationMixin):
         updating its property/contract/tenant association.
 
         Upload flow: stage the new file under a one-off key, commit the
-        DB update, then promote the staged bytes to the canonical key
-        and remove the old file. The document's *current* file is never
-        touched until the DB update commits, so any failure along the
-        way leaves the original file intact — even when the new and old
-        filenames are the same and would otherwise share a key.
+        DB update, then promote to the canonical key and remove the old file.
+        The current file is never touched until the DB update commits,
+        so a failure anywhere leaves the original file intact - even when the new and old filename
+        are the same.
 
         Raises:
             RelatedResourceNotFoundError: document or related resource not found.
             DocumentForbiddenError: current_user not authorized.
             DocumentUploadError: uploading the new file failed (nothing persisted).
-            DocumentStorageInconsistentError: DB committed but promoting the staged
-                upload to its canonical key failed — needs manual remediation.
+            DocumentStorageInconsistentError: DB committed but promotion failed - needs manual remediation
             DocumentDeletionError: deleting the old file from storage failed.
         """
         doc = await self.get_document(db, doc_id, current_user=current_user)
@@ -351,12 +346,12 @@ class DocumentService(ResourceAuthorizationMixin):
     ) -> None:
         """Best-effort cleanup after a successful promotion: remove the staging object,
         and the old file if its key differs from the new one. Failures are logged,
-        not riased - the document is already correctly updated."""
+        not raised - the document is already correctly updated."""
 
         try:
             self._delete_from_storage(storage_client, staging_key)
         except DocumentDeletionError:
-            logger.exception(f"Staging object {staging_key} could not be cleaned up after succesful promotion.")
+            logger.exception(f"Staging object {staging_key} could not be cleaned up after successful promotion.")
 
         if old_storage_key != storage_key:
             try:
@@ -551,37 +546,27 @@ class DocumentService(ResourceAuthorizationMixin):
         current_user: User | None = None,
     ) -> DocumentContext:
         """Resolve the property/contract/tenant context, validate any
-        provided ids exist, and authorize current_user against the
-        resolved property/contract.
+        provided ids exist, and authorize current_user against it.
 
         Raises:
             RelatedResourceNotFoundError: an id was provided but doesn't exist.
             DocumentForbiddenError: current_user isn't authorized.
         """
-        effective_property_id = property_id if property_id is not None else doc.property_id if doc else None
-        effective_contract_id = contract_id if contract_id is not None else doc.contract_id if doc else None
-        effective_tenant_id = tenant_id if tenant_id is not None else doc.tenant_id if doc else None
 
-        await self._validate_related_resources(
-            db,
-            property_id=effective_property_id,
-            contract_id=effective_contract_id,
-            tenant_id=effective_tenant_id,
-        )
+        ids = self._resolve_ids(doc, property_id=property_id, contract_id=contract_id, tenant_id=tenant_id)
+        await self._validate_related_resources(db, **ids)
 
         if current_user:
             await self._authorize_user_to_property(
                 db,
                 current_user,
-                property_id=effective_property_id,
-                contract_id=effective_contract_id,
+                property_id=ids["property_id"],
+                contract_id=ids["contract_id"],
             )
 
         return DocumentContext(
             document=doc,
-            property_id=effective_property_id,
-            contract_id=effective_contract_id,
-            tenant_id=effective_tenant_id,
+            **ids,
         )
 
     def _build_storage_key(self, document_id: UUID, file_name: str) -> str:

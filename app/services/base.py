@@ -160,3 +160,14 @@ class ResourceAuthorizationMixin:
             items = await repo.get_all(db, skip=skip, limit=limit)
             total = await repo.count_all(db)
         return PaginatedResponse(items=items, total=total)
+
+    @staticmethod
+    def _resolve_ids(entity, **overrides: UUID | None) -> dict[str, UUID | None]:
+        """Resolve each override against `entity`'s same-named attribute
+        when the override is None. Shared by the `_prepare_*_context` helpers
+        in Document/Contract/Payment service for computing
+        the "effective" id set on an update/delete."""
+        return {
+            field: value if value is not None else (getattr(entity, field, None) if entity else None)
+            for field, value in overrides.items()
+        }

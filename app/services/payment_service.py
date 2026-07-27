@@ -148,19 +148,18 @@ class PaymentService(ResourceAuthorizationMixin):
         contract_id: UUID | None = None,
         current_user: User | None = None,
     ) -> PaymentContext:
-        effective_contract_id = contract_id if contract_id is not None else payment.contract_id if payment else None
-
-        await self._validate_related_resources(db, contract_id=effective_contract_id)
+        ids = self._resolve_ids(payment, contract_id=contract_id)
+        await self._validate_related_resources(db, **ids)
 
         if current_user:
             await self._authorize_user_to_property(
                 db,
                 current_user,
                 property_id=None,
-                contract_id=effective_contract_id,
+                contract_id=ids["contract_id"],
             )
 
         return PaymentContext(
             payment=payment,
-            contract_id=effective_contract_id,
+            **ids,
         )

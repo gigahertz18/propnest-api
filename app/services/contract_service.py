@@ -176,23 +176,21 @@ class ContractService(ResourceAuthorizationMixin):
         current_user: User | None = None,
     ) -> ContractContext:
 
-        effective_property_id = property_id if property_id is not None else contract.property_id if contract else None
-        effective_tenant_id = tenant_id if tenant_id is not None else contract.tenant_id if contract else None
-
-        await self._validate_related_resources(db, property_id=effective_property_id, tenant_id=effective_tenant_id)
+        ids = self._resolve_ids(contract, property_id=property_id, tenant_id=tenant_id)
+        await self._validate_related_resources(db, **ids)
 
         if current_user:
             await self._authorize_user_to_property(
                 db,
                 current_user,
-                property_id=effective_property_id,
+                property_id=ids["property_id"],
                 contract_id=contract.id if contract else None,
             )
 
         return ContractContext(
             contract=contract,
-            property_id=effective_property_id,
-            tenant_id=effective_tenant_id,
+            property_id=ids["property_id"],
+            tenant_id=ids["tenant_id"],
         )
 
     @staticmethod

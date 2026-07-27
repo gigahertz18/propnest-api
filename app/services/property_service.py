@@ -56,27 +56,22 @@ class PropertyService(ResourceAuthorizationMixin):
             await db.commit()
             return prop
         except IntegrityError as e:
-            if "uq_property_name_address" in integrity_error_message(e):
-                raise PropertyAlreadyExistsError(
-                    f"A property named '{payload.name}' at '{payload.address}' already exists."
-                )
-            raise
+            self._raise_if_name_address_conflict(e, f"A property named '{payload.name}' at '{payload.address}'")
 
     async def update_property(
         self, db: AsyncSession, prop_id: UUID, payload: PropertyUpdate, current_user: User
     ) -> Property:
-        """Update/delete are admin-only at the route layer for now, so this
-        always bypasses in practice - kept explicit so the code stays
-        correct if that route requirement is ever loosened"""
+        """Update/delete are admin-only at the route layer, so the ownership check below
+        always passes in practice - kept explicit so this stays correct if the route
+        requirement is ever loosened.
+        """
         await self.get_property(db, prop_id, current_user=current_user)
         try:
             prop = await self.property_repo.update(db, prop_id, payload)
             await db.commit()
             return prop
         except IntegrityError as e:
-            if "uq_property_name_address" in integrity_error_message(e):
-                raise PropertyAlreadyExistsError("A property with this name and address already exists.")
-            raise
+            self._raise_if_name_address_conflict(e, "A property with this name and address already exists.")
 
     async def delete_property(self, db: AsyncSession, prop_id: UUID, current_user: User) -> Property:
         await self.get_property(db, prop_id, current_user=current_user)
@@ -128,3 +123,11 @@ class PropertyService(ResourceAuthorizationMixin):
 
     async def get_by_status(self, db: AsyncSession, status: PropertyStatus) -> Sequence[Property]:
         return await self.property_repo.get_by_status(db, status)
+
+    @staticmethod
+    def _raise_if_name_address_conflict(e: IntegrityError, subject: str) -> None:
+        """Translate a `uq_property_name_address` violation into `PropertyAlreadyExistsError`;
+        re-raises unrelated IntegrityErrors."""
+        if "uq_property_name_address" in integrity_error_message(e):
+            raise PropertyAlreadyExistsError(f"{subject} already exists.") from e
+        raise e
