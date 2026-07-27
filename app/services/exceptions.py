@@ -114,7 +114,7 @@ class DocumentUploadError(ServiceException):
 
 
 class DocumentDeletionError(ServiceException):
-    """Raised when deleting a document failes due to external storage errors."""
+    """Raised when deleting a document fails due to external storage errors."""
 
     pass
 
@@ -132,7 +132,7 @@ class DocumentStorageInconsistentError(ServiceException):
 
 
 class DocumentForbiddenError(ResourceForbiddenError):
-    """Raised when a document is acccessed by an unauthorized user"""
+    """Raised when a document is accessed by an unauthorized user"""
 
     pass
 

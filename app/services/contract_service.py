@@ -14,6 +14,7 @@ from app.repositories.tenant import TenantRepository
 from app.schemas.base import PaginatedResponse
 from app.schemas.contract import ContractCreate, ContractUpdate
 from app.services.base import ResourceAuthorizationMixin
+from app.services.utils import integrity_error_message
 from app.services.exceptions import (
     ContractActiveError,
     ContractForbiddenError,
@@ -64,11 +65,9 @@ class ContractService(ResourceAuthorizationMixin):
         current_user: User | None = None,
     ) -> Contract:
         """
-        Rely on DB constraint to prevent race conditions where two concurrent
-        requests attempt to create an ACTIVE contract for the same property.
-        Attempt the insert and translate unique/constraint errors into the
-        domain-specific `ContractActiveError` so callers get a consistent
-        response without depending on a fragile pre-check.
+        Relies on a DB constraint (not a pre-check) to prevent
+        two concurrent requests both creating an ACTIVE contract for the same property;
+        a resulting IntegrityError is translated into `ContractActiveError`
         """
         ctx = await self._prepare_contract_context(
             db,
@@ -101,14 +100,12 @@ class ContractService(ResourceAuthorizationMixin):
         current_user: User | None = None,
     ) -> Contract | None:
         """
-        Rely on the DB here: ContractUpdate can't change property_id,
-        but it can flip `status` back to ACTIVE (e.g reactivating TERMINATED contract)
-        on a property that has since picked up a different active contract.
-        Same partial unique index as create_contract, so translate the same way
+        `ContractUpdate` can't change `property_id`, but it can flip `status`
+        back to ACTIVE - same partial unique index as `create_contract`, translated the same way
         """
         contract = await self.get_contract(db, contract_id)
 
-        # this is for authorization only. no need to use the returned context
+        # validates related resources and enforces authorization
         await self._prepare_contract_context(
             db,
             contract=contract,
@@ -179,32 +176,29 @@ class ContractService(ResourceAuthorizationMixin):
         current_user: User | None = None,
     ) -> ContractContext:
 
-        effective_property_id = property_id if property_id is not None else contract.property_id if contract else None
-        effective_tenant_id = tenant_id if tenant_id is not None else contract.tenant_id if contract else None
-
-        await self._validate_related_resources(db, property_id=effective_property_id, tenant_id=effective_tenant_id)
+        ids = self._resolve_ids(contract, property_id=property_id, tenant_id=tenant_id)
+        await self._validate_related_resources(db, **ids)
 
         if current_user:
             await self._authorize_user_to_property(
                 db,
                 current_user,
-                property_id=effective_property_id,
+                property_id=ids["property_id"],
                 contract_id=contract.id if contract else None,
             )
 
         return ContractContext(
             contract=contract,
-            property_id=effective_property_id,
-            tenant_id=effective_tenant_id,
+            property_id=ids["property_id"],
+            tenant_id=ids["tenant_id"],
         )
 
     @staticmethod
     def _raise_if_active_contract_conflict(e: IntegrityError) -> None:
         """
-        Translate a violation of the `uq_active_contract_property` partial unique index
-        into the domain `ContractActiveError`. Shared by create_contract and update_contract since both can hit it
-        leaves unrelated IntegrityErrors for the caller to reraise as-is.
+        Translate a violation of `uq_active_contract_property` into `ContractActiveError`;
+        leaves unrelated IntegrityErrors for the caller to re-raise as is.
         """
-        msg = str(e.orig) if getattr(e, "orig", None) is not None else str(e)
+        msg = integrity_error_message(e)
         if "uq_active_contract_property" in msg or ("duplicate key value" in msg and "property_id" in msg):
             raise ContractActiveError("An active contract already exists for this property")

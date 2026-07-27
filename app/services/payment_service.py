@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.payment import Payment
-from app.models.user import User, UserRole
+from app.models.user import User
 from app.repositories.contract import ContractRepository
 from app.repositories.payment import PaymentRepository
 from app.repositories.property import PropertyRepository
@@ -51,22 +51,9 @@ class PaymentService(ResourceAuthorizationMixin):
         skip: int = 0,
         limit: int = 100,
     ) -> PaginatedResponse[Payment]:
-        """Admins see every payment. Managers only see payments whose
-        contract belongs to one of their own properties.
-
-        `current_user` is required, not optional — see
-        `DocumentService.list_documents`'s docstring for why an optional,
-        silently-skippable auth parameter is a footgun this codebase has
-        already been bitten by once.
-        """
-        if current_user.role == UserRole.MANAGER:
-            items = await self.payment_repo.get_all_for_manager(db, current_user.id, skip=skip, limit=limit)
-            total = await self.payment_repo.count_all_for_manager(db, current_user.id)
-        else:
-            items = await self.payment_repo.get_all(db, skip=skip, limit=limit)
-            total = await self.payment_repo.count_all(db)
-
-        return PaginatedResponse(items=items, total=total)
+        """Admins see every payment; managers only see payments whose
+        contract belongs to one of their own properties."""
+        return await self._list_scoped_by_manager(db, current_user, self.payment_repo, skip, limit)
 
     async def get_payment(
         self,
@@ -161,19 +148,18 @@ class PaymentService(ResourceAuthorizationMixin):
         contract_id: UUID | None = None,
         current_user: User | None = None,
     ) -> PaymentContext:
-        effective_contract_id = contract_id if contract_id is not None else payment.contract_id if payment else None
-
-        await self._validate_related_resources(db, contract_id=effective_contract_id)
+        ids = self._resolve_ids(payment, contract_id=contract_id)
+        await self._validate_related_resources(db, **ids)
 
         if current_user:
             await self._authorize_user_to_property(
                 db,
                 current_user,
                 property_id=None,
-                contract_id=effective_contract_id,
+                contract_id=ids["contract_id"],
             )
 
         return PaymentContext(
             payment=payment,
-            contract_id=effective_contract_id,
+            **ids,
         )
