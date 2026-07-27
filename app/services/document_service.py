@@ -53,8 +53,8 @@ class DocumentService(ResourceAuthorizationMixin):
 
     Optionally accepts a storage client (e.g., MinIO) for uploading files.
     Given a file-like object (`file_obj`), the service validates MIME/size
-    and streams it to storage. The MIME type is sniffed from the file's own mgaic bytes,
-    never trusted frmo `file_obj.content_type` or `payload.file_type`. Errors are translated
+    and streams it to storage. The MIME type is sniffed from the file's own magic bytes,
+    never trusted from `file_obj.content_type` or `payload.file_type`. Errors are translated
     to domain exceptions for the route layer.
     """
 

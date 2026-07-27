@@ -97,9 +97,8 @@ class PropertyService(ResourceAuthorizationMixin):
         The only path that populates `Property.manager_id` outside of
         direct DB writes in tests — every manager-scoped authorization
         check in the app depends on this field being set through here.
-        No unassign path: reassigning overwrites the current manager_id.
-        There is no unassign path: reassigning simply overwrites the
-        current `manager_id` rather than clearing it in between contracts.
+        No unassign path: reassigning overwrites the current manager_id
+        rather than clearing it first.
 
         Raises:
             RelatedResourceNotFoundError: `prop_id` doesn't exist.
