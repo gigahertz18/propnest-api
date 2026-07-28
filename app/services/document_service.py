@@ -546,89 +546,89 @@ class DocumentService(ResourceAuthorizationMixin):
         tenant_id: UUID | None = None,
         current_user: User | None = None,
     ) -> DocumentContext:
-        """Resolve the property/contract/tenant context, validate any
-        provided ids exist, normalize contract-backed relationships, and
-        authorize current_user against it.
+        """Resolve, normalize, and authorize the property/contract/tenant context.
+        
+        Contract-backed documents are normalized through a single helper so the  contract
+        remains the source of truth and the contract/property/tenant checks stay in one place.
 
         Raises:
             RelatedResourceNotFoundError: an id was provided but doesn't exist.
             DocumentForbiddenError: current_user isn't authorized.
             DocumentValidationError: provided relationship ids conflict with each other.
         """
-
-        # ids = self._resolve_ids(doc, property_id=property_id, contract_id=contract_id, tenant_id=tenant_id)
-        # await self._validate_related_resources(db, **ids)
-
-        # if current_user:
-        #     await self._authorize_user_to_property(
-        #         db,
-        #         current_user,
-        #         property_id=ids["property_id"],
-        #         contract_id=ids["contract_id"],
-        #     )
-
-        # return DocumentContext(
-        #     document=doc,
-        #     **ids,
-        # )
-        effective_contract_id = contract_id if contract_id is not None else getattr(doc, "contract_id", None)
-
-        if effective_contract_id is not None:
-            contract = await self._get_contract(db, effective_contract_id)
-            if contract is None:
-                raise RelatedResourceNotFoundError(f"Contract {effective_contract_id} not found.")
-
-            # Validate any explicitly supplied related ids before we derive
-            # the canonical relationship from the contract.
-            await self._validate_related_resources(
-                db,
-                property_id=property_id,
-                tenant_id=tenant_id,
-            )
-
-            contract_property = await self._get_property(db, contract.property_id)
-            if contract_property is None:
-                raise RelatedResourceNotFoundError(f"Property {contract.property_id} not found.")
-
-            contract_tenant = await self._get_tenant(db, contract.tenant_id)
-            if contract_tenant is None:
-                raise RelatedResourceNotFoundError(f"Tenant {contract.tenant_id} not found.")
-
-            if property_id is not None and property_id != contract.property_id:
-                raise DocumentValidationError(
-                    f"Property {property_id} does not match contract {effective_contract_id}."
-                )
-            if tenant_id is not None and tenant_id != contract.tenant_id:
-                raise DocumentValidationError(f"Tenant {tenant_id} does not match contract {effective_contract_id}.")
-
-            resolved_property_id = contract.property_id
-            resolved_contract_id = contract.id
-            resolved_tenant_id = contract.tenant_id
-        else:
-            resolved_property_id = property_id if property_id is not None else getattr(doc, "property_id", None)
-            resolved_contract_id = None
-            resolved_tenant_id = tenant_id if tenant_id is not None else getattr(doc, "tenant_id", None)
-
-            await self._validate_related_resources(
-                db,
-                property_id=resolved_property_id,
-                tenant_id=resolved_tenant_id,
-            )
+        
+        resolved_prop_id, resolved_contract_id, resolved_tenant_id = await self._resolve_document_relationship(
+            db,
+            doc=doc,
+            property_id=property_id,
+            contract_id=contract_id,
+            tenant_id=tenant_id,
+        )
 
         if current_user:
             await self._authorize_user_to_property(
                 db,
                 current_user,
-                property_id=resolved_property_id,
+                property_id=resolved_prop_id,
                 contract_id=resolved_contract_id,
             )
 
         return DocumentContext(
             document=doc,
-            property_id=resolved_property_id,
+            property_id=resolved_prop_id,
             contract_id=resolved_contract_id,
             tenant_id=resolved_tenant_id,
         )
+
+    async def _resolve_document_relationship(
+        self,
+        db: AsyncSession,
+        *,
+        doc: Document | None,
+        property_id: UUID | None,
+        contract_id: UUID | None,
+        tenant_id: UUID | None,
+    ) -> tuple[UUID | None, UUID | None, UUID | None]:
+        """Normalize the relationship ids for document write operations.
+
+        If a contract is present, it is the source of truth and any supplied
+        property_id / tenant_id must match it.
+        """
+        resolved_ids = self._resolve_ids(
+            doc,
+            property_id=property_id,
+            contract_id=contract_id,
+            tenant_id=tenant_id,
+        )
+        
+        effective_contract_id = resolved_ids.get("contract_id")
+        resolved_property_id = resolved_ids.get("property_id")
+        resolved_tenant_id = resolved_ids.get("tenant_id")
+
+        if not effective_contract_id:
+            await self._validate_related_resources(
+                db,
+                property_id=resolved_property_id,
+                tenant_id=resolved_tenant_id,
+            )
+            return resolved_property_id, None, resolved_tenant_id
+
+        contract = await self._get_contract(db, effective_contract_id)
+        if contract is None:
+            raise RelatedResourceNotFoundError(f"Contract {effective_contract_id} not found.")
+
+        await self._validate_related_resources(
+            db,
+            property_id=resolved_property_id,
+            tenant_id=resolved_tenant_id,
+        )
+
+        if resolved_property_id and resolved_property_id != contract.property_id:
+            raise DocumentValidationError(f"Property {resolved_property_id} does not match contract {effective_contract_id}")
+        if resolved_tenant_id and resolved_tenant_id != contract.tenant_id:
+            raise DocumentValidationError(f"Tenant {resolved_tenant_id} does not match contract {effective_contract_id}")
+
+        return contract.property_id, contract.id, contract.tenant_id
 
     def _build_storage_key(self, document_id: UUID, file_name: str) -> str:
         filename = Path(file_name).name

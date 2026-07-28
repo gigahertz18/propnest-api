@@ -56,24 +56,6 @@ class ResourceAuthorizationMixin:
         `contract_id` is authoritative when present: resolve the contract first,
         then resolve and return its property. `property_id` is only used when no contract is supplied.
         """
-
-        # if property_id is not None:
-        #     prop = await self._get_property(db, property_id)
-        #     if prop is None:
-        #         raise RelatedResourceNotFoundError(f"Property {property_id} not found.")
-        #     return prop
-
-        # if contract_id is None:
-        #     return None
-        # contract = await self._get_contract(db, contract_id)
-        # if contract is None:
-        #     raise RelatedResourceNotFoundError(f"Contract {contract_id} not found.")
-
-        # prop = await self._get_property(db, contract.property_id)
-        # if prop is None:
-        #     raise RelatedResourceNotFoundError(f"Property {property_id} not found.")
-
-        # return prop
         if contract_id:
             contract = await self._get_contract(db, contract_id)
             if not contract:

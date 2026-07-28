@@ -161,7 +161,6 @@ class TestCreateDocument:
         prop_id = uuid4()
         tenant_id = uuid4()
         svc = _make_service(
-            # contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
             contracts={
                 contract_id: SimpleNamespace(
                     id=contract_id,
@@ -703,7 +702,6 @@ class TestReplaceDocumentFile:
         )
 
         assert result.file_name == "replacement.pdf"
-        # assert "replacement.pdf" in storage.put_calls
         assert svc._build_storage_key(doc_id, "replacement.pdf") in storage.put_calls
 
     async def test_deletes_old_storage_object_when_filename_changes(self, mock_db):
@@ -722,7 +720,6 @@ class TestReplaceDocumentFile:
             current_user=make_admin(),
         )
 
-        # assert "original.pdf" in storage.remove_calls
         assert svc._build_storage_key(doc_id, "original.pdf") in storage.remove_calls
 
     async def test_does_not_delete_old_object_when_filename_is_the_same(self, mock_db):
@@ -741,7 +738,6 @@ class TestReplaceDocumentFile:
             current_user=make_admin(),
         )
 
-        # assert "same_name.pdf" not in storage.remove_calls
         assert svc._build_storage_key(doc_id, "same_name.pdf") not in storage.remove_calls
 
     async def test_manager_authorized_via_existing_property_can_replace(self, mock_db):
@@ -1131,7 +1127,6 @@ class TestCreateDocumentStorageCleanupOnDbFailure:
                 file_obj=BytesIO(b"%PDF-1.4 content"),
             )
 
-        # assert deleted_calls == ["test.pdf"]
         assert deleted_calls == [svc._build_storage_key(fixed_id, "test.pdf")]
 
     async def test_skips_cleanup_when_no_file_was_uploaded(self, mock_db):
