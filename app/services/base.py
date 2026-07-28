@@ -51,28 +51,28 @@ class ResourceAuthorizationMixin:
         contract_id: UUID | None,
     ) -> Property | None:
         """
-        Resolve "the property this operation concerns": `property_id` directly
-        if given, else via `contract_id`'s poperty, else `None`. Callers with no via-contract
-        path just never pass `contract_id`
-        """
+        Resolve "the property this operation concerns".
 
-        if property_id is not None:
+        `contract_id` is authoritative when present: resolve the contract first,
+        then resolve and return its property. `property_id` is only used when no contract is supplied.
+        """
+        if contract_id:
+            contract = await self._get_contract(db, contract_id)
+            if not contract:
+                raise RelatedResourceNotFoundError(f"Contract {contract_id} not found.")
+
+            prop = await self._get_property(db, contract.property_id)
+            if not prop:
+                raise RelatedResourceNotFoundError(f"Property {contract.property_id} not found.")
+            return prop
+
+        if property_id:
             prop = await self._get_property(db, property_id)
-            if prop is None:
+            if not prop:
                 raise RelatedResourceNotFoundError(f"Property {property_id} not found.")
             return prop
 
-        if contract_id is None:
-            return None
-        contract = await self._get_contract(db, contract_id)
-        if contract is None:
-            raise RelatedResourceNotFoundError(f"Contract {contract_id} not found.")
-
-        prop = await self._get_property(db, contract.property_id)
-        if prop is None:
-            raise RelatedResourceNotFoundError(f"Property {property_id} not found.")
-
-        return prop
+        return None
 
     async def _validate_related_resources(
         self,

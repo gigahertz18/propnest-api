@@ -11,6 +11,7 @@ from app.services.exceptions import (
     DocumentForbiddenError,
     DocumentStorageInconsistentError,
     DocumentUploadError,
+    DocumentValidationError,
     ResourceForbiddenError,
 )
 from app.repositories.document import document_repo
@@ -151,12 +152,24 @@ class TestCreateDocument:
 
     async def test_creates_document_linked_only_to_a_contract(self, mock_db):
         """Contract-only document: contract must exist, manager must own its
-        property. Using admin here to isolate the existence-check path."""
+        property. Using admin here to isolate the existence-check path.
+
+        The contract is the source of truth, so a contract-only payload must resolve
+        both the poperty and the tenant from the contract itself.
+        """
         contract_id = uuid4()
         prop_id = uuid4()
+        tenant_id = uuid4()
         svc = _make_service(
-            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            contracts={
+                contract_id: SimpleNamespace(
+                    id=contract_id,
+                    property_id=prop_id,
+                    tenant_id=tenant_id,
+                )
+            },
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+            tenants={tenant_id: SimpleNamespace(id=tenant_id)},
         )
         result = await svc.create_document(
             mock_db,
@@ -164,6 +177,108 @@ class TestCreateDocument:
             current_user=make_admin(),
         )
         assert result.contract_id == contract_id
+        assert result.property_id == prop_id
+        assert result.tenant_id == tenant_id
+
+    async def test_rejects_mismatched_property_when_contract_is_supplied(self, mock_db):
+        """A contract-linked document must not accept a different standalone property_id."""
+        contract_property_id = uuid4()
+        supplied_property_id = uuid4()
+        contract_tenant_id = uuid4()
+        contract_id = uuid4()
+        svc = _make_service(
+            properties={
+                contract_property_id: SimpleNamespace(id=contract_property_id, manager_id=uuid4()),
+                supplied_property_id: SimpleNamespace(id=supplied_property_id, manager_id=uuid4()),
+            },
+            contracts={
+                contract_id: SimpleNamespace(
+                    id=contract_id,
+                    property_id=contract_property_id,
+                    tenant_id=contract_tenant_id,
+                )
+            },
+            tenants={contract_tenant_id: SimpleNamespace(id=contract_tenant_id)},
+        )
+        repo = svc.document_repo
+
+        with pytest.raises(DocumentValidationError):
+            await svc.create_document(
+                mock_db,
+                self._payload(
+                    contract_id=contract_id,
+                    property_id=supplied_property_id,
+                ),
+                current_user=make_admin(),
+            )
+
+        assert repo.created_payloads == []
+
+    async def test_rejects_mismatched_tenant_when_contract_is_supplied(self, mock_db):
+        """A contract-linked document must not accept a different standalone tenant_id."""
+        contract_property_id = uuid4()
+        contract_tenant_id = uuid4()
+        supplied_tenant_id = uuid4()
+        contract_id = uuid4()
+        svc = _make_service(
+            properties={contract_property_id: SimpleNamespace(id=contract_property_id, manager_id=uuid4())},
+            contracts={
+                contract_id: SimpleNamespace(
+                    id=contract_id,
+                    property_id=contract_property_id,
+                    tenant_id=contract_tenant_id,
+                )
+            },
+            tenants={
+                contract_tenant_id: SimpleNamespace(id=contract_tenant_id),
+                supplied_tenant_id: SimpleNamespace(id=supplied_tenant_id),
+            },
+        )
+        repo = svc.document_repo
+
+        with pytest.raises(DocumentValidationError):
+            await svc.create_document(
+                mock_db,
+                self._payload(
+                    contract_id=contract_id,
+                    tenant_id=supplied_tenant_id,
+                ),
+                current_user=make_admin(),
+            )
+
+        assert repo.created_payloads == []
+
+    async def test_creates_document_with_matching_contract_property_and_tenant(self, mock_db):
+        """When all three ids are supplied and they match, the service should
+        accept the payload and persist the normalized relationship set."""
+        contract_id = uuid4()
+        contract_property_id = uuid4()
+        contract_tenant_id = uuid4()
+        svc = _make_service(
+            contracts={
+                contract_id: SimpleNamespace(
+                    id=contract_id,
+                    property_id=contract_property_id,
+                    tenant_id=contract_tenant_id,
+                )
+            },
+            properties={contract_property_id: SimpleNamespace(id=contract_property_id, manager_id=uuid4())},
+            tenants={contract_tenant_id: SimpleNamespace(id=contract_tenant_id)},
+        )
+
+        result = await svc.create_document(
+            mock_db,
+            self._payload(
+                contract_id=contract_id,
+                property_id=contract_property_id,
+                tenant_id=contract_tenant_id,
+            ),
+            current_user=make_admin(),
+        )
+
+        assert result.contract_id == contract_id
+        assert result.property_id == contract_property_id
+        assert result.tenant_id == contract_tenant_id
 
     async def test_creates_document_linked_only_to_a_tenant(self, mock_db):
         """Tenant-only document, created by an admin.
@@ -270,9 +385,17 @@ class TestCreateDocument:
         manager_id = uuid4()
         prop_id = uuid4()
         contract_id = uuid4()
+        tenant_id = uuid4()
         svc = _make_service(
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)},
-            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            contracts={
+                contract_id: SimpleNamespace(
+                    id=contract_id,
+                    property_id=prop_id,
+                    tenant_id=tenant_id,
+                )
+            },
+            tenants={tenant_id: SimpleNamespace(id=tenant_id)},
         )
         result = await svc.create_document(
             mock_db,
@@ -286,9 +409,11 @@ class TestCreateDocument:
         belongs to a different manager — forbidden."""
         prop_id = uuid4()
         contract_id = uuid4()
+        tenant_id = uuid4()
         svc = _make_service(
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
-            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id)},
+            tenants={tenant_id: SimpleNamespace(id=tenant_id)},
         )
         repo = svc.document_repo
         with pytest.raises(DocumentForbiddenError):
@@ -371,14 +496,16 @@ class TestUpdateDocumentAuthorization:
         prop_id = uuid4()
         contract_id = uuid4()
         new_contract_id = uuid4()
+        tenant_id = uuid4()
         doc_id, doc = self._make_doc(contract_id=contract_id)
         svc = _make_service(
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)},
             contracts={
-                contract_id: SimpleNamespace(id=contract_id, property_id=prop_id),
-                new_contract_id: SimpleNamespace(id=new_contract_id, property_id=prop_id),
+                contract_id: SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id),
+                new_contract_id: SimpleNamespace(id=new_contract_id, property_id=prop_id, tenant_id=tenant_id),
             },
             documents={doc_id: doc},
+            tenants={tenant_id: SimpleNamespace(id=tenant_id)},
         )
         result = await svc.update_document(
             mock_db,
@@ -518,11 +645,19 @@ class TestDeleteDocumentAuthorization:
         manager_id = uuid4()
         prop_id = uuid4()
         contract_id = uuid4()
+        tenant_id = uuid4()
         doc_id, doc = self._make_doc(contract_id=contract_id)
         svc = _make_service(
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)},
-            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            contracts={
+                contract_id: SimpleNamespace(
+                    id=contract_id,
+                    property_id=prop_id,
+                    tenant_id=tenant_id,
+                )
+            },
             documents={doc_id: doc},
+            tenants={tenant_id: SimpleNamespace(id=tenant_id)},
         )
         result = await svc.delete_document(mock_db, doc_id, current_user=make_manager(manager_id))
         assert result is not None
@@ -567,7 +702,6 @@ class TestReplaceDocumentFile:
         )
 
         assert result.file_name == "replacement.pdf"
-        # assert "replacement.pdf" in storage.put_calls
         assert svc._build_storage_key(doc_id, "replacement.pdf") in storage.put_calls
 
     async def test_deletes_old_storage_object_when_filename_changes(self, mock_db):
@@ -586,7 +720,6 @@ class TestReplaceDocumentFile:
             current_user=make_admin(),
         )
 
-        # assert "original.pdf" in storage.remove_calls
         assert svc._build_storage_key(doc_id, "original.pdf") in storage.remove_calls
 
     async def test_does_not_delete_old_object_when_filename_is_the_same(self, mock_db):
@@ -605,7 +738,6 @@ class TestReplaceDocumentFile:
             current_user=make_admin(),
         )
 
-        # assert "same_name.pdf" not in storage.remove_calls
         assert svc._build_storage_key(doc_id, "same_name.pdf") not in storage.remove_calls
 
     async def test_manager_authorized_via_existing_property_can_replace(self, mock_db):
@@ -995,7 +1127,6 @@ class TestCreateDocumentStorageCleanupOnDbFailure:
                 file_obj=BytesIO(b"%PDF-1.4 content"),
             )
 
-        # assert deleted_calls == ["test.pdf"]
         assert deleted_calls == [svc._build_storage_key(fixed_id, "test.pdf")]
 
     async def test_skips_cleanup_when_no_file_was_uploaded(self, mock_db):

@@ -152,13 +152,13 @@ class TestResolveProperty:
 
         assert result is prop
 
-    async def test_property_id_takes_precedence_over_contract_id(self, mock_db):
-        """If a caller (incorrectly) passes both, property_id wins —
-        matches the documented resolution order."""
+    async def test_contract_id_takes_precedence_over_property_id(self, mock_db):
+        """If a caller passes both, contact_id is authoritative."""
         direct_id, via_contract_id, contract_id = uuid4(), uuid4(), uuid4()
         direct_prop = SimpleNamespace(id=direct_id, manager_id=uuid4())
         contract_prop = SimpleNamespace(id=via_contract_id, manager_id=uuid4())
         contract = SimpleNamespace(id=contract_id, property_id=via_contract_id)
+
         mixin = _make_mixin(
             properties={direct_id: direct_prop, via_contract_id: contract_prop},
             contracts={contract_id: contract},
@@ -166,7 +166,7 @@ class TestResolveProperty:
 
         result = await mixin._resolve_property(mock_db, property_id=direct_id, contract_id=contract_id)
 
-        assert result is direct_prop
+        assert result is contract_prop
 
     async def test_raises_when_property_id_does_not_exist(self, mock_db):
         mixin = _make_mixin()
