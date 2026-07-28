@@ -11,6 +11,8 @@ from tests.factories import (
     make_document_model,
     make_property_model,
     make_user_model,
+    make_tenant_model,
+    make_contract_model,
 )
 
 
@@ -199,6 +201,35 @@ class TestCreateDocumentRoute:
 
         assert response.status_code == 404
 
+    async def test_returns_400_when_property_does_not_match_contract(self, client, db, authenticate_admin):
+        """Regression test: a payload that supplies both a contract_id and a
+        property_id that don't belong to each other must be rejected with a
+        client error, not silently accepted against the (unrelated) owned
+        property, and not surfaced as an unhandled 500."""
+        auth_ctx = await authenticate_admin()
+        tenant = await make_tenant_model(db)
+        contract_property = await make_property_model(db)
+        unrelated_property = await make_property_model(db)
+        contract = await make_contract_model(db, property_id=contract_property.id, tenant_id=tenant.id)
+
+        payload = make_document(contract_id=str(contract.id), property_id=str(unrelated_property.id))
+        response = await client.post("/api/v1/documents/", json=payload, headers=auth_ctx.headers)
+
+        assert response.status_code == 400
+
+    async def test_returns_400_when_tenant_does_not_match_contract(self, client, db, authenticate_admin):
+        """Same as above, but for a mismatched tenant_id supplied alongside contract_id."""
+        auth_ctx = await authenticate_admin()
+        tenant = await make_tenant_model(db)
+        unrelated_tenant = await make_tenant_model(db)
+        prop = await make_property_model(db)
+        contract = await make_contract_model(db, property_id=prop.id, tenant_id=tenant.id)
+
+        payload = make_document(contract_id=str(contract.id), tenant_id=str(unrelated_tenant.id))
+        response = await client.post("/api/v1/documents/", json=payload, headers=auth_ctx.headers)
+
+        assert response.status_code == 400
+
 
 # ─── POST /documents/upload (multipart upload) ───────────────────────────────
 
@@ -324,7 +355,31 @@ class TestUploadDocumentRoute:
         assert first_key.endswith("_lease.pdf")
         assert second_key.endswith("_lease.pdf")
 
-
+    async def test_returns_400_when_property_does_not_match_contract(self, client, db, authenticate_admin):
+        """Regression test: uploading with a contract_id and a property_id
+        that don't belong to each other must be rejected, not silently
+        accepted against the unrelated property."""
+        auth_ctx = await authenticate_admin()
+        app.dependency_overrides[get_storage_client] = lambda: FakeStorageClient()
+ 
+        tenant = await make_tenant_model(db)
+        contract_property = await make_property_model(db)
+        unrelated_property = await make_property_model(db)
+        contract = await make_contract_model(db, property_id=contract_property.id, tenant_id=tenant.id)
+ 
+        response = await client.post(
+            "/api/v1/documents/upload",
+            files={"file": ("upload.pdf", b"%PDF-1.4 fake content", "application/pdf")},
+            data={
+                "file_type": "application/pdf",
+                "contract_id": str(contract.id),
+                "property_id": str(unrelated_property.id),
+            },
+            headers=auth_ctx.headers,
+        )
+ 
+        assert response.status_code == 400
+        
 # ─── PATCH /documents/{id} ────────────────────────────────────────────────────
 
 
@@ -365,6 +420,23 @@ class TestUpdateDocumentRoute:
             headers=outsider_ctx.headers,
         )
         assert response.status_code == 403
+
+    async def test_returns_400_when_relink_property_does_not_match_contract(self, client, db, authenticate_admin):
+        """Regression test: relinking a document with a contract_id and a
+        property_id that don't belong to each other must be rejected."""
+        auth_ctx = await authenticate_admin()
+        tenant = await make_tenant_model(db)
+        contract_property = await make_property_model(db)
+        unrelated_property = await make_property_model(db)
+        contract = await make_contract_model(db, property_id=contract_property.id, tenant_id=tenant.id)
+        doc = await make_document_model(db, property_id=contract_property.id)
+
+        response = await client.patch(
+            f"/api/v1/documents/{doc.id}",
+            json={"contract_id": str(contract.id), "property_id": str(unrelated_property.id)},
+            headers=auth_ctx.headers,
+        )
+        assert response.status_code == 400
 
 
 # ─── DELETE /documents/{id} ───────────────────────────────────────────────────
@@ -522,3 +594,28 @@ class TestReplaceDocumentFileRoute:
             headers=auth_ctx.headers,
         )
         assert response.status_code == 404
+
+    async def test_returns_400_when_relink_property_does_not_match_contract(self, client, db, authenticate_admin):
+        """Regression test: replacing a document's file while relinking it
+        with a contract_id and a property_id that don't belong to each
+        other must be rejected."""
+        auth_ctx = await authenticate_admin()
+        app.dependency_overrides[get_storage_client] = lambda: FakeStorageClient()
+ 
+        tenant = await make_tenant_model(db)
+        contract_property = await make_property_model(db)
+        unrelated_property = await make_property_model(db)
+        contract = await make_contract_model(db, property_id=contract_property.id, tenant_id=tenant.id)
+        doc = await make_document_model(db, property_id=contract_property.id)
+ 
+        response = await client.put(
+            f"/api/v1/documents/{doc.id}/file",
+            files={"file": ("new.pdf", b"%PDF-1.4 content", "application/pdf")},
+            data={
+                "file_type": "application/pdf",
+                "contract_id": str(contract.id),
+                "property_id": str(unrelated_property.id),
+            },
+            headers=auth_ctx.headers,
+        )
+        assert response.status_code == 400
