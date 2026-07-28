@@ -361,12 +361,12 @@ class TestUploadDocumentRoute:
         accepted against the unrelated property."""
         auth_ctx = await authenticate_admin()
         app.dependency_overrides[get_storage_client] = lambda: FakeStorageClient()
- 
+
         tenant = await make_tenant_model(db)
         contract_property = await make_property_model(db)
         unrelated_property = await make_property_model(db)
         contract = await make_contract_model(db, property_id=contract_property.id, tenant_id=tenant.id)
- 
+
         response = await client.post(
             "/api/v1/documents/upload",
             files={"file": ("upload.pdf", b"%PDF-1.4 fake content", "application/pdf")},
@@ -377,9 +377,10 @@ class TestUploadDocumentRoute:
             },
             headers=auth_ctx.headers,
         )
- 
+
         assert response.status_code == 400
-        
+
+
 # ─── PATCH /documents/{id} ────────────────────────────────────────────────────
 
 
@@ -601,13 +602,13 @@ class TestReplaceDocumentFileRoute:
         other must be rejected."""
         auth_ctx = await authenticate_admin()
         app.dependency_overrides[get_storage_client] = lambda: FakeStorageClient()
- 
+
         tenant = await make_tenant_model(db)
         contract_property = await make_property_model(db)
         unrelated_property = await make_property_model(db)
         contract = await make_contract_model(db, property_id=contract_property.id, tenant_id=tenant.id)
         doc = await make_document_model(db, property_id=contract_property.id)
- 
+
         response = await client.put(
             f"/api/v1/documents/{doc.id}/file",
             files={"file": ("new.pdf", b"%PDF-1.4 content", "application/pdf")},
