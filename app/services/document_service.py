@@ -547,7 +547,7 @@ class DocumentService(ResourceAuthorizationMixin):
         current_user: User | None = None,
     ) -> DocumentContext:
         """Resolve, normalize, and authorize the property/contract/tenant context.
-        
+
         Contract-backed documents are normalized through a single helper so the  contract
         remains the source of truth and the contract/property/tenant checks stay in one place.
 
@@ -556,7 +556,7 @@ class DocumentService(ResourceAuthorizationMixin):
             DocumentForbiddenError: current_user isn't authorized.
             DocumentValidationError: provided relationship ids conflict with each other.
         """
-        
+
         resolved_prop_id, resolved_contract_id, resolved_tenant_id = await self._resolve_document_relationship(
             db,
             doc=doc,
@@ -600,7 +600,7 @@ class DocumentService(ResourceAuthorizationMixin):
             contract_id=contract_id,
             tenant_id=tenant_id,
         )
-        
+
         effective_contract_id = resolved_ids.get("contract_id")
         resolved_property_id = resolved_ids.get("property_id")
         resolved_tenant_id = resolved_ids.get("tenant_id")
@@ -624,9 +624,13 @@ class DocumentService(ResourceAuthorizationMixin):
         )
 
         if resolved_property_id and resolved_property_id != contract.property_id:
-            raise DocumentValidationError(f"Property {resolved_property_id} does not match contract {effective_contract_id}")
+            raise DocumentValidationError(
+                f"Property {resolved_property_id} does not match contract {effective_contract_id}"
+            )
         if resolved_tenant_id and resolved_tenant_id != contract.tenant_id:
-            raise DocumentValidationError(f"Tenant {resolved_tenant_id} does not match contract {effective_contract_id}")
+            raise DocumentValidationError(
+                f"Tenant {resolved_tenant_id} does not match contract {effective_contract_id}"
+            )
 
         return contract.property_id, contract.id, contract.tenant_id
 
