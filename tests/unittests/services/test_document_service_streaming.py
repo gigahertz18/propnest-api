@@ -79,7 +79,7 @@ def make_upload(content: bytes, filename: str, content_type: str, seekable: bool
 
 
 def make_payload(name: str, mime: str):
-    return DocumentCreate(file_name=name, file_type=mime, file_url="")
+    return DocumentCreate(file_name=name, file_type=mime)
 
 
 @pytest.mark.asyncio

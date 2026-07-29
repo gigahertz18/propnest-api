@@ -15,7 +15,7 @@ async def test_create_document_without_storage_client_skips_upload(mock_db):
             return "created"
 
     svc = DocumentService(document_repo=FakeRepo())  # type: ignore[arg-type]
-    payload = DocumentCreate(file_name="a.pdf", file_type="application/pdf", file_url="http://exaple.com/a.pdf")
+    payload = DocumentCreate(file_name="a.pdf", file_type="application/pdf")
 
     result = await svc.create_document(db=mock_db, payload=payload, storage_client=None)
     assert result == "created"
@@ -52,7 +52,6 @@ async def test_create_document_uploads_to_storage_when_file_is_provided(mock_db)
                 id=data.get("id", uuid4()),
                 file_name=data["file_name"],
                 file_type=data["file_type"],
-                file_url=data["file_url"],
                 contract_id=data.get("contract_id"),
                 property_id=data.get("property_id"),
                 tenant_id=data.get("tenant_id"),
@@ -60,7 +59,7 @@ async def test_create_document_uploads_to_storage_when_file_is_provided(mock_db)
 
     storage = RecordingStorage()
     svc = DocumentService(document_repo=FakeRepo())  # type: ignore[arg-type]
-    payload = DocumentCreate(file_name="a.pdf", file_type="application/pdf", file_url="http://example.com/a.pdf")
+    payload = DocumentCreate(file_name="a.pdf", file_type="application/pdf")
     file_obj = SimpleNamespace(content_type="application/pdf", file=BytesIO(b"%PDF-1.4 hello"))
 
     result = await svc.create_document(db=mock_db, payload=payload, storage_client=storage, file_obj=file_obj)
@@ -78,7 +77,7 @@ async def test_create_document_translates_storage_failures(mock_db):
             raise RuntimeError("Network Error")
 
     svc = DocumentService(document_repo=SimpleNamespace())  # type: ignore[arg-type]
-    payload = DocumentCreate(file_name="a.pdf", file_type="application/pdf", file_url="http://example.com/a.pdf")
+    payload = DocumentCreate(file_name="a.pdf", file_type="application/pdf")
     file_obj = SimpleNamespace(content_type="application/pdf", file=BytesIO(b"%PDF-1.4 hello"))
 
     with pytest.raises(DocumentUploadError):

@@ -216,28 +216,27 @@ async def make_contract_model(db, property_id: uuid.UUID, tenant_id: uuid.UUID, 
 def make_document(
     file_name: str = "test_document.pdf",
     file_type: str = "application/pdf",
-    file_url: str = "http://example.com/test_document.pdf",
     contract_id: uuid.UUID | None = None,
     property_id: uuid.UUID | None = None,
     tenant_id: uuid.UUID | None = None,
 ) -> dict:
-    """Returns a dict matching DocumentCreate schema."""
+    """Returns a dict matching the public DocumentCreate schema."""
     return {
         "file_name": file_name,
         "file_type": file_type,
-        "file_url": file_url,
         "contract_id": contract_id,
         "property_id": property_id,
         "tenant_id": tenant_id,
     }
 
 
-async def make_document_model(db, **kwargs) -> Document:
+async def make_document_model(db, file_url: str = "http://example.com/test_document.pdf", **kwargs) -> Document:
     """Creates and persists a Document directly in the test DB."""
     data = make_document(**kwargs)
     obj = Document(
         id=uuid.uuid4(),
-        **{k: v for k, v in data.items()},
+        file_url=file_url,
+        **data,
     )
     db.add(obj)
     await db.flush()
