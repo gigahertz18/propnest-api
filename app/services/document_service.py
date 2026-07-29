@@ -145,28 +145,23 @@ class DocumentService(ResourceAuthorizationMixin):
 
         doc_id = uuid4()
         storage_key = self._build_storage_key(doc_id, payload.file_name)
-        file_url = (
-            self.build_object_url(storage_key)
-            if storage_client is not None and file_obj is not None
-            else payload.file_url
-        )
 
-        resolved_payload = DocumentCreate(
-            file_name=payload.file_name,
-            file_type=payload.file_type,
-            file_url=file_url,
-            property_id=ctx.property_id,
-            contract_id=ctx.contract_id,
-            tenant_id=ctx.tenant_id,
-        )
+        file_url = self.build_object_url(storage_key)
 
-        create_payload = resolved_payload.model_dump()
-        create_payload["id"] = doc_id
+        create_payload = {
+            "id": doc_id,
+            "file_name": payload.file_name,
+            "file_type": payload.file_type,
+            "file_url": file_url,
+            "property_id": ctx.property_id,
+            "contract_id": ctx.contract_id,
+            "tenant_id": ctx.tenant_id,
+        }
         # Step 1: upload to storage first - before any DB write.
         # If this fails, nothing is written to the DB
         if storage_client is not None and file_obj is not None:
             try:
-                self._upload_to_storage(storage_client, storage_key, resolved_payload, file_obj)
+                self._upload_to_storage(storage_client, storage_key, payload, file_obj)
             except Exception:
                 raise  # let route handle this - no DB record created
 
@@ -255,14 +250,14 @@ class DocumentService(ResourceAuthorizationMixin):
         storage_key = self._build_storage_key(doc_id, payload.file_name)
         old_storage_key = self._build_storage_key(doc_id, doc.file_name)
 
-        resolved_payload = DocumentFileUpdate(
-            file_name=payload.file_name,
-            file_type=payload.file_type,
-            file_url=self.build_object_url(storage_key),
-            property_id=ctx.property_id,
-            contract_id=ctx.contract_id,
-            tenant_id=ctx.tenant_id,
-        )
+        resolved_payload = {
+            "file_name": payload.file_name,
+            "file_type": payload.file_type,
+            "file_url": self.build_object_url(storage_key),
+            "property_id": ctx.property_id,
+            "contract_id": ctx.contract_id,
+            "tenant_id": ctx.tenant_id,
+        }
 
         # Read once so the same bytes can be written to more than one
         # storage key without re-reading file_obj (single-pass stream)

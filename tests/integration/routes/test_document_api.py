@@ -230,6 +230,27 @@ class TestCreateDocumentRoute:
 
         assert response.status_code == 400
 
+    async def test_creates_document_without_file_url(self, client, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+
+        payload = {
+            "file_name": "lease.pdf",
+            "file_type": "application/pdf",
+            "property_id": None,
+            "contract_id": None,
+            "tenant_id": None,
+        }
+
+        response = await client.post("/api/v1/documents/", json=payload, headers=auth_ctx.headers)
+
+        assert response.status_code == 201
+        data = response.json()
+
+        assert data["file_name"] == "lease.pdf"
+        assert data["file_type"] == "application/pdf"
+        assert data["file_url"]
+        assert "/documents/" in data["file_url"]
+
 
 # ─── POST /documents/upload (multipart upload) ───────────────────────────────
 

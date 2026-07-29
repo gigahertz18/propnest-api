@@ -3,7 +3,7 @@ import pytest_asyncio
 import uuid
 
 from app.repositories.document import document_repo
-from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate
+from app.schemas.document import DocumentRelinkUpdate, DocumentFileUpdate
 from tests.factories import (
     make_document,
     make_document_model,
@@ -149,50 +149,75 @@ class TestDocumentRepositoryGetManyByIds:
 @pytest.mark.asyncio
 class TestDocumentRepositoryCreate:
     async def test_creates_document_successfully(self, db):
-        payload = DocumentCreate(**make_document())
+
+        payload = {
+            **make_document(),
+            "file_url": "http://example.com/test_document.pdf",
+        }
         result = await document_repo.create(db, payload)
         assert result.id is not None
         assert result.file_name == "test_document.pdf"
         assert result.file_type == "application/pdf"
 
     async def test_created_document_is_persisted(self, db):
-        payload = DocumentCreate(**make_document(file_name="persisted.pdf"))
+
+        payload = {
+            **make_document(file_name="persisted.pdf"),
+            "file_url": "http://example.com/persisted.pdf",
+        }
         created = await document_repo.create(db, payload)
         fetched = await document_repo.get_by_id(db, created.id)
         assert fetched is not None
         assert fetched.file_name == "persisted.pdf"
 
     async def test_fk_fields_default_to_none(self, db):
-        payload = DocumentCreate(**make_document())
+
+        payload = {
+            **make_document(),
+            "file_url": "http://example.com/test_document.pdf",
+        }
         result = await document_repo.create(db, payload)
         assert result.contract_id is None
         assert result.property_id is None
         assert result.tenant_id is None
 
     async def test_can_link_to_a_property(self, db, property_):
-        payload = DocumentCreate(**make_document(property_id=property_.id))
+
+        payload = {
+            **make_document(property_id=property_.id),
+            "file_url": "http://example.com/test_document.pdf",
+        }
         result = await document_repo.create(db, payload)
         assert result.property_id == property_.id
 
     async def test_can_link_to_a_tenant(self, db, tenant):
-        payload = DocumentCreate(**make_document(tenant_id=tenant.id))
+
+        payload = {
+            **make_document(tenant_id=tenant.id),
+            "file_url": "http://example.com/test_document.pdf",
+        }
         result = await document_repo.create(db, payload)
         assert result.tenant_id == tenant.id
 
     async def test_can_link_to_a_contract(self, db, contract):
-        payload = DocumentCreate(**make_document(contract_id=contract.id))
+
+        payload = {
+            **make_document(contract_id=contract.id),
+            "file_url": "http://example.com/test_document.pdf",
+        }
         result = await document_repo.create(db, payload)
         assert result.contract_id == contract.id
 
     async def test_all_fields_are_stored(self, db, property_):
-        payload = DocumentCreate(
+
+        payload = {
             **make_document(
                 file_name="full.pdf",
                 file_type="application/pdf",
-                file_url="http://example.com/full.pdf",
                 property_id=property_.id,
-            )
-        )
+            ),
+            "file_url": "http://example.com/full.pdf",
+        }
         result = await document_repo.create(db, payload)
         assert result.file_name == "full.pdf"
         assert result.file_type == "application/pdf"
@@ -208,14 +233,14 @@ class TestDocumentRepositoryUpdate:
     async def test_updates_file_name(self, db):
         doc = await make_document_model(db, file_name="old.pdf")
         result = await document_repo.update(
-            db, doc.id, DocumentFileUpdate(file_name="new.pdf", file_type=doc.file_type, file_url=doc.file_url)
+            db, doc.id, DocumentFileUpdate(file_name="new.pdf", file_type=doc.file_type)
         )
         assert result.file_name == "new.pdf"
 
     async def test_partial_update_does_not_affect_other_fields(self, db):
         doc = await make_document_model(db, file_type="application/pdf")
         result = await document_repo.update(
-            db, doc.id, DocumentFileUpdate(file_name="renamed.pdf", file_type=doc.file_type, file_url=doc.file_url)
+            db, doc.id, DocumentFileUpdate(file_name="renamed.pdf", file_type=doc.file_type)
         )
         assert result.file_type == "application/pdf"
 
@@ -247,7 +272,7 @@ class TestDocumentRepositoryUpdate:
         # property_id is never mentioned in the payload, so exclude_unset=True
         # drops it entirely — this must NOT be treated the same as clearing it.
         result = await document_repo.update(
-            db, doc.id, DocumentFileUpdate(file_name="renamed.pdf", file_type=doc.file_type, file_url=doc.file_url)
+            db, doc.id, DocumentFileUpdate(file_name="renamed.pdf", file_type=doc.file_type)
         )
         assert result.property_id == property_.id
 
@@ -257,9 +282,7 @@ class TestDocumentRepositoryUpdate:
 
     async def test_updated_value_is_persisted(self, db):
         doc = await make_document_model(db)
-        await document_repo.update(
-            db, doc.id, DocumentFileUpdate(file_name="saved.pdf", file_type=doc.file_type, file_url=doc.file_url)
-        )
+        await document_repo.update(db, doc.id, DocumentFileUpdate(file_name="saved.pdf", file_type=doc.file_type))
         fetched = await document_repo.get_by_id(db, doc.id)
         assert fetched.file_name == "saved.pdf"
 
