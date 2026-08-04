@@ -2,7 +2,15 @@
 """
 scripts/seed_admin.py
 
-Creates the initial admin user for PropNest.
+One-off operational script for bootstrapping the initial admin user in a
+new PropNest environment.
+
+This is NOT part of the application runtime. It talks to the database
+directly — it does not go through the API, service, or repository
+layers — and is meant to be run manually (or via `make seed`) once per
+environment, typically right after running migrations. It is
+intentionally simple and hand-rolled rather than reusing
+`UserService`/`UserRepository`.
 Safe to run multiple times — skips creation if the username or email
 already exists rather than erroring.
 
@@ -20,6 +28,7 @@ Run via make:
     make seed password=mypassword123
 """
 
+import asyncio
 import os
 import sys
 import uuid
@@ -27,22 +36,36 @@ import uuid
 # ── make sure the app package is importable when run from /app ────────────────
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.db.session import SessionLocal
+
+from sqlalchemy import select  # noqa: E402
+
+from app.db.session import AsyncSessionLocal  # noqa: E402
 from app.models.base import TimestampMixin  # noqa: F401 — ensure TimestampMixin is loaded
-from app.models.user import User, UserRole
-from app.core.security import hash_password
+from app.models.user import User, UserRole  # noqa: E402
+from app.core.security import hash_password  # noqa: E402
 from app.models import Property, Contract, Tenant, Document  # noqa: F401 — register all models
 
-# ── Credentials from environment ──────────────────────────────────────────────
 
-USERNAME = os.environ.get("SEED_USERNAME", "admin")
-EMAIL = os.environ.get("SEED_EMAIL", "admin@propnest.com")
-FULL_NAME = os.environ.get("SEED_FULL_NAME", "PropNest Admin")
-PASSWORD = os.environ.get("SEED_PASSWORD", "")
+def _get_credentials() -> tuple[str, str, str, str]:
+    """
+    Read seed credentials from the environment.
+
+    Deliberately read at call time rather than at import time, so this
+    module can be imported (e.g by the smoke test in `tests/integration/test_seed_admin.py`)
+    without the values being frozen before the caller has a chance to set them via monkeypatch.
+
+    Returns (username, email, full_name, password)
+    """
+
+    username = os.environ.get("SEED_USERNAME", "addmin")
+    email = os.environ.get("SEED_EMAIL", "admin@propnest.com")
+    full_name = os.environ.get("SEED_FULL_NAME", "PropNest Admin")
+    password = os.environ.get("SEED_PASSWORD", "")
+    return username, email, full_name, password
 
 
-def _validate() -> None:
-    if not PASSWORD:
+def _validate(password: str) -> None:
+    if not password:
         print(
             "\n[seed] ERROR: SEED_PASSWORD is required.\n"
             "       Set it via environment variable or use:\n"
@@ -50,70 +73,66 @@ def _validate() -> None:
         )
         sys.exit(1)
 
-    if len(PASSWORD) < 8:
+    if len(password) < 8:
         print("\n[seed] ERROR: SEED_PASSWORD must be at least 8 characters.\n")
         sys.exit(1)
 
 
-def seed() -> None:
-    _validate()
+async def seed() -> None:
+    username, email, full_name, password = _get_credentials()
+    _validate(password)
 
-    db = SessionLocal()
+    async with AsyncSessionLocal() as db:
+        try:
+            # Check for existing user
+            existing_username = (await db.execute(select(User).where(User.username == username))).scalar_one_or_none()
+            existing_email = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
+            if existing_username:
+                print(
+                    f"\n[seed] Skipped — username '{username}' already exists.\n"
+                    f"       User ID : {existing_username.id}\n"
+                    f"       Role    : {existing_username.role.value}\n"
+                    f"       Active  : {existing_username.is_active}\n"
+                )
+                return
 
-    try:
-        # ── Check for existing user ────────────────────────────────────────────
-        existing_username = db.query(User).filter(User.username == USERNAME).first()
-        existing_email = db.query(User).filter(User.email == EMAIL).first()
+            if existing_email:
+                print(
+                    f"\n[seed] Skipped — email '{email}' already exists.\n"
+                    f"       Username: {existing_email.username}\n"
+                    f"       User ID : {existing_email.id}\n"
+                )
+                return
 
-        if existing_username:
-            print(
-                f"\n[seed] Skipped — username '{USERNAME}' already exists.\n"
-                f"       User ID : {existing_username.id}\n"
-                f"       Role    : {existing_username.role.value}\n"
-                f"       Active  : {existing_username.is_active}\n"
+            # ── Create admin user ──────────────────────────────────────────────────
+            admin = User(
+                id=uuid.uuid4(),
+                username=username,
+                email=email,
+                full_name=full_name,
+                password_hash=hash_password(password),
+                role=UserRole.ADMIN,
+                is_active=True,
             )
-            return
 
-        if existing_email:
+            db.add(admin)
+            await db.commit()
+            await db.refresh(admin)
+
             print(
-                f"\n[seed] Skipped — email '{EMAIL}' already exists.\n"
-                f"       Username: {existing_email.username}\n"
-                f"       User ID : {existing_email.id}\n"
+                f"\n[seed] Admin user created successfully.\n"
+                f"       Username : {admin.username}\n"
+                f"       Email    : {admin.email}\n"
+                f"       Full name: {admin.full_name}\n"
+                f"       User ID  : {admin.id}\n"
+                f"       Role     : {admin.role.value}\n"
+                f"\n       Log in at http://localhost:3000/login\n"
             )
-            return
-
-        # ── Create admin user ──────────────────────────────────────────────────
-        admin = User(
-            id=uuid.uuid4(),
-            username=USERNAME,
-            email=EMAIL,
-            full_name=FULL_NAME,
-            password_hash=hash_password(PASSWORD),
-            role=UserRole.ADMIN,
-            is_active=True,
-        )
-
-        db.add(admin)
-        db.commit()
-        db.refresh(admin)
-
-        print(
-            f"\n[seed] Admin user created successfully.\n"
-            f"       Username : {admin.username}\n"
-            f"       Email    : {admin.email}\n"
-            f"       Full name: {admin.full_name}\n"
-            f"       User ID  : {admin.id}\n"
-            f"       Role     : {admin.role.value}\n"
-            f"\n       Log in at http://localhost:3000/login\n"
-        )
-
-    except Exception as e:
-        db.rollback()
-        print(f"\n[seed] ERROR: {e}\n")
-        sys.exit(1)
-    finally:
-        db.close()
+        except Exception as e:
+            await db.rollback()
+            print(f"\n[seed] ERROR: {e}\n")
+            sys.exit(1)
 
 
 if __name__ == "__main__":
-    seed()
+    asyncio.run(seed())
