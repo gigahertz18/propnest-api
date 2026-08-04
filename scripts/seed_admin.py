@@ -57,7 +57,7 @@ def _get_credentials() -> tuple[str, str, str, str]:
     Returns (username, email, full_name, password)
     """
 
-    username = os.environ.get("SEED_USERNAME", "addmin")
+    username = os.environ.get("SEED_USERNAME", "admin")
     email = os.environ.get("SEED_EMAIL", "admin@propnest.com")
     full_name = os.environ.get("SEED_FULL_NAME", "PropNest Admin")
     password = os.environ.get("SEED_PASSWORD", "")
