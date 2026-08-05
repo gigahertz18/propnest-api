@@ -67,6 +67,15 @@ class TestGetContractRoute:
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]
 
+    async def test_returns_403_when_regular_user(self, client, db, authenticate_user):
+        auth_ctx = await authenticate_user()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, prop.id, tenant.id)
+        response = await client.get(f"/api/v1/contracts/{contract.id}", headers=auth_ctx.headers)
+
+        assert response.status_code == 403
+
 
 @pytest.mark.asyncio
 class TestCreateContractRoute:

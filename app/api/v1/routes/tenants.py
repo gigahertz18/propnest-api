@@ -49,14 +49,14 @@ async def get_tenant(
     "/",
     response_model=TenantResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_manager_or_above)],
 )
 async def create_tenant(
     payload: TenantCreate,
     db: AsyncSession = Depends(get_db),
     tenant_service: TenantService = Depends(get_tenant_service),
+    current_user: User = Depends(require_manager_or_above),
 ):
-    return await tenant_service.create_tenant(db, payload)
+    return await tenant_service.create_tenant(db, payload, current_user=current_user)
 
 
 @router.patch(

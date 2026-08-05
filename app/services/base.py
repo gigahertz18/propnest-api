@@ -119,17 +119,20 @@ class ResourceAuthorizationMixin:
         """
         Enforce manager-ownership for an operation resolved to a
         property (directly, or via a contract). No-op for admins.
-        Non-manager/non-admin roles never reach here — route-level role
-        gating already excludes them. Managers must own the resolved
-        property; if nothing resolves, managers are forbidden.
+        Fails closed: any role other than ADMIN/MANAGEr - including a plain USER, or a missing/unrecognized role -
+        is forbidden outright rather than silently treated as authorized.
+        Managers must own the resolved property; if nothing resolves, managers are forbidden.
 
         Raises:
             RelatedResourceNotFoundError: bubbled up from `_resolve_property`.
-            self.forbidden_error: when a manager isn't authorized (each
+            self.forbidden_error: when the caller isn't authorized (each
                 entity overrides this class attribute with its own type).
         """
-        if getattr(current_user, "role", None) != UserRole.MANAGER:
+        role = getattr(current_user, "role", None)
+        if role == UserRole.ADMIN:
             return
+        if role != UserRole.MANAGER:
+            raise self.forbidden_error("User not authorized to manage this resource.")
 
         prop = await self._resolve_property(db, property_id=property_id, contract_id=contract_id)
 
@@ -146,19 +149,25 @@ class ResourceAuthorizationMixin:
     ) -> PaginatedResponse:
         """Admins see everything; managers see only their own, via
         `repo.get_all_for_manager`/`count_all_for_manager`. Shared by
-        the Document/Payment/Property/Tenant list endpoints.
+        the Document/Payment/Property/Tenant/Contract list endpoints.
 
         `current_user` is required, not optional: a call site that
         forgets to pass it fails loudly with a TypeError instead of
         silently listing everything to nobody-in-particular — the
         exact silent-bypass bug this codebase was bitten by once.
+
+        Failse closed: any role other than ADMIN/MANAGERe is forbidden outright
+        rather than falling through to the unscoped "everyone else" branch.
         """
-        if current_user.role == UserRole.MANAGER:
+        role = getattr(current_user, "role", None)
+        if role == UserRole.MANAGER:
             items = await repo.get_all_for_manager(db, current_user.id, skip=skip, limit=limit)
             total = await repo.count_all_for_manager(db, current_user.id)
-        else:
+        elif role == UserRole.ADMIN:
             items = await repo.get_all(db, skip=skip, limit=limit)
             total = await repo.count_all(db)
+        else:
+            raise self.forbidden_error("User not authorized to manage this resource.")
         return PaginatedResponse(items=items, total=total)
 
     @staticmethod

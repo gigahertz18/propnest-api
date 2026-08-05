@@ -123,9 +123,9 @@ class DocumentService(ResourceAuthorizationMixin):
         self,
         db: AsyncSession,
         payload: DocumentCreate,
+        current_user: User,
         storage_client=None,
         file_obj=None,
-        current_user: User | None = None,
     ) -> Document:
         """Create a document record and optionally store the file in external storage.
 
@@ -136,11 +136,11 @@ class DocumentService(ResourceAuthorizationMixin):
 
         ctx = await self._prepare_document_context(
             db,
+            current_user,
             doc=None,
             property_id=payload.property_id,
             contract_id=payload.contract_id,
             tenant_id=payload.tenant_id,
-            current_user=current_user,
         )
 
         doc_id = uuid4()
@@ -186,18 +186,18 @@ class DocumentService(ResourceAuthorizationMixin):
         db: AsyncSession,
         doc_id: UUID,
         payload: DocumentRelinkUpdate,
-        current_user: User | None = None,
+        current_user: User,
     ) -> Document | None:
 
         doc = await self.get_document(db, doc_id, current_user=current_user)
 
         ctx = await self._prepare_document_context(
             db,
+            current_user,
             doc=doc,
             property_id=payload.property_id,
             contract_id=payload.contract_id,
             tenant_id=payload.tenant_id,
-            current_user=current_user,
         )
 
         resolved_payload = DocumentRelinkUpdate(
@@ -218,7 +218,7 @@ class DocumentService(ResourceAuthorizationMixin):
         *,
         storage_client,
         file_obj,
-        current_user: User | None = None,
+        current_user: User,
     ) -> Document | None:
         """
         Replace the file behind an existing document, optionally
@@ -241,11 +241,11 @@ class DocumentService(ResourceAuthorizationMixin):
 
         ctx = await self._prepare_document_context(
             db,
+            current_user,
             doc=doc,
             property_id=payload.property_id,
             contract_id=payload.contract_id,
             tenant_id=payload.tenant_id,
-            current_user=current_user,
         )
         storage_key = self._build_storage_key(doc_id, payload.file_name)
         old_storage_key = self._build_storage_key(doc_id, doc.file_name)
@@ -362,19 +362,19 @@ class DocumentService(ResourceAuthorizationMixin):
         self,
         db: AsyncSession,
         doc_id: UUID,
+        current_user: User,
         storage_client=None,
-        current_user: User | None = None,
     ) -> Document | None:
 
         doc = await self.get_document(db, doc_id, current_user=current_user)
 
         await self._prepare_document_context(
             db,
+            current_user,
             doc=doc,
             property_id=doc.property_id,
             contract_id=doc.contract_id,
             tenant_id=doc.tenant_id,
-            current_user=current_user,
         )
 
         savepoint = await db.begin_nested()
@@ -534,12 +534,12 @@ class DocumentService(ResourceAuthorizationMixin):
     async def _prepare_document_context(
         self,
         db: AsyncSession,
+        current_user: User,
         *,
         doc: Document | None = None,
         property_id: UUID | None = None,
         contract_id: UUID | None = None,
         tenant_id: UUID | None = None,
-        current_user: User | None = None,
     ) -> DocumentContext:
         """Resolve, normalize, and authorize the property/contract/tenant context.
 
@@ -560,13 +560,12 @@ class DocumentService(ResourceAuthorizationMixin):
             tenant_id=tenant_id,
         )
 
-        if current_user:
-            await self._authorize_user_to_property(
-                db,
-                current_user,
-                property_id=resolved_prop_id,
-                contract_id=resolved_contract_id,
-            )
+        await self._authorize_user_to_property(
+            db,
+            current_user,
+            property_id=resolved_prop_id,
+            contract_id=resolved_contract_id,
+        )
 
         return DocumentContext(
             document=doc,

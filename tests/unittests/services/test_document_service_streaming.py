@@ -8,6 +8,8 @@ from app.repositories.document import document_repo
 from app.schemas.document import DocumentCreate
 from app.services.exceptions import DocumentUploadError
 
+from tests.factories import make_admin
+
 
 class NonSeekableIO:
     """A minimal non-seekable file-like object used by tests."""
@@ -95,7 +97,7 @@ class TestUploadStreaming:
 
         storage = RecordingStorage()
 
-        created = await service.create_document(db, payload, storage_client=storage, file_obj=upload)
+        created = await service.create_document(db, payload, make_admin(), storage_client=storage, file_obj=upload)
 
         assert len(storage.calls) == 1
         call = storage.calls[0]
@@ -111,7 +113,7 @@ class TestUploadStreaming:
 
         storage = DummyStorageClient()
 
-        doc = await service.create_document(db, payload, storage_client=storage, file_obj=upload)
+        doc = await service.create_document(db, payload, make_admin(), storage_client=storage, file_obj=upload)
 
         assert doc is not None
         assert len(storage.calls) == 1
@@ -128,7 +130,7 @@ class TestUploadStreaming:
         storage = DummyStorageClient()
 
         with pytest.raises(DocumentUploadError):
-            await service.create_document(db, payload, storage_client=storage, file_obj=upload)
+            await service.create_document(db, payload, make_admin(), storage_client=storage, file_obj=upload)
 
     async def test_handles_non_seekable_stream(self, db, service):
         content = b"%PDF-1.4 NON-SEEKABLE-CONTENT"
@@ -137,7 +139,7 @@ class TestUploadStreaming:
 
         storage = DummyStorageClient()
 
-        doc = await service.create_document(db, payload, storage_client=storage, file_obj=upload)
+        doc = await service.create_document(db, payload, make_admin(), storage_client=storage, file_obj=upload)
 
         assert doc is not None
         assert len(storage.calls) == 1
@@ -155,7 +157,7 @@ class TestUploadStreaming:
 
         storage = ThreeArgStorage()
 
-        doc = await service.create_document(db, payload, storage_client=storage, file_obj=upload)
+        doc = await service.create_document(db, payload, make_admin(), storage_client=storage, file_obj=upload)
 
         assert doc is not None
         assert len(storage.calls) == 1
@@ -172,7 +174,7 @@ class TestUploadStreaming:
             storage = DummyStorageClient()
 
             with pytest.raises(DocumentUploadError):
-                await service.create_document(db, payload, storage_client=storage, file_obj=upload)
+                await service.create_document(db, payload, make_admin(), storage_client=storage, file_obj=upload)
         finally:
             DocumentService._MAX_FILE_SIZE = original_max
 
@@ -215,7 +217,7 @@ class TestMimeSniffing:
         upload = make_upload(content, filename, expected_content_type)
         storage = DummyStorageClient()
 
-        await service.create_document(db, payload, storage_client=storage, file_obj=upload)
+        await service.create_document(db, payload, make_admin(), storage_client=storage, file_obj=upload)
 
         assert len(storage.calls) == 1
         assert storage.calls[0]["content_type"] == expected_content_type
@@ -230,7 +232,7 @@ class TestMimeSniffing:
         storage = DummyStorageClient()
 
         with pytest.raises(DocumentUploadError):
-            await service.create_document(db, payload, storage_client=storage, file_obj=upload)
+            await service.create_document(db, payload, make_admin(), storage_client=storage, file_obj=upload)
         assert storage.calls == []
 
     async def test_rejects_disallowed_real_type_even_with_allowed_declared_type(self, db, service):
@@ -242,7 +244,7 @@ class TestMimeSniffing:
         storage = DummyStorageClient()
 
         with pytest.raises(DocumentUploadError):
-            await service.create_document(db, payload, storage_client=storage, file_obj=upload)
+            await service.create_document(db, payload, make_admin(), storage_client=storage, file_obj=upload)
         assert storage.calls == []
 
     async def test_rejects_unrecognized_signature(self, db, service):
@@ -253,7 +255,7 @@ class TestMimeSniffing:
         storage = DummyStorageClient()
 
         with pytest.raises(DocumentUploadError):
-            await service.create_document(db, payload, storage_client=storage, file_obj=upload)
+            await service.create_document(db, payload, make_admin(), storage_client=storage, file_obj=upload)
 
     async def test_rejects_legitimate_file_despite_disallowed_declared_type(self, db, service):
         """
@@ -267,7 +269,7 @@ class TestMimeSniffing:
         storage = DummyStorageClient()
 
         with pytest.raises(DocumentUploadError):
-            await service.create_document(db, payload, storage_client=storage, file_obj=upload)
+            await service.create_document(db, payload, make_admin(), storage_client=storage, file_obj=upload)
 
         assert storage.calls == []
 
@@ -281,7 +283,7 @@ class TestMimeSniffing:
 
         storage = DummyStorageClient()
 
-        await service.create_document(db, payload, storage_client=storage, file_obj=upload)
+        await service.create_document(db, payload, make_admin(), storage_client=storage, file_obj=upload)
 
         assert len(storage.calls) == 1
         assert storage.calls[0]["content_type"] == "image/jpeg"
@@ -295,4 +297,4 @@ class TestMimeSniffing:
         storage = DummyStorageClient()
 
         with pytest.raises(DocumentUploadError):
-            await service.create_document(db, payload, storage_client=storage, file_obj=upload)
+            await service.create_document(db, payload, make_admin(), storage_client=storage, file_obj=upload)

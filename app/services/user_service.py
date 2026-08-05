@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from uuid import UUID
 
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.repositories.user import UserRepository
 from app.schemas.user import UserCreate, UserUpdate
 from app.services.utils import integrity_error_message
@@ -12,6 +12,7 @@ from app.services.exceptions import (
     EmailAlreadyExistsError,
     UsernameAlreadyExistsError,
     ManagerAssignedToPropertyError,
+    UserForbiddenError,
 )
 
 
@@ -27,16 +28,28 @@ class UserService:
     def __init__(self, user_repo: UserRepository) -> None:
         self.user_repo = user_repo
 
-    async def list_users(self, db: AsyncSession, skip: int = 0, limit: int = 100) -> Sequence[User]:
+    async def list_users(
+        self,
+        db: AsyncSession,
+        current_user: User,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Sequence[User]:
+        self._require_admin(current_user)
         return await self.user_repo.get_all(db, skip=skip, limit=limit)
 
-    async def get_user(self, db: AsyncSession, id: UUID) -> User:
+    async def get_user(self, db: AsyncSession, id: UUID, current_user: User) -> User:
+        self._authorize_self_or_admin(current_user, id)
         user = await self.user_repo.get_by_id(db, id)
         if not user:
             raise UserNotFoundError("User not found")
         return user
 
     async def create_user(self, db: AsyncSession, payload: UserCreate) -> User:
+        # No self-or-admin check needed: this creates a brand-new account,
+        # so there's no existing resource to own. Admin-only role gating
+        # at the route layer (require_admin) is sufficient here — there's
+        # no per-resource ownership dimension the way get/update/delete have.
         # Pre-check for fast feedback in the common case
         if await self.user_repo.get_by_email(db, payload.email):
             raise EmailAlreadyExistsError("A user with this email already exists")
@@ -54,7 +67,12 @@ class UserService:
                 e, default=EmailAlreadyExistsError("A user with this email or username already exists")
             )
 
-    async def update_user(self, db: AsyncSession, id: UUID, payload: UserUpdate) -> User:
+    async def update_user(self, db: AsyncSession, id: UUID, payload: UserUpdate, current_user: User) -> User:
+        self._authorize_self_or_admin(current_user, id)
+
+        if payload.role is not None and getattr(current_user, "role", None) != UserRole.ADMIN:
+            raise UserForbiddenError("You cannot change your own role.")
+
         if payload.email is not None:
             existing = await self.user_repo.get_by_email(db, payload.email)
             if existing and existing.id != id:
@@ -75,7 +93,12 @@ class UserService:
         await db.commit()
         return user
 
-    async def delete_user(self, db: AsyncSession, id: UUID) -> User:
+    async def delete_user(self, db: AsyncSession, id: UUID, current_user: User) -> User:
+        self._require_admin(current_user)
+
+        if current_user.id == id:
+            raise UserForbiddenError("You cannot delete your own account.")
+
         user = await self.user_repo.delete(db, id)
 
         if not user:
@@ -88,6 +111,17 @@ class UserService:
                 f"User {id} cannot be deleted because they are still assigned as manager on one or more properties."
             ) from e
         return user
+
+    @staticmethod
+    def _require_admin(current_user: User) -> None:
+        if getattr(current_user, "role", None) != UserRole.ADMIN:
+            raise UserForbiddenError("Admin access required.")
+
+    @staticmethod
+    def _authorize_self_or_admin(current_user: User, target_id: UUID) -> None:
+        role = getattr(current_user, "role", None)
+        if role != UserRole.ADMIN and getattr(current_user, "id", None) != target_id:
+            raise UserForbiddenError("You can only access your own profile.")
 
     @staticmethod
     def _raise_conflict(e: IntegrityError, default: Exception | None = None) -> None:

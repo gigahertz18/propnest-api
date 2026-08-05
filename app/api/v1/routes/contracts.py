@@ -22,31 +22,33 @@ router = APIRouter(prefix="/contracts", tags=["Contracts"])
 @router.get(
     "/",
     response_model=PaginatedResponse[ContractResponse],
-    dependencies=[Depends(require_manager_or_above)],
 )
 async def list_contracts(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
     contract_service: ContractService = Depends(get_contract_service),
+    current_user: User = Depends(require_manager_or_above),
 ):
-    return await contract_service.list_contracts(db, skip=skip, limit=limit)
+    return await contract_service.list_contracts(db, current_user, skip=skip, limit=limit)
 
 
 @router.get(
     "/{contract_id}",
     response_model=ContractResponse,
-    dependencies=[Depends(require_manager_or_above)],
 )
 async def get_contract(
     contract_id: UUID,
     db: AsyncSession = Depends(get_db),
     contract_service: ContractService = Depends(get_contract_service),
+    current_user: User = Depends(require_manager_or_above),
 ):
     try:
-        return await contract_service.get_contract(db, contract_id)
+        return await contract_service.get_contract(db, contract_id, current_user)
     except RelatedResourceNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ContractForbiddenError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
 @router.post(

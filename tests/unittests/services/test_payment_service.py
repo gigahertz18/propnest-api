@@ -349,7 +349,7 @@ class TestDeletePayment:
     async def test_raises_when_not_found(self, mock_db):
         svc = _make_service()
         with pytest.raises(RelatedResourceNotFoundError):
-            await svc.delete_payment(mock_db, uuid4())
+            await svc.delete_payment(mock_db, uuid4(), make_admin())
 
     async def test_admin_can_delete_any_payment(self, mock_db):
         payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4()

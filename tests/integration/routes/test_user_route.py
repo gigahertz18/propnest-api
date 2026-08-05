@@ -252,7 +252,7 @@ class TestDeleteUserRoute:
     async def test_admin_cannot_delete_themselves(self, client, authenticate_admin):
         ctx = await authenticate_admin()
         response = await client.delete(f"/api/v1/users/{ctx.user.id}", headers=ctx.headers)
-        assert response.status_code == 400
+        assert response.status_code == 403
 
     async def test_regular_user_cannot_delete(self, client, db, authenticate_user):
         ctx = await authenticate_user()

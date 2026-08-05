@@ -103,7 +103,6 @@ class TestListDocuments:
         fix for the regression where Tenant/Document authorization was
         silently skippable when current_user was omitted."""
         doc = SimpleNamespace(id=uuid4())
-        # svc = DocumentService(document_repo=MockDocumentRepoWithScoping({doc.id: doc}))
         svc = _make_service(documents=MockDocumentRepoWithScoping({doc.id: doc}))
 
         with pytest.raises(TypeError):
@@ -112,7 +111,6 @@ class TestListDocuments:
     async def test_admin_sees_all_documents(self, mock_db):
         owned = SimpleNamespace(id=uuid4(), manager_id=uuid4())
         other = SimpleNamespace(id=uuid4(), manager_id=uuid4())
-        # svc = DocumentService(document_repo=MockDocumentRepoWithScoping({owned.id: owned, other.id: other}))
         svc = _make_service(documents=MockDocumentRepoWithScoping({owned.id: owned, other.id: other}))
         admin = make_admin()
 
@@ -125,7 +123,6 @@ class TestListDocuments:
         manager = make_manager()
         owned = SimpleNamespace(id=uuid4(), manager_id=manager.id)
         other = SimpleNamespace(id=uuid4(), manager_id=uuid4())
-        # svc = DocumentService(document_repo=MockDocumentRepoWithScoping({owned.id: owned, other.id: other}))
         svc = _make_service(documents=MockDocumentRepoWithScoping({owned.id: owned, other.id: other}))
 
         result = await svc.list_documents(mock_db, current_user=manager)
@@ -1214,6 +1211,7 @@ class TestCreateDocumentStorageCleanupOnDbFailure:
             await svc.create_document(
                 mock_db,
                 payload,
+                make_admin(),
                 storage_client=TrackingStorage(),
                 file_obj=BytesIO(b"%PDF-1.4 content"),
             )
@@ -1268,6 +1266,7 @@ class TestCreateDocumentStorageCleanupOnDbFailure:
             await svc.create_document(
                 mock_db,
                 payload,
+                make_admin(),
                 storage_client=FailingStorage(),
                 file_obj=BytesIO(b"%PDF-1.4 content"),
             )
