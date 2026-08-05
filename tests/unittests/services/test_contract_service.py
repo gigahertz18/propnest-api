@@ -18,7 +18,7 @@ from app.services.exceptions import (
     ResourceForbiddenError,
 )
 from tests.mock_repos import MockCRUDRepo, MockReadOnlyRepo
-from tests.factories import make_admin, make_manager
+from tests.factories import make_admin, make_manager, make_regular_user
 
 
 class MockContractRepo(MockCRUDRepo):
@@ -46,11 +46,44 @@ class MockContractRepo(MockCRUDRepo):
         return await self._filter_by(booking_source=booking_source)
 
 
-def _make_service(properties=None, tenants=None, contracts=None):
+class MockContractRepoWithScoping(MockContractRepo):
+    """Adds a fake `get_all_for_manager`/`count_all_for_manager` that
+    filters directly off a `manager_id` attribute stashed on each mock
+    record, not the real property join. The real join semantics are
+    covered by ContractRepository's own tests against a real DB; this
+    only needs to confirm ContractService.list_contracts calls the
+    right repo method for the right role."""
+
+    async def get_all_for_manager(self, db, manager_id, skip=0, limit=100):
+        return [c for c in self.records.values() if getattr(c, "manager_id", None) == manager_id]
+
+
+def _make_service(contracts=None, properties=None, tenants=None) -> ContractService:
+    if contracts is None:
+        contract_repo = MockContractRepo({})
+    elif isinstance(contracts, dict):
+        contract_repo = MockContractRepo(contracts)
+    else:
+        contract_repo = contracts
+
+    if properties is None:
+        property_repo = MockReadOnlyRepo({})
+    elif isinstance(properties, dict):
+        property_repo = MockReadOnlyRepo(properties)
+    else:
+        property_repo = properties
+
+    if tenants is None:
+        tenant_repo = MockReadOnlyRepo({})
+    elif isinstance(tenants, dict):
+        tenant_repo = MockReadOnlyRepo(tenants)
+    else:
+        tenant_repo = tenants
+
     return ContractService(
-        contract_repo=MockContractRepo(contracts),
-        property_repo=MockReadOnlyRepo(properties),
-        tenant_repo=MockReadOnlyRepo(tenants),
+        contract_repo=contract_repo,
+        property_repo=property_repo,
+        tenant_repo=tenant_repo,
     )
 
 
@@ -98,16 +131,73 @@ class TestContractServiceClassAttributes:
 @pytest.mark.asyncio
 class TestGetContract:
     async def test_returns_contract_when_found(self, mock_db):
-        contract_id = uuid4()
-        contract = SimpleNamespace(id=contract_id)
-        svc = _make_service(contracts={contract_id: contract})
+        contract_id, prop_id = uuid4(), uuid4()
+        contract = SimpleNamespace(id=contract_id, property_id=prop_id)
+        svc = _make_service(
+            contracts={contract_id: contract},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
 
-        assert await svc.get_contract(mock_db, contract_id) is contract
+        assert await svc.get_contract(mock_db, contract_id, current_user=make_admin()) is contract
 
     async def test_raises_when_not_found(self, mock_db):
         svc = _make_service()
         with pytest.raises(RelatedResourceNotFoundError):
-            await svc.get_contract(mock_db, uuid4())
+            await svc.get_contract(mock_db, uuid4(), current_user=make_admin())
+
+    async def test_current_user_is_required(self, mock_db):
+        contract_id, prop_id = uuid4(), uuid4()
+        contract = SimpleNamespace(id=contract_id, property_id=prop_id)
+        svc = _make_service(
+            contracts={contract_id: contract},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+
+        with pytest.raises(TypeError):
+            await svc.get_contract(mock_db, contract_id)
+
+    async def test_admin_can_get_any_contract(self, mock_db):
+        contract_id, prop_id = uuid4(), uuid4()
+        contract = SimpleNamespace(id=contract_id, property_id=prop_id)
+
+        svc = _make_service(
+            contracts={contract_id: contract},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+
+        assert await svc.get_contract(mock_db, contract_id, current_user=make_admin()) is contract
+
+    async def test_manager_can_get_contract_on_owned_property(self, mock_db):
+        manager_id, contract_id, prop_id = uuid4(), uuid4(), uuid4()
+        contract = SimpleNamespace(id=contract_id, property_id=prop_id)
+        svc = _make_service(
+            contracts={contract_id: contract},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)},
+        )
+
+        assert await svc.get_contract(mock_db, contract_id, current_user=make_manager(manager_id)) is contract
+
+    async def test_manager_forbidden_for_unowned_property(self, mock_db):
+        contract_id, prop_id = uuid4(), uuid4()
+        contract = SimpleNamespace(id=contract_id, property_id=prop_id)
+        svc = _make_service(
+            contracts={contract_id: contract},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+
+        with pytest.raises(ContractForbiddenError):
+            await svc.get_contract(mock_db, contract_id, current_user=make_manager())
+
+    async def test_user_role_is_forbidden(self, mock_db):
+        contract_id, prop_id = uuid4(), uuid4()
+        contract = SimpleNamespace(id=contract_id, property_id=prop_id)
+        svc = _make_service(
+            contracts={contract_id: contract},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+
+        with pytest.raises(ContractForbiddenError):
+            await svc.get_contract(mock_db, contract_id, current_user=make_regular_user())
 
 
 # ─── list_contracts ─────────────────────────────────────────────────────────
@@ -115,20 +205,45 @@ class TestGetContract:
 
 @pytest.mark.asyncio
 class TestListContracts:
-    async def test_delegates_to_repo(self, mock_db):
-        c1, c2 = SimpleNamespace(id=uuid4()), SimpleNamespace(id=uuid4())
-        svc = _make_service(contracts={c1.id: c1, c2.id: c2})
 
-        result = await svc.list_contracts(mock_db)
+    async def test_current_user_is_required(self, mock_db):
+        """current_user has no default - a caller that forgets to pass it gets
+        a loud TypeError, not a silent bypass to the unscoped list."""
+        svc = _make_service(contracts=MockContractRepoWithScoping())
+        with pytest.raises(TypeError):
+            await svc.list_contracts(mock_db)
+
+    async def test_admin_sees_all_contracts(self, mock_db):
+        c1 = SimpleNamespace(id=uuid4(), manager_id=uuid4())
+        c2 = SimpleNamespace(id=uuid4(), manager_id=uuid4())
+        svc = _make_service(contracts=MockContractRepoWithScoping({c1.id: c1, c2.id: c2}))
+
+        result = await svc.list_contracts(mock_db, current_user=make_admin())
 
         assert result.items == [c1, c2]
         assert result.total == 2
 
-    async def test_respects_skip_and_limit(self, mock_db):
-        contracts = {uuid4(): SimpleNamespace(id=i) for i in range(5)}
-        svc = _make_service(contracts=contracts)
+    async def test_manager_only_sees_contracts_for_own_properties(self, mock_db):
+        manager = make_manager()
+        owned = SimpleNamespace(id=uuid4(), manager_id=manager.id)
+        other = SimpleNamespace(id=uuid4(), manager_id=uuid4())
+        svc = _make_service(contracts=MockContractRepoWithScoping({owned.id: owned, other.id: other}))
 
-        result = await svc.list_contracts(mock_db, skip=1, limit=2)
+        result = await svc.list_contracts(mock_db, current_user=manager)
+
+        assert result.items == [owned]
+        assert result.total == 1
+
+    async def test_user_role_is_forbidden(self, mock_db):
+        svc = _make_service(contracts=MockContractRepoWithScoping())
+        with pytest.raises(ContractForbiddenError):
+            await svc.list_contracts(mock_db, current_user=make_regular_user())
+
+    async def test_respects_skip_and_limit(self, mock_db):
+        contracts = {uuid4(): SimpleNamespace(id=i, manager_id=uuid4()) for i in range(5)}
+        svc = _make_service(contracts=MockContractRepoWithScoping(contracts))
+
+        result = await svc.list_contracts(mock_db, current_user=make_admin(), skip=1, limit=2)
 
         assert len(result.items) == 2
         assert result.total == 5
@@ -234,18 +349,39 @@ class TestCreateContract:
 
         assert repo.created_payloads == []
 
-    async def test_skips_authorization_when_no_current_user(self, mock_db):
-        """Internal/system callers that don't pass current_user skip
-        authorization entirely, but existence validation still runs."""
+    async def test_current_user_is_required(self, mock_db):
+        """current_user has no default — a caller that forgets to pass it
+        gets a loud TypeError, not a silent bypass. This is the specific
+        fix for the regression where authorization was silently
+        skippable when current_user was omitted."""
         prop_id, tenant_id = uuid4(), uuid4()
         svc = _make_service(
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
             tenants={tenant_id: SimpleNamespace(id=tenant_id)},
         )
+        repo = svc.contract_repo
 
-        result = await svc.create_contract(mock_db, _payload(property_id=prop_id, tenant_id=tenant_id))
+        with pytest.raises(TypeError):
+            await svc.create_contract(mock_db, _payload(property_id=prop_id, tenant_id=tenant_id))
 
-        assert result.property_id == prop_id
+        assert repo.created_payloads == []
+
+    async def test_user_role_is_forbidden(self, mock_db):
+        prop_id, tenant_id = uuid4(), uuid4()
+        svc = _make_service(
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+            tenants={tenant_id: SimpleNamespace(id=tenant_id)},
+        )
+        repo = svc.contract_repo
+
+        with pytest.raises(ContractForbiddenError):
+            await svc.create_contract(
+                mock_db,
+                _payload(property_id=prop_id, tenant_id=tenant_id),
+                current_user=make_regular_user(),
+            )
+
+        assert repo.created_payloads == []
 
     async def test_translates_integrity_error_with_uq_constraint_name(self, mock_db):
         class Repo(MockContractRepo):
@@ -313,7 +449,7 @@ class TestUpdateContract:
     async def test_raises_when_contract_not_found(self, mock_db):
         svc = _make_service()
         with pytest.raises(RelatedResourceNotFoundError):
-            await svc.update_contract(mock_db, uuid4(), ContractUpdate(status="INACTIVE"))
+            await svc.update_contract(mock_db, uuid4(), ContractUpdate(status="INACTIVE"), current_user=make_admin())
 
     async def test_admin_can_update_any_contract(self, mock_db):
         contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
@@ -364,7 +500,7 @@ class TestUpdateContract:
         assert repo.updated_payloads == []
         assert not mock_db.commit.called
 
-    async def test_skips_authorization_when_no_current_user(self, mock_db):
+    async def test_current_user_is_required(self, mock_db):
         contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
         contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="ACTIVE")
         svc = _make_service(
@@ -372,10 +508,29 @@ class TestUpdateContract:
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
             tenants={tenant_id: SimpleNamespace(id=tenant_id)},
         )
+        repo = svc.contract_repo
 
-        result = await svc.update_contract(mock_db, contract_id, ContractUpdate(status="INACTIVE"))
+        with pytest.raises(TypeError):
+            await svc.update_contract(mock_db, contract_id, ContractUpdate(status="INACTIVE"))
 
-        assert result.status == "INACTIVE"
+        assert repo.updated_payloads == []
+
+    async def test_user_role_is_forbidden(self, mock_db):
+        contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
+        contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="ACTIVE")
+        svc = _make_service(
+            contracts={contract_id: contract},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+            tenants={tenant_id: SimpleNamespace(id=tenant_id)},
+        )
+        repo = svc.contract_repo
+
+        with pytest.raises(ContractForbiddenError):
+            await svc.update_contract(
+                mock_db, contract_id, ContractUpdate(status="INACTIVE"), current_user=make_regular_user()
+            )
+
+        assert repo.updated_payloads == []
 
     async def test_returns_none_when_repo_update_returns_none(self, mock_db):
         """Edge case: contract existed at get_contract time but the repo's
@@ -476,7 +631,7 @@ class TestDeleteContract:
     async def test_raises_when_contract_not_found(self, mock_db):
         svc = _make_service()
         with pytest.raises(RelatedResourceNotFoundError):
-            await svc.delete_contract(mock_db, uuid4())
+            await svc.delete_contract(mock_db, uuid4(), current_user=make_admin())
 
     async def test_admin_can_delete_any_contract(self, mock_db):
         contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
@@ -521,7 +676,7 @@ class TestDeleteContract:
         assert repo.deleted_ids == []
         assert not mock_db.commit.called
 
-    async def test_skips_authorization_when_no_current_user(self, mock_db):
+    async def test_current_user_is_required(self, mock_db):
         contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
         contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="ACTIVE")
         svc = _make_service(
@@ -529,10 +684,27 @@ class TestDeleteContract:
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
             tenants={tenant_id: SimpleNamespace(id=tenant_id)},
         )
+        repo = svc.contract_repo
 
-        result = await svc.delete_contract(mock_db, contract_id)
+        with pytest.raises(TypeError):
+            await svc.delete_contract(mock_db, contract_id)
 
-        assert result is contract
+        assert repo.deleted_ids == []
+
+    async def test_user_role_is_forbidden(self, mock_db):
+        contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
+        contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="ACTIVE")
+        svc = _make_service(
+            contracts={contract_id: contract},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+            tenants={tenant_id: SimpleNamespace(id=tenant_id)},
+        )
+        repo = svc.contract_repo
+
+        with pytest.raises(ContractForbiddenError):
+            await svc.delete_contract(mock_db, contract_id, current_user=make_regular_user())
+
+        assert repo.deleted_ids == []
 
     async def test_returns_none_when_repo_delete_returns_none(self, mock_db):
         contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()

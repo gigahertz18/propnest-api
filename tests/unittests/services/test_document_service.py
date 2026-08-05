@@ -17,7 +17,7 @@ from app.services.exceptions import (
 from app.repositories.document import document_repo
 from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate
 from tests.mock_repos import MockCRUDRepo, MockReadOnlyRepo
-from tests.factories import make_admin, make_manager
+from tests.factories import make_admin, make_manager, make_regular_user
 
 
 class FailingStorage:
@@ -58,12 +58,40 @@ class MockDocumentRepoWithScoping(MockCRUDRepo):
         return [doc for doc in self.records.values() if getattr(doc, "manager_id", None) == manager_id]
 
 
-def _make_service(properties=None, contracts=None, tenants=None, documents=None):
+def _make_service(documents=None, tenants=None, properties=None, contracts=None) -> DocumentService:
+    if documents is None:
+        documents_repo = MockCRUDRepo({})
+    elif isinstance(documents, dict):
+        documents_repo = MockCRUDRepo(documents)
+    else:
+        documents_repo = documents
+
+    if properties is None:
+        property_repo = MockReadOnlyRepo({})
+    elif isinstance(properties, dict):
+        property_repo = MockReadOnlyRepo(properties)
+    else:
+        property_repo = properties
+
+    if contracts is None:
+        contracts_repo = MockReadOnlyRepo({})
+    elif isinstance(contracts, dict):
+        contracts_repo = MockReadOnlyRepo(contracts)
+    else:
+        contracts_repo = contracts
+
+    if tenants is None:
+        tenants_repo = MockReadOnlyRepo({})
+    elif isinstance(tenants, dict):
+        tenants_repo = MockReadOnlyRepo(tenants)
+    else:
+        tenants_repo = tenants
+
     return DocumentService(
-        document_repo=MockCRUDRepo(documents),
-        property_repo=MockReadOnlyRepo(properties),
-        contract_repo=MockReadOnlyRepo(contracts),
-        tenant_repo=MockReadOnlyRepo(tenants),
+        document_repo=documents_repo,
+        property_repo=property_repo,
+        contract_repo=contracts_repo,
+        tenant_repo=tenants_repo,
     )
 
 
@@ -75,7 +103,8 @@ class TestListDocuments:
         fix for the regression where Tenant/Document authorization was
         silently skippable when current_user was omitted."""
         doc = SimpleNamespace(id=uuid4())
-        svc = DocumentService(document_repo=MockDocumentRepoWithScoping({doc.id: doc}))
+        # svc = DocumentService(document_repo=MockDocumentRepoWithScoping({doc.id: doc}))
+        svc = _make_service(documents=MockDocumentRepoWithScoping({doc.id: doc}))
 
         with pytest.raises(TypeError):
             await svc.list_documents(mock_db)
@@ -83,7 +112,8 @@ class TestListDocuments:
     async def test_admin_sees_all_documents(self, mock_db):
         owned = SimpleNamespace(id=uuid4(), manager_id=uuid4())
         other = SimpleNamespace(id=uuid4(), manager_id=uuid4())
-        svc = DocumentService(document_repo=MockDocumentRepoWithScoping({owned.id: owned, other.id: other}))
+        # svc = DocumentService(document_repo=MockDocumentRepoWithScoping({owned.id: owned, other.id: other}))
+        svc = _make_service(documents=MockDocumentRepoWithScoping({owned.id: owned, other.id: other}))
         admin = make_admin()
 
         result = await svc.list_documents(mock_db, current_user=admin)
@@ -95,7 +125,8 @@ class TestListDocuments:
         manager = make_manager()
         owned = SimpleNamespace(id=uuid4(), manager_id=manager.id)
         other = SimpleNamespace(id=uuid4(), manager_id=uuid4())
-        svc = DocumentService(document_repo=MockDocumentRepoWithScoping({owned.id: owned, other.id: other}))
+        # svc = DocumentService(document_repo=MockDocumentRepoWithScoping({owned.id: owned, other.id: other}))
+        svc = _make_service(documents=MockDocumentRepoWithScoping({owned.id: owned, other.id: other}))
 
         result = await svc.list_documents(mock_db, current_user=manager)
 
@@ -434,6 +465,26 @@ class TestCreateDocument:
         )
         assert result.property_id == prop_id
 
+    async def test_current_user_is_required(self, mock_db):
+        prop_id = uuid4()
+        svc = _make_service(properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())})
+        repo = svc.document_repo
+
+        with pytest.raises(TypeError):
+            await svc.create_document(mock_db, self._payload(property_id=prop_id))
+
+        assert repo.created_payloads == []
+
+    async def test_user_role_is_forbidden(self, mock_db):
+        prop_id = uuid4()
+        svc = _make_service(properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())})
+        repo = svc.document_repo
+
+        with pytest.raises(DocumentForbiddenError):
+            await svc.create_document(mock_db, self._payload(property_id=prop_id), current_user=make_regular_user())
+
+        assert repo.created_payloads == []
+
 
 @pytest.mark.asyncio
 class TestUpdateDocumentAuthorization:
@@ -446,6 +497,26 @@ class TestUpdateDocumentAuthorization:
             contract_id=kwargs.get("contract_id"),
             tenant_id=kwargs.get("tenant_id"),
         )
+
+    async def test_current_user_is_required(self, mock_db):
+        doc_id, prop_id = uuid4(), uuid4()
+        doc = SimpleNamespace(id=doc_id, property_id=prop_id, contract_id=None, tenant_id=None)
+        svc = _make_service(
+            documents={doc_id: doc},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+        with pytest.raises(TypeError):
+            await svc.update_document(mock_db, doc_id, DocumentRelinkUpdate())
+
+    async def test_user_role_is_forbidden(self, mock_db):
+        doc_id, prop_id = uuid4(), uuid4()
+        doc = SimpleNamespace(id=doc_id, property_id=prop_id, contract_id=None, tenant_id=None)
+        svc = _make_service(
+            documents={doc_id: doc},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+        with pytest.raises(DocumentForbiddenError):
+            await svc.update_document(mock_db, doc_id, DocumentRelinkUpdate(), current_user=make_regular_user())
 
     async def test_manager_can_update_when_authorized_via_property(self, mock_db):
 
@@ -605,6 +676,26 @@ class TestDeleteDocumentAuthorization:
             contract_id=kwargs.get("contract_id"),
             tenant_id=kwargs.get("tenant_id"),
         )
+
+    async def test_current_user_is_required(self, mock_db):
+        doc_id, prop_id = uuid4(), uuid4()
+        doc = SimpleNamespace(id=doc_id, property_id=prop_id, contract_id=None, tenant_id=None, file_name="f.pdf")
+        svc = _make_service(
+            documents={doc_id: doc},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+        with pytest.raises(TypeError):
+            await svc.delete_document(mock_db, doc_id)
+
+    async def test_user_role_is_forbidden(self, mock_db):
+        doc_id, prop_id = uuid4(), uuid4()
+        doc = SimpleNamespace(id=doc_id, property_id=prop_id, contract_id=None, tenant_id=None, file_name="f.pdf")
+        svc = _make_service(
+            documents={doc_id: doc},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+        with pytest.raises(DocumentForbiddenError):
+            await svc.delete_document(mock_db, doc_id, current_user=make_regular_user())
 
     async def test_manager_can_delete_when_authorized_via_property(self, mock_db):
         manager_id = uuid4()
@@ -1149,7 +1240,7 @@ class TestCreateDocumentStorageCleanupOnDbFailure:
         )
 
         with pytest.raises(RuntimeError):
-            await svc.create_document(mock_db, payload)  # no storage_client, no file_obj
+            await svc.create_document(mock_db, payload, current_user=make_admin())  # no storage_client, no file_obj
 
     async def test_reraises_original_db_error_when_cleanup_also_fails(self, mock_db):
         class FailingCreateRepo(MockCRUDRepo):

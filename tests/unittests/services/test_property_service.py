@@ -151,7 +151,7 @@ class TestCreateProperty:
         svc = _make_service()
         payload = PropertyCreate(name="Unit A", address="123 Main St")
 
-        created = await svc.create_property(mock_db, payload)
+        created = await svc.create_property(mock_db, payload, current_user=_admin())
 
         assert created.name == "Unit A"
         assert created.address == "123 Main St"
@@ -170,7 +170,7 @@ class TestCreateProperty:
         payload = PropertyCreate(name="Unit A", address="123 Main St")
 
         with pytest.raises(PropertyAlreadyExistsError):
-            await svc.create_property(mock_db, payload)
+            await svc.create_property(mock_db, payload, current_user=_admin())
 
     async def test_reraises_unrelated_integrity_errors(self, mock_db):
         class FailingRepo(MockPropertyRepo):
@@ -181,7 +181,30 @@ class TestCreateProperty:
         payload = PropertyCreate(name="Unit A", address="123 Main St")
 
         with pytest.raises(IntegrityError):
+            await svc.create_property(mock_db, payload, current_user=_admin())
+
+    async def test_current_user_is_required(self, mock_db):
+        svc = _make_service()
+        payload = PropertyCreate(name="Unit A", address="123 Main St")
+
+        with pytest.raises(TypeError):
             await svc.create_property(mock_db, payload)
+
+    async def test_manager_is_forbidden(self, mock_db):
+        svc = _make_service()
+        payload = PropertyCreate(name="Unit A", address="123 Main St")
+        manager = SimpleNamespace(id=uuid4(), role=UserRole.MANAGER)
+
+        with pytest.raises(PropertyForbiddenError):
+            await svc.create_property(mock_db, payload, current_user=manager)
+
+    async def test_user_role_is_forbidden(self, mock_db):
+        svc = _make_service()
+        payload = PropertyCreate(name="Unit A", address="123 Main St")
+        user = SimpleNamespace(id=uuid4(), role=UserRole.USER)
+
+        with pytest.raises(PropertyForbiddenError):
+            await svc.create_property(mock_db, payload, current_user=user)
 
 
 @pytest.mark.asyncio
@@ -387,6 +410,25 @@ class TestAssignManager:
         )
         with pytest.raises(TypeError):
             await svc.assign_manager(mock_db, prop.id, manager_id)
+
+    async def test_manager_cannot_assign_manager_even_on_owned_property(self, mock_db):
+        """Regression test: assign_manager previously had no explicit
+        role check of its own — it relied on get_property's ownership
+        check, which a manager who owns the property would pass. Only
+        admins may reassign a property's manager."""
+        manager_id = uuid4()
+        prop = SimpleNamespace(id=uuid4(), manager_id=manager_id)
+        new_manager_id = uuid4()
+
+        svc = _make_service(
+            properties={prop.id: prop},
+            users={new_manager_id: SimpleNamespace(id=new_manager_id, role=UserRole.MANAGER)},
+        )
+
+        with pytest.raises(PropertyForbiddenError):
+            await svc.assign_manager(
+                mock_db, prop.id, new_manager_id, current_user=SimpleNamespace(id=manager_id, role=UserRole.MANAGER)
+            )
 
     async def test_raises_runtime_error_when_user_repo_not_injected(self, mock_db):
         prop = SimpleNamespace(id=uuid4(), manager_id=None)

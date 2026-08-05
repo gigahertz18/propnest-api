@@ -14,6 +14,7 @@ from app.services.exceptions import (
     TenantForbiddenError,
 )
 from tests.mock_repos import MockCRUDRepo, MockReadOnlyRepo
+from tests.factories import make_tenant
 
 
 async def test_tenant_service_delegates_to_repo_methods(mock_db):
@@ -59,7 +60,7 @@ async def test_tenant_service_delegates_to_repo_methods(mock_db):
     assert list_result.items == ["t1"]
     assert list_result.total == 1
     assert await svc.get_tenant(db=mock_db, id=1, current_user=admin) == "byid"
-    assert await svc.create_tenant(db=mock_db, payload=None) == "created"
+    assert await svc.create_tenant(db=mock_db, payload=None, current_user=admin) == "created"
     assert await svc.update_tenant(db=mock_db, id=1, payload=None, current_user=admin) == "updated"
     assert await svc.delete_tenant(db=mock_db, id=1, current_user=admin) == "deleted"
     assert await svc.get_by_email(db=mock_db, email="e") == "email"
@@ -394,3 +395,82 @@ class TestTenantServiceAuthorization:
 
         with pytest.raises(TenantForbiddenError):
             await svc.link_user(mock_db, tenant.id, user.id, current_user=manager)
+
+
+# ─── create_tenant ───────────────────────────────────────────────────────────
+
+
+def _make_regular_user():
+    return SimpleNamespace(id=uuid4(), role=UserRole.USER)
+
+
+@pytest.mark.asyncio
+class TestCreateTenant:
+    async def test_admin_can_create_tenant(self, mock_db):
+        repo = MockCRUDRepo()
+        svc = TenantService(tenant_repo=repo)
+        payload = make_tenant()
+
+        result = await svc.create_tenant(mock_db, payload=payload, current_user=_make_admin())
+
+        assert result is not None
+
+    async def test_manager_can_create_tenant(self, mock_db):
+        repo = MockCRUDRepo()
+        svc = TenantService(tenant_repo=repo)
+        payload = make_tenant()
+
+        result = await svc.create_tenant(mock_db, payload=payload, current_user=_make_manager())
+
+        assert result is not None
+
+    async def test_user_role_is_forbidden(self, mock_db):
+        """A brand-new tenant has no owner to check ownership against —
+        this is the one place role alone (not resource ownership) is the
+        whole check, and it must not be skippable."""
+        repo = MockCRUDRepo()
+        svc = TenantService(tenant_repo=repo)
+        payload = make_tenant()
+
+        with pytest.raises(TenantForbiddenError):
+            await svc.create_tenant(mock_db, payload=payload, current_user=_make_regular_user())
+
+        assert repo.created_payloads == []
+
+    async def test_current_user_is_required(self, mock_db):
+        repo = MockCRUDRepo()
+        svc = TenantService(tenant_repo=repo)
+        payload = make_tenant()
+
+        with pytest.raises(TypeError):
+            await svc.create_tenant(mock_db, payload=payload)
+
+
+# ─── _authorize_user_to_tenant fails closed for unclaimed tenants ───────────
+
+
+@pytest.mark.asyncio
+class TestAuthorizeUserToTenantFailsClosed:
+    async def test_user_role_is_forbidden_for_unclaimed_tenant(self, mock_db):
+        """Regression test: MockOwnershipTenantRepo.is_accessible_by_manager
+        (mirroring the real repo's EXISTS clause) returns True for *any*
+        id when a tenant is unclaimed — it never checks role. Before the
+        fail-closed fix, a plain USER role reached that query and was
+        incorrectly authorized. It must now be rejected before the query
+        ever runs."""
+        tenant = _make_tenant()
+        repo = MockOwnershipTenantRepo({tenant.id: tenant})  # unclaimed
+        svc = TenantService(tenant_repo=repo)
+        user = _make_regular_user()
+
+        with pytest.raises(TenantForbiddenError):
+            await svc.get_tenant(mock_db, tenant.id, current_user=user)
+
+    async def test_unrecognized_role_is_forbidden_for_unclaimed_tenant(self, mock_db):
+        tenant = _make_tenant()
+        repo = MockOwnershipTenantRepo({tenant.id: tenant})  # unclaimed
+        svc = TenantService(tenant_repo=repo)
+        stub = SimpleNamespace(id=uuid4(), role=None)
+
+        with pytest.raises(TenantForbiddenError):
+            await svc.get_tenant(mock_db, tenant.id, current_user=stub)

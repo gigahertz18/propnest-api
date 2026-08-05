@@ -271,6 +271,105 @@ class TestAuthorizeManager:
         with pytest.raises(_CustomForbiddenError):
             await mixin._authorize_user_to_property(mock_db, outsider, property_id=prop_id, contract_id=None)
 
+    async def test_user_role_is_forbidden_even_when_id_matches_manager_id(self, mock_db):
+        """Regression test for the fail-closed fix: a plain USER role
+        must never be treated as authorized just because MANAGER was the
+        only role explicitly special-cased. Even if a USER's id happens
+        to match the resolved property's manager_id, the role check must
+        reject them before ownership is ever considered."""
+        prop_id = uuid4()
+        user_id = uuid4()
+        prop = SimpleNamespace(id=prop_id, manager_id=user_id)
+        mixin = _make_mixin(properties={prop_id: prop})
+        user = SimpleNamespace(id=user_id, role=UserRole.USER)
+
+        with pytest.raises(ResourceForbiddenError):
+            await mixin._authorize_user_to_property(mock_db, user, property_id=prop_id, contract_id=None)
+
+    async def test_unrecognized_role_is_forbidden(self, mock_db):
+        """A current_user with a missing/None role (e.g. a bare stub, or
+        current_user=None passed explicitly) must be rejected, not
+        silently pass through as if authorized."""
+        mixin = _make_mixin()
+        stub = SimpleNamespace(id=uuid4(), role=None)
+
+        with pytest.raises(ResourceForbiddenError):
+            await mixin._authorize_user_to_property(mock_db, stub, property_id=uuid4(), contract_id=None)
+
+
+# ─── _list_scoped_by_manager ─────────────────────────────────────────────────
+
+
+class _FakeListRepo:
+    """Minimal stand-in for a repo used only by `_list_scoped_by_manager` —
+    just the four methods that method calls, nothing entity-specific."""
+
+    def __init__(self, all_items=None, manager_items=None):
+        self.all_items = all_items or []
+        self.manager_items = manager_items or []
+
+    async def get_all(self, db, skip=0, limit=100):
+        return self.all_items
+
+    async def count_all(self, db):
+        return len(self.all_items)
+
+    async def get_all_for_manager(self, db, manager_id, skip=0, limit=100):
+        return self.manager_items
+
+    async def count_all_for_manager(self, db, manager_id):
+        return len(self.manager_items)
+
+
+@pytest.mark.asyncio
+class TestListScopedByManager:
+    async def test_admin_sees_everything(self, mock_db):
+        mixin = ResourceAuthorizationMixin()
+        admin = SimpleNamespace(id=uuid4(), role=UserRole.ADMIN)
+        repo = _FakeListRepo(all_items=["a", "b"])
+
+        result = await mixin._list_scoped_by_manager(mock_db, admin, repo)
+
+        assert result.items == ["a", "b"]
+        assert result.total == 2
+
+    async def test_manager_sees_only_scoped_items(self, mock_db):
+        mixin = ResourceAuthorizationMixin()
+        manager = SimpleNamespace(id=uuid4(), role=UserRole.MANAGER)
+        repo = _FakeListRepo(all_items=["a", "b"], manager_items=["a"])
+
+        result = await mixin._list_scoped_by_manager(mock_db, manager, repo)
+
+        assert result.items == ["a"]
+        assert result.total == 1
+
+    async def test_user_role_is_forbidden(self, mock_db):
+        """Regression test for the fail-closed fix: a plain USER role
+        must not fall through to the unscoped 'everyone else' branch,
+        which previously handed it the full admin-equivalent list."""
+        mixin = ResourceAuthorizationMixin()
+        user = SimpleNamespace(id=uuid4(), role=UserRole.USER)
+        repo = _FakeListRepo(all_items=["a", "b"])
+
+        with pytest.raises(ResourceForbiddenError):
+            await mixin._list_scoped_by_manager(mock_db, user, repo)
+
+    async def test_unrecognized_role_is_forbidden(self, mock_db):
+        mixin = ResourceAuthorizationMixin()
+        stub = SimpleNamespace(id=uuid4(), role=None)
+        repo = _FakeListRepo(all_items=["a"])
+
+        with pytest.raises(ResourceForbiddenError):
+            await mixin._list_scoped_by_manager(mock_db, stub, repo)
+
+    async def test_raises_whatever_forbidden_error_the_instance_sets(self, mock_db):
+        mixin = ResourceAuthorizationMixin()
+        mixin.forbidden_error = _CustomForbiddenError
+        user = SimpleNamespace(id=uuid4(), role=UserRole.USER)
+
+        with pytest.raises(_CustomForbiddenError):
+            await mixin._list_scoped_by_manager(mock_db, user, _FakeListRepo())
+
 
 # ─── _validate_related_resources ────────────────────────────────────────────
 

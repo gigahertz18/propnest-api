@@ -5,9 +5,23 @@ from typing import Any
 import pytest
 from sqlalchemy.exc import IntegrityError
 
+from app.models.user import UserRole
 from app.services.user_service import UserService
 from app.schemas.user import UserCreate, UserUpdate
-from app.services.exceptions import EmailAlreadyExistsError, UsernameAlreadyExistsError, UserNotFoundError
+from app.services.exceptions import (
+    EmailAlreadyExistsError,
+    UsernameAlreadyExistsError,
+    UserNotFoundError,
+    UserForbiddenError,
+)
+
+
+def _admin(id="admin"):
+    return SimpleNamespace(id=id, role=UserRole.ADMIN)
+
+
+def _regular(id="me"):
+    return SimpleNamespace(id=id, role=UserRole.USER)
 
 
 class FakeRepoIntegrityEmail:
@@ -92,6 +106,9 @@ class BaseRepo:
     async def get_by_email(self, db, email) -> Any:
         return None
 
+    async def get_all(self, db, skip=0, limit=100):
+        return None
+
     async def get_by_username(self, db, username) -> Any:
         return None
 
@@ -113,16 +130,15 @@ async def test_update_user_translates_integrity_error(mock_db) -> None:
     svc = UserService(user_repo=UpdateRepo())
 
     with pytest.raises(UsernameAlreadyExistsError):
-        await svc.update_user(db=mock_db, id="id", payload=UserUpdate(username="collision"))
+        await svc.update_user(db=mock_db, id="id", payload=UserUpdate(username="collision"), current_user=_admin())
 
 
 @pytest.mark.asyncio
 async def test_get_user_not_found_raises(mock_db):
-
     svc = UserService(user_repo=BaseRepo())
 
     with pytest.raises(UserNotFoundError):
-        await svc.get_user(db=mock_db, id="nope")
+        await svc.get_user(db=mock_db, id="nope", current_user=_admin())
 
 
 @pytest.mark.asyncio
@@ -134,35 +150,187 @@ async def test_update_user_precheck_email_collision(mock_db):
     svc = UserService(user_repo=Repo())
 
     with pytest.raises(EmailAlreadyExistsError):
-        await svc.update_user(db=mock_db, id="me", payload=UserUpdate(email="e@x.com"))
+        await svc.update_user(db=mock_db, id="me", payload=UserUpdate(email="e@x.com"), current_user=_regular("me"))
 
 
 @pytest.mark.asyncio
 async def test_update_user_precheck_username_collision(mock_db):
     class Repo(BaseRepo):
-
         async def get_by_username(self, db, username):
             return SimpleNamespace(id="other")
 
     svc = UserService(user_repo=Repo())
 
     with pytest.raises(UsernameAlreadyExistsError):
-        await svc.update_user(db=mock_db, id="me", payload=UserUpdate(username="u"))
+        await svc.update_user(db=mock_db, id="me", payload=UserUpdate(username="u"), current_user=_regular("me"))
 
 
 @pytest.mark.asyncio
 async def test_update_user_not_found_raises(mock_db):
-
     svc = UserService(user_repo=BaseRepo())
 
     with pytest.raises(UserNotFoundError):
-        await svc.update_user(db=mock_db, id="me", payload=UserUpdate())
+        await svc.update_user(db=mock_db, id="me", payload=UserUpdate(), current_user=_regular("me"))
 
 
 @pytest.mark.asyncio
 async def test_delete_user_not_found_raises(mock_db):
-
     svc = UserService(user_repo=BaseRepo())
 
     with pytest.raises(UserNotFoundError):
-        await svc.delete_user(db=mock_db, id="me")
+        await svc.delete_user(db=mock_db, id="me", current_user=_admin())
+
+
+# ─── list_users ──────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+class TestListUsers:
+    async def test_admin_can_list(self, mock_db):
+        class Repo(BaseRepo):
+            async def get_all(self, db, skip=0, limit=100):
+                return ["u1", "u2"]
+
+        svc = UserService(user_repo=Repo())
+        result = await svc.list_users(db=mock_db, current_user=_admin())
+        assert result == ["u1", "u2"]
+
+    async def test_user_role_is_forbidden(self, mock_db):
+        svc = UserService(user_repo=BaseRepo())
+        with pytest.raises(UserForbiddenError):
+            await svc.list_users(db=mock_db, current_user=_regular())
+
+    async def test_current_user_is_required(self, mock_db):
+        svc = UserService(user_repo=BaseRepo())
+        with pytest.raises(TypeError):
+            await svc.list_users(db=mock_db)
+
+
+# ─── get_user authorization ─────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+class TestGetUserAuthorization:
+    async def test_self_can_get_own_profile(self, mock_db):
+        class Repo(BaseRepo):
+            async def get_by_id(self, db, id):
+                return SimpleNamespace(id=id)
+
+        svc = UserService(user_repo=Repo())
+        result = await svc.get_user(db=mock_db, id="me", current_user=_regular("me"))
+        assert result.id == "me"
+
+    async def test_admin_can_get_any_profile(self, mock_db):
+        class Repo(BaseRepo):
+            async def get_by_id(self, db, id):
+                return SimpleNamespace(id=id)
+
+        svc = UserService(user_repo=Repo())
+        result = await svc.get_user(db=mock_db, id="someone-else", current_user=_admin())
+        assert result.id == "someone-else"
+
+    async def test_forbidden_for_another_users_profile(self, mock_db):
+        class Repo(BaseRepo):
+            async def get_by_id(self, db, id):
+                return SimpleNamespace(id=id)
+
+        svc = UserService(user_repo=Repo())
+        with pytest.raises(UserForbiddenError):
+            await svc.get_user(db=mock_db, id="someone-else", current_user=_regular("me"))
+
+    async def test_current_user_is_required(self, mock_db):
+        svc = UserService(user_repo=BaseRepo())
+        with pytest.raises(TypeError):
+            await svc.get_user(db=mock_db, id="me")
+
+
+# ─── update_user authorization ──────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+class TestUpdateUserAuthorization:
+    async def test_self_can_update_own_profile(self, mock_db):
+        class Repo(BaseRepo):
+            async def update(self, db, id, payload):
+                return SimpleNamespace(id=id)
+
+        svc = UserService(user_repo=Repo())
+        result = await svc.update_user(
+            db=mock_db, id="me", payload=UserUpdate(full_name="New Name"), current_user=_regular("me")
+        )
+        assert result.id == "me"
+
+    async def test_admin_can_update_any_profile(self, mock_db):
+        class Repo(BaseRepo):
+            async def update(self, db, id, payload):
+                return SimpleNamespace(id=id)
+
+        svc = UserService(user_repo=Repo())
+        result = await svc.update_user(
+            db=mock_db, id="someone-else", payload=UserUpdate(full_name="New Name"), current_user=_admin()
+        )
+        assert result.id == "someone-else"
+
+    async def test_forbidden_for_another_users_profile(self, mock_db):
+        svc = UserService(user_repo=BaseRepo())
+        with pytest.raises(UserForbiddenError):
+            await svc.update_user(
+                db=mock_db,
+                id="someone-else",
+                payload=UserUpdate(full_name="New Name"),
+                current_user=_regular("me"),
+            )
+
+    async def test_non_admin_cannot_change_own_role(self, mock_db):
+        svc = UserService(user_repo=BaseRepo())
+        with pytest.raises(UserForbiddenError):
+            await svc.update_user(
+                db=mock_db, id="me", payload=UserUpdate(role=UserRole.ADMIN), current_user=_regular("me")
+            )
+
+    async def test_admin_can_change_a_users_role(self, mock_db):
+        class Repo(BaseRepo):
+            async def update(self, db, id, payload):
+                return SimpleNamespace(id=id)
+
+        svc = UserService(user_repo=Repo())
+        result = await svc.update_user(
+            db=mock_db, id="someone-else", payload=UserUpdate(role=UserRole.MANAGER), current_user=_admin()
+        )
+        assert result.id == "someone-else"
+
+    async def test_current_user_is_required(self, mock_db):
+        svc = UserService(user_repo=BaseRepo())
+        with pytest.raises(TypeError):
+            await svc.update_user(db=mock_db, id="me", payload=UserUpdate())
+
+
+# ─── delete_user authorization ──────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+class TestDeleteUserAuthorization:
+    async def test_admin_can_delete_another_user(self, mock_db):
+        class Repo(BaseRepo):
+            async def delete(self, db, id):
+                return SimpleNamespace(id=id)
+
+        svc = UserService(user_repo=Repo())
+        result = await svc.delete_user(db=mock_db, id="someone-else", current_user=_admin())
+        assert result.id == "someone-else"
+        assert mock_db.commit.called
+
+    async def test_non_admin_is_forbidden(self, mock_db):
+        svc = UserService(user_repo=BaseRepo())
+        with pytest.raises(UserForbiddenError):
+            await svc.delete_user(db=mock_db, id="someone-else", current_user=_regular("me"))
+
+    async def test_admin_cannot_delete_own_account(self, mock_db):
+        svc = UserService(user_repo=BaseRepo())
+        with pytest.raises(UserForbiddenError):
+            await svc.delete_user(db=mock_db, id="admin", current_user=_admin("admin"))
+
+    async def test_current_user_is_required(self, mock_db):
+        svc = UserService(user_repo=BaseRepo())
+        with pytest.raises(TypeError):
+            await svc.delete_user(db=mock_db, id="someone-else")

@@ -12,7 +12,7 @@ from app.services.exceptions import (
     ResourceForbiddenError,
 )
 from tests.mock_repos import MockCRUDRepo, MockReadOnlyRepo
-from tests.factories import make_admin, make_manager
+from tests.factories import make_admin, make_manager, make_regular_user
 
 
 class MockPaymentRepo(MockCRUDRepo):
@@ -37,11 +37,32 @@ class MockPaymentRepoWithScoping(MockPaymentRepo):
         return [p for p in self.records.values() if getattr(p, "manager_id", None) == manager_id]
 
 
-def _make_service(contracts=None, properties=None, payments=None):
+def _make_service(payments=None, properties=None, contracts=None) -> PaymentService:
+    if payments is None:
+        payment_repo = MockPaymentRepo({})
+    elif isinstance(payments, dict):
+        payment_repo = MockPaymentRepo(payments)
+    else:
+        payment_repo = payments
+
+    if properties is None:
+        property_repo = MockReadOnlyRepo({})
+    elif isinstance(properties, dict):
+        property_repo = MockReadOnlyRepo(properties)
+    else:
+        property_repo = properties
+
+    if contracts is None:
+        contracts_repo = MockReadOnlyRepo({})
+    elif isinstance(contracts, dict):
+        contracts_repo = MockReadOnlyRepo(contracts)
+    else:
+        contracts_repo = contracts
+
     return PaymentService(
-        payment_repo=MockPaymentRepo(payments),
-        contract_repo=MockReadOnlyRepo(contracts),
-        property_repo=MockReadOnlyRepo(properties),
+        payment_repo=payment_repo,
+        property_repo=property_repo,
+        contract_repo=contracts_repo,
     )
 
 
@@ -118,6 +139,18 @@ class TestGetPayment:
         with pytest.raises(PaymentForbiddenError):
             await svc.get_payment(mock_db, payment.id, make_manager())
 
+    async def test_user_role_is_forbidden(self, mock_db):
+        contract_id, prop_id = uuid4(), uuid4()
+        payment = SimpleNamespace(id=uuid4(), contract_id=contract_id)
+        svc = _make_service(
+            payments={payment.id: payment},
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+
+        with pytest.raises(PaymentForbiddenError):
+            await svc.get_payment(mock_db, payment.id, make_regular_user())
+
 
 # ─── list_payments ───────────────────────────────────────────────────────────
 
@@ -127,14 +160,14 @@ class TestListPayments:
     async def test_current_user_is_required(self, mock_db):
         """current_user has no default — a caller that forgets to pass it
         gets a loud TypeError, not a silent bypass."""
-        svc = PaymentService(payment_repo=MockPaymentRepoWithScoping())
+        svc = _make_service(payments=MockPaymentRepoWithScoping())
         with pytest.raises(TypeError):
             await svc.list_payments(mock_db)
 
     async def test_admin_sees_all_payments(self, mock_db):
         owned = SimpleNamespace(id=uuid4(), manager_id=uuid4())
         other = SimpleNamespace(id=uuid4(), manager_id=uuid4())
-        svc = PaymentService(payment_repo=MockPaymentRepoWithScoping({owned.id: owned, other.id: other}))
+        svc = _make_service(payments=MockPaymentRepoWithScoping({owned.id: owned, other.id: other}))
 
         result = await svc.list_payments(mock_db, current_user=make_admin())
 
@@ -145,12 +178,17 @@ class TestListPayments:
         manager = make_manager()
         owned = SimpleNamespace(id=uuid4(), manager_id=manager.id)
         other = SimpleNamespace(id=uuid4(), manager_id=uuid4())
-        svc = PaymentService(payment_repo=MockPaymentRepoWithScoping({owned.id: owned, other.id: other}))
+        svc = _make_service(payments=MockPaymentRepoWithScoping({owned.id: owned, other.id: other}))
 
         result = await svc.list_payments(mock_db, current_user=manager)
 
         assert result.items == [owned]
         assert result.total == 1
+
+    async def test_user_role_is_forbidden(self, mock_db):
+        svc = _make_service(payments=MockPaymentRepoWithScoping())
+        with pytest.raises(PaymentForbiddenError):
+            await svc.list_payments(mock_db, current_user=make_regular_user())
 
 
 # ─── create_payment ──────────────────────────────────────────────────────────
@@ -202,15 +240,31 @@ class TestCreatePayment:
         with pytest.raises(RelatedResourceNotFoundError):
             await svc.create_payment(mock_db, _payload(), current_user=make_admin())
 
-    async def test_skips_authorization_when_no_current_user(self, mock_db):
+    async def test_current_user_is_required(self, mock_db):
         contract_id, prop_id = uuid4(), uuid4()
         svc = _make_service(
             contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
         )
+        repo = svc.payment_repo
 
-        result = await svc.create_payment(mock_db, _payload(contract_id=contract_id))
-        assert result.contract_id == contract_id
+        with pytest.raises(TypeError):
+            await svc.create_payment(mock_db, _payload(contract_id=contract_id))
+
+        assert repo.created_payloads == []
+
+    async def test_user_role_is_forbidden(self, mock_db):
+        contract_id, prop_id = uuid4(), uuid4()
+        svc = _make_service(
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+        repo = svc.payment_repo
+
+        with pytest.raises(PaymentForbiddenError):
+            await svc.create_payment(mock_db, _payload(contract_id=contract_id), current_user=make_regular_user())
+
+        assert repo.created_payloads == []
 
 
 # ─── update_payment ──────────────────────────────────────────────────────────
@@ -254,7 +308,7 @@ class TestUpdatePayment:
         assert repo.updated_payloads == []
         assert not mock_db.commit.called
 
-    async def test_skips_authorization_when_no_current_user(self, mock_db):
+    async def test_current_user_is_required(self, mock_db):
         payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4()
         payment = SimpleNamespace(id=payment_id, contract_id=contract_id, status="PAID")
         svc = _make_service(
@@ -262,9 +316,29 @@ class TestUpdatePayment:
             contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
         )
+        repo = svc.payment_repo
 
-        result = await svc.update_payment(mock_db, payment_id, PaymentUpdate(status="REFUNDED"))
-        assert result.status == "REFUNDED"
+        with pytest.raises(TypeError):
+            await svc.update_payment(mock_db, payment_id, PaymentUpdate(status="REFUNDED"))
+
+        assert repo.updated_payloads == []
+
+    async def test_user_role_is_forbidden(self, mock_db):
+        payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4()
+        payment = SimpleNamespace(id=payment_id, contract_id=contract_id, status="PAID")
+        svc = _make_service(
+            payments={payment_id: payment},
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+        repo = svc.payment_repo
+
+        with pytest.raises(PaymentForbiddenError):
+            await svc.update_payment(
+                mock_db, payment_id, PaymentUpdate(status="REFUNDED"), current_user=make_regular_user()
+            )
+
+        assert repo.updated_payloads == []
 
 
 # ─── delete_payment ──────────────────────────────────────────────────────────
@@ -318,7 +392,7 @@ class TestDeletePayment:
         assert repo.deleted_ids == []
         assert not mock_db.commit.called
 
-    async def test_skips_authorization_when_no_current_user(self, mock_db):
+    async def test_current_user_is_required(self, mock_db):
         payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4()
         payment = SimpleNamespace(id=payment_id, contract_id=contract_id)
         svc = _make_service(
@@ -326,9 +400,27 @@ class TestDeletePayment:
             contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
         )
+        repo = svc.payment_repo
 
-        result = await svc.delete_payment(mock_db, payment_id)
-        assert result is payment
+        with pytest.raises(TypeError):
+            await svc.delete_payment(mock_db, payment_id)
+
+        assert repo.deleted_ids == []
+
+    async def test_user_role_is_forbidden(self, mock_db):
+        payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4()
+        payment = SimpleNamespace(id=payment_id, contract_id=contract_id)
+        svc = _make_service(
+            payments={payment_id: payment},
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+        repo = svc.payment_repo
+
+        with pytest.raises(PaymentForbiddenError):
+            await svc.delete_payment(mock_db, payment_id, current_user=make_regular_user())
+
+        assert repo.deleted_ids == []
 
 
 # ─── Delegated read-only passthroughs ───────────────────────────────────────
