@@ -52,8 +52,6 @@ class PropertyService(ResourceAuthorizationMixin):
         if not prop:
             raise RelatedResourceNotFoundError(f"Property {prop_id} not found.")
 
-        # if current_user.role == UserRole.MANAGER and current_user.id != prop.manager_id:
-        # raise PropertyForbiddenError(f"Property {prop.id} is not accessible for this user")
         role = getattr(current_user, "role", None)
         is_admin = role == UserRole.ADMIN
         is_owning_manager = role == UserRole.MANAGER and current_user.id == prop.manager_id
