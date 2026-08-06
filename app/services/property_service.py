@@ -41,16 +41,29 @@ class PropertyService(ResourceAuthorizationMixin):
         return await self._list_scoped_by_manager(db, current_user, self.property_repo, skip, limit)
 
     async def get_property(self, db: AsyncSession, prop_id: UUID, current_user: User) -> Property:
+        """
+        Fails closed: only ADMIN (bypass) and MANAGER (must own the property) are authorized. Any other role -
+        including a plain USER - is rejected outright rather than failing through as if authorized,
+        matching the fail-closed pattern used by `ResourceAuthorizationMixin._authorize_user_to_property` and
+        `_list_scoped_by_manager` elsewhere in the service layer.
+        """
+
         prop = await self.property_repo.get_by_id(db, prop_id)
         if not prop:
             raise RelatedResourceNotFoundError(f"Property {prop_id} not found.")
 
-        if current_user.role == UserRole.MANAGER and current_user.id != prop.manager_id:
+        role = getattr(current_user, "role", None)
+        is_admin = role == UserRole.ADMIN
+        is_owning_manager = role == UserRole.MANAGER and current_user.id == prop.manager_id
+
+        if not (is_admin or is_owning_manager):
             raise PropertyForbiddenError(f"Property {prop.id} is not accessible for this user")
 
         return prop
 
-    async def create_property(self, db: AsyncSession, payload: PropertyCreate) -> Property:
+    async def create_property(self, db: AsyncSession, payload: PropertyCreate, current_user: User) -> Property:
+        if getattr(current_user, "role", None) != UserRole.ADMIN:
+            raise PropertyForbiddenError("Only admins may create properties.")
         try:
             prop = await self.property_repo.create(db, payload)
             await db.commit()
@@ -94,6 +107,10 @@ class PropertyService(ResourceAuthorizationMixin):
     ) -> Property:
         """
         Assign a manager to a property. Admin-only at the route layer.
+        Also enforced here: only admins may reassign a property's manager
+        — a manager who owns the property must not be able to do this
+        just because `get_property`'s ownership check would let them
+        through for a read.
         The only path that populates `Property.manager_id` outside of
         direct DB writes in tests — every manager-scoped authorization
         check in the app depends on this field being set through here.
@@ -102,11 +119,15 @@ class PropertyService(ResourceAuthorizationMixin):
 
         Raises:
             RelatedResourceNotFoundError: `prop_id` doesn't exist.
+            PropertyForbiddenError: the `current user` isn't an admin.
             UserNotFoundError: `manager_id` doesn't reference an existing user.
             PropertyManagerAssignmentError: the referenced user isn't a MANAGER.
         """
         if self.user_repo is None:
             raise RuntimeError(f"{type(self).__name__}.assign_manager requires user_repo to be injected.")
+
+        if current_user.role != UserRole.ADMIN:
+            raise PropertyForbiddenError("Only admins may assign managers to properties.")
 
         prop = await self.get_property(db, prop_id, current_user=current_user)
 

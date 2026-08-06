@@ -74,13 +74,13 @@ class PaymentService(ResourceAuthorizationMixin):
         self,
         db: AsyncSession,
         payload: PaymentCreate,
-        current_user: User | None = None,
+        current_user: User,
     ) -> Payment:
         ctx = await self._prepare_payment_context(
             db,
+            current_user,
             payment=None,
             contract_id=payload.contract_id,
-            current_user=current_user,
         )
 
         resolved_payload = payload.model_copy(update={"contract_id": ctx.contract_id})
@@ -94,16 +94,16 @@ class PaymentService(ResourceAuthorizationMixin):
         db: AsyncSession,
         payment_id: UUID,
         payload: PaymentUpdate,
-        current_user: User | None = None,
+        current_user: User,
     ) -> Payment | None:
         payment = await self._get_payment_or_404(db, payment_id)
 
         # this is for authorization only. no need to use the returned context
         await self._prepare_payment_context(
             db,
+            current_user,
             payment=payment,
             contract_id=payment.contract_id,
-            current_user=current_user,
         )
 
         payment = await self.payment_repo.update(db, payment_id, payload)
@@ -114,15 +114,15 @@ class PaymentService(ResourceAuthorizationMixin):
         self,
         db: AsyncSession,
         payment_id: UUID,
-        current_user: User | None = None,
+        current_user: User,
     ) -> Payment | None:
         payment = await self._get_payment_or_404(db, payment_id)
 
         await self._prepare_payment_context(
             db,
+            current_user,
             payment=payment,
             contract_id=payment.contract_id,
-            current_user=current_user,
         )
 
         payment = await self.payment_repo.delete(db, payment_id)
@@ -144,20 +144,19 @@ class PaymentService(ResourceAuthorizationMixin):
     async def _prepare_payment_context(
         self,
         db: AsyncSession,
+        current_user: User,
         payment: Payment | None = None,
         contract_id: UUID | None = None,
-        current_user: User | None = None,
     ) -> PaymentContext:
         ids = self._resolve_ids(payment, contract_id=contract_id)
         await self._validate_related_resources(db, **ids)
 
-        if current_user:
-            await self._authorize_user_to_property(
-                db,
-                current_user,
-                property_id=None,
-                contract_id=ids["contract_id"],
-            )
+        await self._authorize_user_to_property(
+            db,
+            current_user,
+            property_id=None,
+            contract_id=ids["contract_id"],
+        )
 
         return PaymentContext(
             payment=payment,

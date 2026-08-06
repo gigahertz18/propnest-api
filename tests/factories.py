@@ -129,6 +129,15 @@ def make_manager(manager_id: uuid.UUID | None = None) -> SimpleNamespace:
     return SimpleNamespace(id=manager_id or uuid.uuid4(), role=UserRole.MANAGER)
 
 
+def make_regular_user(user_id: uuid.UUID | None = None) -> SimpleNamespace:
+    """
+    Lightweight USER-role stand-in - see `make_admin`'s docstring for why
+    this isn't a persisted model. Used to prove authorization checks fail closed for roles
+    other than ADMIN/MANAGER instead of silently treating them as authorized.
+    """
+    return SimpleNamespace(id=user_id or uuid.uuid4(), role=UserRole.USER)
+
+
 # ─── Tenant ───────────────────────────────────────────────────────────────────
 
 

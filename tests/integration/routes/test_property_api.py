@@ -135,6 +135,17 @@ class TestCreatePropertyRoute:
 
         assert response.status_code == 409
 
+    async def test_create_returns_403_when_creating_with_a_manager_user(self, client, authenticate_manager):
+        ctx = await authenticate_manager()
+        payload = make_property(name="New prop")
+        response = await client.post(
+            "/api/v1/properties/",
+            json=payload,
+            headers=ctx.headers,
+        )
+
+        assert response.status_code == 403
+
 
 @pytest.mark.asyncio
 class TestUpdatePropertyRoute:

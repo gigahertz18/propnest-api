@@ -59,10 +59,18 @@ class TenantService(ResourceAuthorizationMixin):
         await self._authorize_user_to_tenant(db, current_user, id)
         return tenant
 
-    async def create_tenant(self, db: AsyncSession, payload: TenantCreate) -> Tenant:
-        # No ownership check needed: a brand-new tenant has no contracts
-        # yet, so it's unclaimed and any manager may create one. Role
-        # gating (manager-or-above) at the route layer is sufficient here.
+    async def create_tenant(self, db: AsyncSession, payload: TenantCreate, current_user: User) -> Tenant:
+        """
+        No ownership check needed: a brand-new tenant has no contracts
+        yet, so it's unclaimed and any manager may create one. Still
+        requires an explicit role check here — the route's
+        `require_manager_or_above` gate is not trusted as the only line
+        of defense.
+        """
+        role = getattr(current_user, "role", None)
+        if role not in (UserRole.ADMIN, UserRole.MANAGER):
+            raise TenantForbiddenError("User not authorized to create tenants.")
+
         tenant = await self.tenant_repo.create(db, payload)
         await db.commit()
         return tenant
@@ -207,10 +215,18 @@ class TenantService(ResourceAuthorizationMixin):
         Admins bypass. Managers must either own a property tied to one of
         this tenant's contracts, or the tenant must have no contracts yet
         (unclaimed tenants are actionable by any manager, since anyone
-        could be the one to attach the first contract to them).
+        could be the one to attach the first contract to them). Fails
+        closed for any other role — including USER — by rejecting before
+        the accessibility query runs; that query alone would incorrectly
+        pass a non-manager for an unclaimed tenant regardless of role,
+        since the "unclaimed" branch doesn't check who's asking.
         """
-        if getattr(current_user, "role", None) == UserRole.ADMIN:
+        role = getattr(current_user, "role", None)
+        if role == UserRole.ADMIN:
             return
+
+        if role != UserRole.MANAGER:
+            raise TenantForbiddenError("User not authorized to manage this tenant.")
 
         accessible = await self.tenant_repo.is_accessible_by_manager(db, tenant_id, current_user.id)
         if not accessible:

@@ -44,6 +44,16 @@ class UserNotFoundError(ServiceException):
     pass
 
 
+class UserForbiddenError(ServiceException):
+    """
+    Raised when a user is authenticated but not authorized for the operation -
+    either they're acting on another user's account without being an admin,
+    or they're a non-admin attempting an admin-only action (listing all users, deleting a user, changing a role)
+    """
+
+    pass
+
+
 class PropertyManagerAssignmentError(ServiceException):
     """
     Raised when a manager assignment references a user who exists

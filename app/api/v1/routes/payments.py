@@ -84,7 +84,6 @@ async def update_payment(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except PaymentForbiddenError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
-
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Payment {payment_id} not found")
     return updated

@@ -8,6 +8,8 @@ from app.services.document_service import DocumentService
 from app.schemas.document import DocumentCreate
 from app.services.exceptions import DocumentDeletionError, DocumentUploadError
 
+from tests.factories import make_admin
+
 
 async def test_create_document_without_storage_client_skips_upload(mock_db):
     class FakeRepo:
@@ -17,7 +19,7 @@ async def test_create_document_without_storage_client_skips_upload(mock_db):
     svc = DocumentService(document_repo=FakeRepo())  # type: ignore[arg-type]
     payload = DocumentCreate(file_name="a.pdf", file_type="application/pdf")
 
-    result = await svc.create_document(db=mock_db, payload=payload, storage_client=None)
+    result = await svc.create_document(db=mock_db, payload=payload, current_user=make_admin(), storage_client=None)
     assert result == "created"
 
 
@@ -62,7 +64,13 @@ async def test_create_document_uploads_to_storage_when_file_is_provided(mock_db)
     payload = DocumentCreate(file_name="a.pdf", file_type="application/pdf")
     file_obj = SimpleNamespace(content_type="application/pdf", file=BytesIO(b"%PDF-1.4 hello"))
 
-    result = await svc.create_document(db=mock_db, payload=payload, storage_client=storage, file_obj=file_obj)
+    result = await svc.create_document(
+        db=mock_db,
+        payload=payload,
+        current_user=make_admin(),
+        storage_client=storage,
+        file_obj=file_obj,
+    )
 
     print(type(result))
     assert result.file_name == "a.pdf"
@@ -81,7 +89,13 @@ async def test_create_document_translates_storage_failures(mock_db):
     file_obj = SimpleNamespace(content_type="application/pdf", file=BytesIO(b"%PDF-1.4 hello"))
 
     with pytest.raises(DocumentUploadError):
-        await svc.create_document(db=mock_db, payload=payload, storage_client=FailingStorage(), file_obj=file_obj)
+        await svc.create_document(
+            db=mock_db,
+            payload=payload,
+            current_user=make_admin(),
+            storage_client=FailingStorage(),
+            file_obj=file_obj,
+        )
 
 
 async def test_delete_document_skips_storage_cleanup_when_no_storage_client_is_provided(mock_db):
@@ -94,7 +108,7 @@ async def test_delete_document_skips_storage_cleanup_when_no_storage_client_is_p
 
     svc = DocumentService(document_repo=FakeRepo())  # type: ignore[arg-type]
 
-    result = await svc.delete_document(db=mock_db, doc_id=uuid4(), storage_client=None)
+    result = await svc.delete_document(db=mock_db, doc_id=uuid4(), current_user=make_admin(), storage_client=None)
 
     assert result is not None
 
@@ -117,5 +131,6 @@ async def test_delete_document_translates_storage_failures(mock_db):
         await svc.delete_document(
             db=mock_db,
             doc_id=uuid4(),
+            current_user=make_admin(),
             storage_client=FailingStorage(),
         )

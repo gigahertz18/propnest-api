@@ -1,10 +1,12 @@
 import uuid
 
 from collections.abc import Sequence
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.base import BaseRepository
 from app.models.contract import Contract, RentalType
+from app.models.property import Property
 from app.schemas.contract import ContractCreate, ContractUpdate
 
 
@@ -60,6 +62,36 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
 
     async def count_all(self, db: AsyncSession) -> int:
         return await self._count(db)
+
+    async def get_all_for_manager(
+        self,
+        db: AsyncSession,
+        manager_id: uuid.UUID,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Sequence[Contract]:
+        """Contracts a manager may see — those on properties they own."""
+        skip = max(0, skip)
+        limit = min(max(0, limit), 100)
+
+        owned_property_ids = select(Property.id).where(Property.manager_id == manager_id)
+
+        stmt = (
+            select(Contract)
+            .where(Contract.property_id.in_(owned_property_ids))
+            .order_by(Contract.created_at)
+            .offset(skip)
+            .limit(limit)
+        )
+        result = await db.execute(stmt)
+        return result.scalars().all()
+
+    async def count_all_for_manager(self, db: AsyncSession, manager_id: uuid.UUID) -> int:
+        owned_property_ids = select(Property.id).where(Property.manager_id == manager_id)
+
+        stmt = select(func.count()).select_from(Contract).where(Contract.property_id.in_(owned_property_ids))
+        result = await db.execute(stmt)
+        return int(result.scalar_one())
 
     async def get_active_contract_by_property(
         self,

@@ -58,18 +58,20 @@ async def get_property(
     "/",
     response_model=PropertyResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_admin)],
 )
 async def create_property(
     payload: PropertyCreate,
     db: AsyncSession = Depends(get_db),
     property_service: PropertyService = Depends(get_property_service),
+    current_user: User = Depends(require_admin),
 ):
     """Create a new property."""
     try:
-        return await property_service.create_property(db, payload)
+        return await property_service.create_property(db, payload, current_user=current_user)
     except PropertyAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except PropertyForbiddenError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
 @router.patch("/{property_id}", response_model=PropertyResponse)

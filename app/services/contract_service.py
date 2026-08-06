@@ -46,23 +46,35 @@ class ContractService(ResourceAuthorizationMixin):
         self.property_repo = property_repo
         self.tenant_repo = tenant_repo
 
-    async def list_contracts(self, db: AsyncSession, skip: int = 0, limit: int = 100) -> PaginatedResponse[Contract]:
-        items = await self.contract_repo.get_all(db, skip=skip, limit=limit)
-        total = await self.contract_repo.count_all(db)
+    async def list_contracts(
+        self,
+        db: AsyncSession,
+        current_user: User,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> PaginatedResponse[Contract]:
+        """Admins see every contract; managers only see contracts on properties they own."""
 
-        return PaginatedResponse(items=items, total=total)
+        return await self._list_scoped_by_manager(db, current_user, self.contract_repo, skip, limit)
 
-    async def get_contract(self, db: AsyncSession, contract_id: UUID) -> Contract:
+    async def get_contract(self, db: AsyncSession, contract_id: UUID, current_user: User) -> Contract:
         contract = await self.contract_repo.get_by_id(db, contract_id)
         if not contract:
             raise RelatedResourceNotFoundError(f"Contract {contract_id} not found.")
+
+        await self._authorize_user_to_property(
+            db,
+            current_user,
+            property_id=contract.property_id,
+            contract_id=None,
+        )
         return contract
 
     async def create_contract(
         self,
         db: AsyncSession,
         payload: ContractCreate,
-        current_user: User | None = None,
+        current_user: User,
     ) -> Contract:
         """
         Relies on a DB constraint (not a pre-check) to prevent
@@ -97,13 +109,13 @@ class ContractService(ResourceAuthorizationMixin):
         db: AsyncSession,
         contract_id: UUID,
         payload: ContractUpdate,
-        current_user: User | None = None,
+        current_user: User,
     ) -> Contract | None:
         """
         `ContractUpdate` can't change `property_id`, but it can flip `status`
         back to ACTIVE - same partial unique index as `create_contract`, translated the same way
         """
-        contract = await self.get_contract(db, contract_id)
+        contract = await self.get_contract(db, contract_id, current_user=current_user)
 
         # validates related resources and enforces authorization
         await self._prepare_contract_context(
@@ -127,16 +139,16 @@ class ContractService(ResourceAuthorizationMixin):
         self,
         db: AsyncSession,
         contract_id: UUID,
-        current_user: User | None = None,
+        current_user: User,
     ) -> Contract | None:
 
-        contract = await self.get_contract(db, contract_id)
+        contract = await self.get_contract(db, contract_id, current_user=current_user)
 
         await self._prepare_contract_context(
             db,
+            current_user,
             property_id=contract.property_id,
             tenant_id=contract.tenant_id,
-            current_user=current_user,
         )
 
         try:
@@ -170,22 +182,21 @@ class ContractService(ResourceAuthorizationMixin):
     async def _prepare_contract_context(
         self,
         db: AsyncSession,
+        current_user: User,
         contract: Contract | None = None,
         property_id: UUID | None = None,
         tenant_id: UUID | None = None,
-        current_user: User | None = None,
     ) -> ContractContext:
 
         ids = self._resolve_ids(contract, property_id=property_id, tenant_id=tenant_id)
         await self._validate_related_resources(db, **ids)
 
-        if current_user:
-            await self._authorize_user_to_property(
-                db,
-                current_user,
-                property_id=ids["property_id"],
-                contract_id=contract.id if contract else None,
-            )
+        await self._authorize_user_to_property(
+            db,
+            current_user,
+            property_id=ids["property_id"],
+            contract_id=contract.id if contract else None,
+        )
 
         return ContractContext(
             contract=contract,
