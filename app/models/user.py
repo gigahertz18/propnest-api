@@ -1,10 +1,12 @@
 import enum
 import uuid
 
+from datetime import datetime, timezone
+
 from app.db.session import Base
 from app.models.base import TimestampMixin
 
-from sqlalchemy import String, Enum, Boolean, Uuid
+from sqlalchemy import String, Enum, Boolean, Uuid, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
 
 
@@ -42,6 +44,19 @@ class User(Base, TimestampMixin):
         String(255),
         nullable=False,
     )
+
+    password_changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    """
+    Timestamp of the last successful password change. Embedded in every
+    JWT at issuance (`AuthService._issue_token`) and re-checked on every
+    request in `get_current_user` — bumping this value invalidates all
+    previously issued tokens for the user immediately, instead of
+    waiting out the natural expiry window.
+    """
 
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole),

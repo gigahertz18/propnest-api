@@ -25,6 +25,7 @@ from app.repositories.user import user_repo
 from app.services.auth_service import AuthService
 from app.services.contract_service import ContractService
 from app.services.document_service import DocumentService
+from app.services.notification_service import NotificationService
 from app.services.payment_service import PaymentService
 from app.services.property_service import PropertyService
 from app.services.tenant_service import TenantService
@@ -85,6 +86,20 @@ async def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is inactive",
         )
+    # Password-version check: a token issued before the user's most
+    # recent password change is stale and must be rejected, even though
+    # its signature/expiry/issuer/audience are all otherwise valid.
+    # Compared as a full-precision ISO string (not a truncated NumericDate)
+    # so two password changes within the same second are still distinct.
+    # Missing claim = token predates this check being deployed at all —
+    # also rejected, forcing re-login rather than silently trusting it.
+    pwd_v = payload.get("pwd_v")
+    if not isinstance(pwd_v, str) or pwd_v != user.password_changed_at.isoformat():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session invalidated, please log in again",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     return user
 
@@ -133,9 +148,14 @@ def get_auth_service() -> AuthService:
     return AuthService(user_repo=user_repo)
 
 
+def get_notification_service() -> NotificationService:
+    """FastAPI dependency to construct `NotificationService`."""
+    return NotificationService()
+
+
 def get_user_service() -> UserService:
     """Construct a `UserService` for FastAPI dependency injection."""
-    return UserService(user_repo=user_repo)
+    return UserService(user_repo=user_repo, notification_service=get_notification_service())
 
 
 def get_property_service() -> PropertyService:

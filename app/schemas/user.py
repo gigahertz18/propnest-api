@@ -30,6 +30,13 @@ class UserUpdate(BaseModel):
     username: str | None = None
     email: EmailStr | None = None
     password: str | None = None  # Plain password, will be hashed if provided
+    current_password: str | None = None
+    """
+    Required re-authentication when a user is changing their OWN password
+    (current_user.id == target id). Not required when an admin resets
+    another user's password. Enforced in UserService.update_user — never
+    persisted (excluded explicitly in UserRepository.update).
+    """
     role: UserRole | None = None
     is_active: bool | None = None
 
