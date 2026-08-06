@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
@@ -85,10 +86,17 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         if not obj:
             return None
 
-        updates = payload.model_dump(exclude_unset=True)
+        # updates = payload.model_dump(exclude_unset=True)
+
+        # current_password is a re-authentication input, not a model
+        # field — it must never reach setattr() below.
+        updates = payload.model_dump(exclude_unset=True, exclude={"current_password"})
 
         if "password" in updates:
             updates["password_hash"] = hash_password(updates.pop("password"))
+            # Bumping this invalidates every token issued before this
+            # moment — see User.password_changed_at and get_current_user.
+            updates["password_changed_at"] = datetime.now(timezone.utc)
 
         if "email" in updates and updates["email"] is not None:
             updates["email"] = _normalize_email(updates["email"])

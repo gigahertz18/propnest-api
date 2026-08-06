@@ -19,6 +19,16 @@ class InvalidCredentialsError(ServiceException):
     pass
 
 
+class CurrentPasswordRequiredError(ServiceException):
+    """
+    Raised when a user attempts to change their OWN password without
+    supplying `current_password` for re-authentication. Does not apply
+    to an admin resetting another user's password.
+    """
+
+    pass
+
+
 class AccountInactiveError(ServiceException):
     """Raised when a user account exists but is deactivated."""
 

@@ -5,7 +5,9 @@ from typing import Any
 import pytest
 from sqlalchemy.exc import IntegrityError
 
+from app.core.security import hash_password
 from app.models.user import UserRole
+from app.services.notification_service import NotificationService
 from app.services.user_service import UserService
 from app.schemas.user import UserCreate, UserUpdate
 from app.services.exceptions import (
@@ -13,7 +15,107 @@ from app.services.exceptions import (
     UsernameAlreadyExistsError,
     UserNotFoundError,
     UserForbiddenError,
+    CurrentPasswordRequiredError,
+    InvalidCredentialsError,
 )
+
+# TODO: create a _make_service method that will handle the instantiation of user service
+# instead of calling UserService() every test method.
+
+# TODO: refactor this test file to be more organized and readable.
+
+
+def _user_with_password(id, password="oldpassword", role=UserRole.USER):
+    """A current_user stand-in with a real password_hash, for tests that
+    exercise self-service password re-authentication."""
+    return SimpleNamespace(id=id, role=role, password_hash=hash_password(password))
+
+
+class SpyNotificationService(NotificationService):
+    def __init__(self):
+        self.calls = []
+
+    def notify_password_changed(self, user):
+        self.calls.append(user)
+
+
+class PasswordUpdateRepo:
+    """Fake repo for update_user password-change tests."""
+
+    def __init__(self, target_user):
+        self._target = target_user
+
+    async def get_by_email(self, db, email):
+        return None
+
+    async def get_by_username(self, db, username):
+        return None
+
+    async def update(self, db, id, payload):
+        return self._target
+
+
+@pytest.mark.asyncio
+async def test_self_password_change_without_current_password_raises(mock_db) -> None:
+    me = _user_with_password("me")
+    svc = UserService(user_repo=PasswordUpdateRepo(SimpleNamespace(id="me")))
+
+    payload = UserUpdate(password="newpassword")
+
+    with pytest.raises(CurrentPasswordRequiredError):
+        await svc.update_user(db=mock_db, id="me", payload=payload, current_user=me)
+
+
+@pytest.mark.asyncio
+async def test_self_password_change_with_wrong_current_password_raises(mock_db) -> None:
+    me = _user_with_password("me", password="oldpassword")
+    svc = UserService(user_repo=PasswordUpdateRepo(SimpleNamespace(id="me")))
+
+    payload = UserUpdate(password="newpassword", current_password="totally-wrong")
+
+    with pytest.raises(InvalidCredentialsError):
+        await svc.update_user(db=mock_db, id="me", payload=payload, current_user=me)
+
+
+@pytest.mark.asyncio
+async def test_self_password_change_with_correct_current_password_succeeds(mock_db) -> None:
+    target = SimpleNamespace(id="me")
+    me = _user_with_password("me", password="oldpassword")
+    spy = SpyNotificationService()
+    svc = UserService(user_repo=PasswordUpdateRepo(target), notification_service=spy)
+
+    payload = UserUpdate(password="newpassword", current_password="oldpassword")
+    result = await svc.update_user(db=mock_db, id="me", payload=payload, current_user=me)
+
+    assert result is target
+    assert spy.calls == [target]
+
+
+@pytest.mark.asyncio
+async def test_admin_resetting_another_users_password_does_not_require_current_password(mock_db) -> None:
+    target = SimpleNamespace(id="other")
+    admin = _admin(id="admin")
+    spy = SpyNotificationService()
+    svc = UserService(user_repo=PasswordUpdateRepo(target), notification_service=spy)
+
+    payload = UserUpdate(password="newpassword")  # no current_password
+    result = await svc.update_user(db=mock_db, id="other", payload=payload, current_user=admin)
+
+    assert result is target
+    assert spy.calls == [target]
+
+
+@pytest.mark.asyncio
+async def test_non_password_update_does_not_notify(mock_db) -> None:
+    target = SimpleNamespace(id="me")
+    me = _user_with_password("me")
+    spy = SpyNotificationService()
+    svc = UserService(user_repo=PasswordUpdateRepo(target), notification_service=spy)
+
+    payload = UserUpdate(full_name="New Name")
+    await svc.update_user(db=mock_db, id="me", payload=payload, current_user=me)
+
+    assert spy.calls == []
 
 
 def _admin(id="admin"):

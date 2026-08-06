@@ -3,9 +3,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from uuid import UUID
 
+from app.core.security import verify_password
 from app.models.user import User, UserRole
 from app.repositories.user import UserRepository
 from app.schemas.user import UserCreate, UserUpdate
+from app.services.notification_service import NotificationService
 from app.services.utils import integrity_error_message
 from app.services.exceptions import (
     UserNotFoundError,
@@ -13,6 +15,8 @@ from app.services.exceptions import (
     UsernameAlreadyExistsError,
     ManagerAssignedToPropertyError,
     UserForbiddenError,
+    CurrentPasswordRequiredError,
+    InvalidCredentialsError,
 )
 
 
@@ -25,8 +29,9 @@ class UserService:
     them into HTTP responses.
     """
 
-    def __init__(self, user_repo: UserRepository) -> None:
+    def __init__(self, user_repo: UserRepository, notification_service: NotificationService | None = None) -> None:
         self.user_repo = user_repo
+        self.notification_service = notification_service or NotificationService()
 
     async def list_users(
         self,
@@ -73,6 +78,10 @@ class UserService:
         if payload.role is not None and getattr(current_user, "role", None) != UserRole.ADMIN:
             raise UserForbiddenError("You cannot change your own role.")
 
+        is_self_service_password_change = payload.password is not None and current_user.id == id
+        if is_self_service_password_change:
+            self._verify_current_password(payload, current_user)
+
         if payload.email is not None:
             existing = await self.user_repo.get_by_email(db, payload.email)
             if existing and existing.id != id:
@@ -91,6 +100,11 @@ class UserService:
         if not user:
             raise UserNotFoundError("User not found")
         await db.commit()
+
+        if payload.password is not None:
+            # Fires for both the self-service path above and an
+            # admin-initiated reset of another user's password
+            self.notification_service.notify_password_changed(user)
         return user
 
     async def delete_user(self, db: AsyncSession, id: UUID, current_user: User) -> User:
@@ -122,6 +136,21 @@ class UserService:
         role = getattr(current_user, "role", None)
         if role != UserRole.ADMIN and getattr(current_user, "id", None) != target_id:
             raise UserForbiddenError("You can only access your own profile.")
+
+    @staticmethod
+    def _verify_current_password(payload: UserUpdate, current_user: User) -> None:
+        """
+        Re-authentication gate for self-service password changes.
+
+        Only reached when current_user.id == target id — an admin
+        resetting a *different* user's password never calls this, since
+        that path is already gated by _authorize_self_or_admin (only an
+        admin or the account owner can reach update_user at all).
+        """
+        if not payload.current_password:
+            raise CurrentPasswordRequiredError("current_password is required to change your own password.")
+        if not verify_password(payload.current_password, current_user.password_hash):
+            raise InvalidCredentialsError("The current password you entered is incorrect.")
 
     @staticmethod
     def _raise_conflict(e: IntegrityError, default: Exception | None = None) -> None:

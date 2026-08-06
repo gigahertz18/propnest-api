@@ -189,6 +189,32 @@ class TestUserRepositoryUpdate:
         result = await user_repo.update(db, user.id, payload)
         assert verify_password("newpassword", result.password_hash)
 
+    async def test_password_change_bumps_password_changed_at(self, db):
+        user = await make_user_model(db)
+        original = user.password_changed_at
+
+        payload = UserUpdate(password="newpassword")
+        result = await user_repo.update(db, user.id, payload)
+
+        assert result.password_changed_at > original
+
+    async def test_non_password_update_does_not_touch_password_changed_at(self, db):
+        user = await make_user_model(db)
+        original = user.password_changed_at
+
+        payload = UserUpdate(full_name="New Name")
+        result = await user_repo.update(db, user.id, payload)
+
+        assert result.password_changed_at == original
+
+    async def test_current_password_is_never_persisted(self, db):
+        user = await make_user_model(db)
+
+        payload = UserUpdate(password="newpassword", current_password="whatever")
+        result = await user_repo.update(db, user.id, payload)
+
+        assert not hasattr(result, "current_password")
+
     async def test_partial_update_does_not_affect_other_fields(self, db):
         user = await make_user_model(db, email="original@example.com")
         payload = UserUpdate(full_name="New Name")

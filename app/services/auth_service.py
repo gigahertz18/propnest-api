@@ -72,5 +72,13 @@ class AuthService:
                 "sub": str(user.id),
                 "role": user.role.value,
                 "username": user.username,
+                # Password-version claim: get_current_user rejects any
+                # token whose pwd_v doesn't match the user's current
+                # password_changed_at, so changing a password immediately
+                # invalidates every other token in circulation.
+                # Full ISO-8601 (microsecond) string, not a truncated
+                # NumericDate — two changes inside the same second must
+                # still be distinguishable, or a stale token survives.
+                "pwd_v": user.password_changed_at.isoformat(),
             }
         )

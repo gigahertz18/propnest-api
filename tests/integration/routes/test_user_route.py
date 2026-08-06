@@ -239,6 +239,54 @@ class TestUpdateUserRoute:
         )
         assert response.status_code == 404
 
+    async def test_self_password_change_requires_current_password(self, client, authenticate_user):
+        ctx = await authenticate_user()
+        response = await client.patch(
+            f"/api/v1/users/{ctx.user.id}",
+            json={"password": "newpassword123"},
+            headers=ctx.headers,
+        )
+        assert response.status_code == 400
+
+    async def test_self_password_change_rejects_wrong_current_password(self, client, authenticate_user):
+        ctx = await authenticate_user()
+        response = await client.patch(
+            f"/api/v1/users/{ctx.user.id}",
+            json={"password": "newpassword123", "current_password": "not-my-password"},
+            headers=ctx.headers,
+        )
+        assert response.status_code == 401
+
+    async def test_self_password_change_succeeds_and_invalidates_old_token(self, client, authenticate_user):
+        ctx = await authenticate_user(password="password123")
+
+        response = await client.patch(
+            f"/api/v1/users/{ctx.user.id}",
+            json={"password": "newpassword123", "current_password": "password123"},
+            headers=ctx.headers,
+        )
+        assert response.status_code == 200
+
+        # The token used to make the change is now stale — any further
+        # use of it must be rejected, even though it hasn't expired.
+        stale_response = await client.get(
+            f"/api/v1/users/{ctx.user.id}",
+            headers=ctx.headers,
+        )
+        assert stale_response.status_code == 401
+
+    async def test_admin_can_reset_another_users_password_without_current_password(
+        self, client, db, authenticate_admin
+    ):
+        ctx = await authenticate_admin()
+        user = await make_user_model(db, username="user1", email="user1@example.com", password="oldpw123")
+        response = await client.patch(
+            f"/api/v1/users/{user.id}",
+            json={"password": "newpw123"},
+            headers=ctx.headers,
+        )
+        assert response.status_code == 200
+
 
 # ─── Delete User ──────────────────────────────────────────
 @pytest.mark.asyncio
