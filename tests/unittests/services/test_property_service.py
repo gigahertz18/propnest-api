@@ -144,6 +144,30 @@ class TestGetProperty:
         with pytest.raises(PropertyForbiddenError):
             await svc.get_property(mock_db, prop.id, current_user=manager)
 
+    async def test_user_role_is_forbidden(self, mock_db):
+        """Regression test: get_property's ownership check only ever
+        special-cased MANAGER (`if role == MANAGER and id != manager_id:
+        raise`), so a plain USER role fell through the condition
+        entirely and was treated as authorized, identical to an admin.
+        Must be rejected before ownership is even considered — matching
+        the fail-closed pattern used everywhere else in the service
+        layer (_authorize_user_to_property, _list_scoped_by_manager,
+        _authorize_user_to_tenant)."""
+        prop = SimpleNamespace(id=uuid4(), manager_id=uuid4())
+        user = SimpleNamespace(id=uuid4(), role=UserRole.USER)
+        svc = _make_service(properties={prop.id: prop})
+
+        with pytest.raises(PropertyForbiddenError):
+            await svc.get_property(mock_db, prop.id, current_user=user)
+
+    async def test_unrecognized_role_is_forbidden(self, mock_db):
+        prop = SimpleNamespace(id=uuid4(), manager_id=uuid4())
+        stub = SimpleNamespace(id=uuid4(), role=None)
+        svc = _make_service(properties={prop.id: prop})
+
+        with pytest.raises(PropertyForbiddenError):
+            await svc.get_property(mock_db, prop.id, current_user=stub)
+
 
 @pytest.mark.asyncio
 class TestCreateProperty:

@@ -41,11 +41,24 @@ class PropertyService(ResourceAuthorizationMixin):
         return await self._list_scoped_by_manager(db, current_user, self.property_repo, skip, limit)
 
     async def get_property(self, db: AsyncSession, prop_id: UUID, current_user: User) -> Property:
+        """
+        Fails closed: only ADMIN (bypass) and MANAGER (must own the property) are authorized. Any other role -
+        including a plain USER - is rejected outright rather than failing through as if authorized,
+        matching the fail-closed pattern used by `ResourceAuthorizationMixin._authorize_user_to_property` and
+        `_list_scoped_by_manager` elsewhere in the service layer.
+        """
+
         prop = await self.property_repo.get_by_id(db, prop_id)
         if not prop:
             raise RelatedResourceNotFoundError(f"Property {prop_id} not found.")
 
-        if current_user.role == UserRole.MANAGER and current_user.id != prop.manager_id:
+        # if current_user.role == UserRole.MANAGER and current_user.id != prop.manager_id:
+        # raise PropertyForbiddenError(f"Property {prop.id} is not accessible for this user")
+        role = getattr(current_user, "role", None)
+        is_admin = role == UserRole.ADMIN
+        is_owning_manager = role == UserRole.MANAGER and current_user.id == prop.manager_id
+
+        if not (is_admin or is_owning_manager):
             raise PropertyForbiddenError(f"Property {prop.id} is not accessible for this user")
 
         return prop
