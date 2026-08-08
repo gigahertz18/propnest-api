@@ -18,6 +18,19 @@ class InvalidCredentialsError(ServiceException):
 
     pass
 
+class AccountLockedError(ServiceException):
+    """
+    Raised when an identifier has exceeded LOGIN_MAX_FAILED_ATTEMPTS and
+    is inside an active lockout window (see LoginAttemptRepository).
+    Carries retry_after_seconds so the route layer can set a Retry-After
+    header on the resulting 429.
+    """
+
+    def __init__(self, retry_after_seconds: int, message: str = "Too many failed login attempts."):
+        super().__init__(message)
+        self.retry_after_seconds = retry_after_seconds
+
+
 
 class CurrentPasswordRequiredError(ServiceException):
     """

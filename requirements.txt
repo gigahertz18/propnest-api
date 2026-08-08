@@ -33,3 +33,7 @@ pytest-cov==5.0.0
 # Linting
 black==26.5.1
 ruff==0.15.22
+
+# Rate limiting / login lockout state
+redis>=5.0.0
+slowapi>=0.1.9

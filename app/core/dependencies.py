@@ -11,10 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.security import decode_access_token
+from app.core.redis_client import get_redis_client
 from app.db.session import get_db
 
 from app.models.user import User, UserRole
 
+from app.repositories.login_attempt import LoginAttemptRepository
 from app.repositories.contract import contract_repo
 from app.repositories.document import document_repo
 from app.repositories.property import property_repo
@@ -139,13 +141,19 @@ def require_manager_or_above(
         )
     return current_user
 
+def get_login_attempt_repo() -> LoginAttemptRepository:
+    """
+    FastAPI dependency to construct `LoginAttemptRepository`, backed by
+    the shared Redis client. Kept simple so tests can override it.
+    """
+    return LoginAttemptRepository(client=get_redis_client())
 
 def get_auth_service() -> AuthService:
     """
     FastAPI dependency to construct `AuthService`. Kept simple so tests can
     override this dependency if needed.
     """
-    return AuthService(user_repo=user_repo)
+    return AuthService(user_repo=user_repo, login_attempt_repo=get_login_attempt_repo())
 
 
 def get_notification_service() -> NotificationService:
