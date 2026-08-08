@@ -22,7 +22,8 @@ Parts of this project were built with AI assistance. The architecture, schema de
 | Database | PostgreSQL 16 |
 | ORM / Migrations | SQLAlchemy + Alembic |
 | File Storage | MinIO (S3-compatible) |
-| Auth | JWT (access tokens, issuer/audience scoped) |
+| Auth | JWT (access tokens, issuer/audience scoped) + Redis-backed per-IP rate limiting and per-identifier login lockout |
+| Cache / Ephemeral State | Redis |
 | Containerization | Docker + Docker Compose |
 | Linting / Formatting | ruff, black |
 | Testing | pytest (unit + integration), pytest-cov |
@@ -39,7 +40,7 @@ The backend follows a layered structure to keep business logic out of the HTTP l
 app/
 ├── api/v1/routes/      # HTTP layer — request/response handling only
 ├── services/           # Business logic, orchestration, domain exceptions
-├── repositories/       # Data access — generic CRUD base + per-entity repos
+├── repositories/       # Data access — generic CRUD base + per-entity repos (plus a Redis-backed one, LoginAttemptRepository, for login lockout state)
 ├── models/             # SQLAlchemy models (User, Property, Tenant, Contract, Payment, Document)
 ├── schemas/            # Pydantic request/response schemas
 ├── core/                # Config (env-based: dev/test/staging/prod), security, logging, dependencies
@@ -49,6 +50,8 @@ app/
 **Why this split:** routes stay thin and testable in isolation; services hold the actual business rules and raise domain-specific exceptions (not HTTP exceptions) so they're reusable outside the web layer; repositories isolate persistence so the ORM can be swapped or mocked without touching business logic.
 
 **Transaction ownership:** service methods own database commits. The shared `get_db()` dependency only opens the session for the request and rolls back on exception; it does not commit.
+
+**Login throttling:** `/auth/login` is protected by two independent layers above credential checking — a per-IP request rate limit (`slowapi`, route-level decorator) and a per-identifier progressive lockout after repeated failures (`AuthService` + `LoginAttemptRepository`). Lockout is keyed on the normalized identifier itself, not the user id, so a nonexistent username locks out identically to a real one — this preserves the existing timing-attack/enumeration protections in `verify_password` instead of reopening them through a 429-vs-401 difference. Both mechanisms are backed by Redis so they hold across multiple backend instances.
 
 **Config** is environment-aware via a small class hierarchy (`BaseConfig` → `DevelopmentConfig` / `UnittestConfig` / staging / prod), so tests run against a dedicated test database and never touch dev data.
 
@@ -64,7 +67,7 @@ cd propnest-api
 make up
 ```
 
-This starts the API, PostgreSQL, and MinIO. The API will be available at `http://localhost:8000`, with interactive docs at `http://localhost:8000/docs`.
+This starts the API, PostgreSQL, and MinIO and Redis. The API will be available at `http://localhost:8000`, with interactive docs at `http://localhost:8000/docs`.
 
 Run database migrations:
 ```bash
@@ -75,6 +78,19 @@ Seed an admin user:
 ```bash
 make seed password=yourpassword
 ```
+
+---
+### Production environmnet variables
+
+In addition to `DB_PASSWORD`, `SECRET_KEY`, and `MINIO_ROOT_PASSWORD`, production also requires:
+
+| Variable | Purpose |
+| --- | --- |
+| `REDIS_PASSWORD` | Required - `ProductionConfig.validate()` fails to startup if unset. The Redis instance backing rate limiting/lockout must be configured with a matching `requirepass`. |
+| `REDIS_HOST` | Optional, defaults to `redis` (the compose service name). |
+| `REDIS_PORT` | Optional, defaults to `6379`. |
+
+---
 
 ---
 

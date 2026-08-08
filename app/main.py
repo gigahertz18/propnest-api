@@ -6,9 +6,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from app.core.config import settings
 from app.core.logging import setup_logging
+from app.core.rate_limit import limiter
+from app.core.redis_client import close_redis_client
 from app.db.session import engine
 from app.api.v1.routes import properties, auth, users, contracts, tenants, documents, payments
 
@@ -29,6 +34,7 @@ async def lifespan(app: FastAPI):
     logger.info("%s started in [%s] mode", settings.APP_NAME, settings.ENV)
     yield
     await engine.dispose()
+    await close_redis_client()
     logger.info("Database connections closed")
 
 
@@ -69,6 +75,11 @@ app = FastAPI(
     docs_url="/docs" if settings.is_dev else None,
     redoc_url="/redoc" if settings.is_dev else None,
 )
+
+# ─── Rate Limiting ────────────────────────────────────────
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 # ─── CORS ─────────────────────────────────────────────────
 app.add_middleware(

@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from httpx import AsyncClient, ASGITransport
 from unittest.mock import AsyncMock
 
+from app.core.redis_client import get_redis_client
 from app.db.session import engine as app_engine
 
 from app.main import app
@@ -43,6 +44,21 @@ TestingSessionLocal = sessionmaker(
     class_=AsyncSession,
     expire_on_commit=False,
 )
+
+# ─── Redis Fixture ────────────────────────────────────────────────────────────
+@pytest_asyncio.fixture(autouse=True)
+async def _flush_redis():
+    """
+    Runs before/after every test. Rate-limit counters and login-lockout
+    state live in Redis keyed by IP/identifier — without this, tests that
+    log in through `create_authenticated_user` (nearly every integration
+    test file) would accumulate against the same fake test-client IP and
+    eventually start tripping 429s unrelated to what the test is checking.
+    """
+    client = get_redis_client()
+    await client.flushdb()
+    yield
+    await client.flushdb()
 
 
 # ─── Test DB Setup ────────────────────────────────────────────────────────────
