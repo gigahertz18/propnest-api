@@ -33,6 +33,19 @@ class BaseConfig:
     MINIO_ROOT_PASSWORD: str = "propnest_secret"
     MINIO_BUCKET_NAME: str = "propnest-contracts"
 
+    # Redis — rate limiting (per-IP) and login-lockout state (per-identifier)
+    REDIS_HOST: str = "redis"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+    REDIS_PASSWORD: str | None = None
+
+    # Redis connection tuning - mirrors the pool_size/pool_pre_pign tuning
+    # already done for the SQLAlchemy engine below.
+    REDIS_MAX_CONNECTIONS: int = 20
+    REDIS_SOCKET_TIMEOUT: float = 2.0  # seconds a command can block before giving up
+    REDIS_SOCKET_CONNECT_TIMEOUT: float = 2.0
+    REDIS_HEALTH_CHECK_INTERVAL: int = 30  # seconds between pings on idle connections
+
     # Auth / JWT
     SECRET_KEY: str = "dev-secret-key-to-the-universe-pwease-override"
     ALGORITHM: str = "HS256"
@@ -40,12 +53,25 @@ class BaseConfig:
     JWT_ISSUER: str = "propnest-api"
     JWT_AUDIENCE: str = "propnest-users"
 
+    # Login throttling - see AuthService.login / LoginAttemptRepository/ IpRateLimitRepository
+    LOGIN_RATE_LIMIT_MAX_REQUESTS: int = 10
+    LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    LOGIN_MAX_FAILED_ATTEMPTS: int = 5
+    LOGIN_FAILURE_WINDOW_SECONDS: int = 900  # 15 min rolling window for counting failures
+    LOGIN_LOCKOUT_BASE_SECONDS: int = 30
+    LOGIN_LOCKOUT_MAX_SECONDS: int = 900  # 15 min cap, progressive backoff doubles up to this
+
     # CORS
     CORS_ORIGINS: list[str] = field(default_factory=lambda: ["http://localhost:3000"])
 
     @property
     def DATABASE_URL(self) -> str:
         return f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+
+    @property
+    def REDIS_URL(self) -> str:
+        auth = f":{self.REDIS_PASSWORD}@" if self.REDIS_PASSWORD else ""
+        return f"redis://{auth}{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
     @property
     def is_dev(self) -> bool:
@@ -101,6 +127,17 @@ class UnittestConfig(BaseConfig):
     DB_MAX_RETRIES: int = 5
     DB_RETRY_INTERVAL: int = 1
 
+    # Separate Redis DB index so test runs never share keyspace with dev.
+    REDIS_DB: int = 1
+
+    # Small, fast values so lockout/rate-limit tests don't need long sleeps.
+    LOGIN_RATE_LIMIT_MAX_REQUESTS: int = 5
+    LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    LOGIN_MAX_FAILED_ATTEMPTS: int = 3
+    LOGIN_FAILURE_WINDOW_SECONDS: int = 30
+    LOGIN_LOCKOUT_BASE_SECONDS: int = 2
+    LOGIN_LOCKOUT_MAX_SECONDS: int = 6
+
 
 # ─── Test ─────────────────────────────────────────────────────────────────────
 @dataclass
@@ -112,6 +149,8 @@ class TestConfig(BaseConfig):
     # DB should already be running when tests execute — retry fast
     DB_MAX_RETRIES: int = 5
     DB_RETRY_INTERVAL: int = 1
+
+    REDIS_DB: int = 2
 
 
 # ─── Staging ──────────────────────────────────────────────────────────────────
@@ -143,6 +182,9 @@ class ProductionConfig(BaseConfig):
     DB_PASSWORD: str = field(default_factory=lambda: os.environ["DB_PASSWORD"])
     SECRET_KEY: str = field(default_factory=lambda: os.environ["SECRET_KEY"])
     MINIO_ROOT_PASSWORD: str = field(default_factory=lambda: os.environ["MINIO_ROOT_PASSWORD"])
+    REDIS_HOST: str = field(default_factory=lambda: os.environ.get("REDIS_HOST", "redis"))
+    REDIS_PORT: int = field(default_factory=lambda: int(os.environ.get("REDIS_PORT", "6379")))
+    REDIS_PASSWORD: str = field(default_factory=lambda: os.environ["REDIS_PASSWORD"])
     JWT_ISSUER: str = field(default_factory=lambda: os.environ.get("JWT_ISSUER", "propnest-api"))
     JWT_AUDIENCE: str = field(default_factory=lambda: os.environ.get("JWT_AUDIENCE", "propnest-users"))
     CORS_ORIGINS: list[str] = field(
@@ -174,6 +216,11 @@ class ProductionConfig(BaseConfig):
                 "Set the MINIO_ROOT_PASSWORD environment variable."
             )
 
+        if not self.REDIS_PASSWORD:
+            errors.append(
+                "REDIS_PASSWORD is not set. Set the REDIS_PASSWORD environment variable "
+                "so login-lockout/rate-limit state isn't exposed on an authenticated Redis instance."
+            )
         if self.ACCESS_TOKEN_EXPIRE_MINUTES > 30:
             errors.append(
                 f"ACCESS_TOKEN_EXPIRE_MINUTES is {self.ACCESS_TOKEN_EXPIRE_MINUTES}. " "Must be ≤ 30 in production."

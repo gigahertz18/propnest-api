@@ -1,7 +1,10 @@
 import pytest
 from datetime import datetime, timedelta, timezone
 
+from unittest.mock import patch
+from redis.exceptions import ConnectionError as RedisConnectionError
 from app.core.config import settings
+
 from jose import jwt
 from tests.factories import make_user_model
 
@@ -89,6 +92,127 @@ class TestLogin:
             },
         )
         assert response.json()["detail"] == "Invalid credentials"
+
+
+@pytest.mark.asyncio
+class TestAccountLockout:
+    """
+    Progressive per-identifier lockout. UnittestConfig sets
+    LOGIN_MAX_FAILED_ATTEMPTS/LOGIN_LOCKOUT_BASE_SECONDS small so these
+    stay fast — see app/core/config.py.
+    """
+
+    async def test_locks_after_max_failed_attempts(self, client, db):
+        await make_user_model(db, username="john", password="secret123")
+
+        for _ in range(settings.LOGIN_MAX_FAILED_ATTEMPTS):
+            response = await client.post(
+                "/api/v1/auth/login",
+                json={"identifier": "john", "password": "wrongpassword"},
+            )
+            assert response.status_code == 401
+
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={"identifier": "john", "password": "wrongpassword"},
+        )
+        assert response.status_code == 429
+        assert "Retry-After" in response.headers
+
+    async def test_locked_out_even_with_correct_password(self, client, db):
+        """Once locked, even the right password is rejected until the
+        lockout window passes — otherwise lockout is just cosmetic."""
+        await make_user_model(db, username="john", password="secret123")
+
+        for _ in range(settings.LOGIN_MAX_FAILED_ATTEMPTS):
+            await client.post(
+                "/api/v1/auth/login",
+                json={"identifier": "john", "password": "wrongpassword"},
+            )
+
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={"identifier": "john", "password": "secret123"},
+        )
+        assert response.status_code == 429
+
+    async def test_locks_nonexistent_identifier_the_same_way(self, client):
+        """A nonexistent username must lock out identically to a real
+        one — otherwise 429-vs-401 becomes a username-enumeration oracle."""
+        for _ in range(settings.LOGIN_MAX_FAILED_ATTEMPTS):
+            await client.post(
+                "/api/v1/auth/login",
+                json={"identifier": "nobody-here", "password": "x"},
+            )
+
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={"identifier": "nobody-here", "password": "x"},
+        )
+        assert response.status_code == 429
+
+    async def test_successful_login_resets_the_failure_count(self, client, db):
+        await make_user_model(db, username="john", password="secret123")
+
+        for _ in range(settings.LOGIN_MAX_FAILED_ATTEMPTS - 1):
+            await client.post(
+                "/api/v1/auth/login",
+                json={"identifier": "john", "password": "wrongpassword"},
+            )
+
+        ok = await client.post(
+            "/api/v1/auth/login",
+            json={"identifier": "john", "password": "secret123"},
+        )
+        assert ok.status_code == 200
+
+        # A single fresh failure shouldn't lock — the earlier count was cleared.
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={"identifier": "john", "password": "wrongpassword"},
+        )
+        assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+class TestRateLimiting:
+    """Per-IP throttling — coarser than lockout, catches an attacker
+    spraying many different identifiers from one source."""
+
+    async def test_exceeding_per_ip_limit_returns_429(self, client, db):
+        await make_user_model(db, username="john", password="secret123")
+        limit = settings.LOGIN_RATE_LIMIT_MAX_REQUESTS
+
+        for _ in range(limit):
+            response = await client.post(
+                "/api/v1/auth/login",
+                json={"identifier": "john", "password": "secret123"},
+            )
+            assert response.status_code == 200
+
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={"identifier": "john", "password": "secret123"},
+        )
+        assert response.status_code == 429
+        assert "Retry-After" in response.headers
+
+
+@pytest.mark.asyncio
+class TestFailsClosedOnRedisOutage:
+    async def test_redis_unavailable_returns_503(self, client, db):
+        await make_user_model(db, username="john", password="secret123")
+
+        with patch(
+            "app.repositories.ip_rate_limit.IpRateLimitRepository.check",
+            side_effect=RedisConnectionError("simulated outage"),
+        ):
+            response = await client.post(
+                "/api/v1/auth/login",
+                json={"identifier": "john", "password": "secret123"},
+            )
+
+        assert response.status_code == 503
 
 
 @pytest.mark.asyncio

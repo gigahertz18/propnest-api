@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 from uuid import UUID
 
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +15,8 @@ from app.db.session import get_db
 
 from app.models.user import User, UserRole
 
+from app.repositories.ip_rate_limit import IpRateLimitRepository
+from app.repositories.login_attempt import LoginAttemptRepository
 from app.repositories.contract import contract_repo
 from app.repositories.document import document_repo
 from app.repositories.property import property_repo
@@ -140,12 +142,38 @@ def require_manager_or_above(
     return current_user
 
 
-def get_auth_service() -> AuthService:
+def get_login_attempt_repo(request: Request) -> LoginAttemptRepository:
+    """
+    FastAPI dependency to construct `LoginAttemptRepository`, backed by
+    the app's Redis client manager (see main.py's lifespan). Reading it
+    off `request.app.state` — rather than a module-level singleton —
+    means each test can wire its own manager for its own event loop.
+    """
+    return LoginAttemptRepository(client=request.app.state.redis.get_client())
+
+
+def get_ip_rate_limit_repo(request: Request) -> IpRateLimitRepository:
+    """FastAPI dependency to construct `IpRateLimitRepository`, backed by app's Redis client manager."""
+    return IpRateLimitRepository(
+        client=request.app.state.redis.get_client(),
+        limit=settings.LOGIN_RATE_LIMIT_MAX_REQUESTS,
+        window_seconds=settings.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+    )
+
+
+def get_auth_service(
+    login_attempt_repo: LoginAttemptRepository = Depends(get_login_attempt_repo),
+    ip_rate_limit_repo: IpRateLimitRepository = Depends(get_ip_rate_limit_repo),
+) -> AuthService:
     """
     FastAPI dependency to construct `AuthService`. Kept simple so tests can
     override this dependency if needed.
     """
-    return AuthService(user_repo=user_repo)
+    return AuthService(
+        user_repo=user_repo,
+        login_attempt_repo=login_attempt_repo,
+        ip_rate_limit_repo=ip_rate_limit_repo,
+    )
 
 
 def get_notification_service() -> NotificationService:

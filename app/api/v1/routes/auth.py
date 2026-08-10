@@ -1,11 +1,16 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.schemas.user import UserLogin, TokenResponse, UserResponse
 from app.services.auth_service import AuthService
-from app.services.exceptions import InvalidCredentialsError
+from app.services.exceptions import (
+    AccountLockedError,
+    InvalidCredentialsError,
+    IpRateLimitExceededError,
+    LoginThrottleUnavailableError,
+)
 from app.core.dependencies import get_current_user, get_auth_service
 from app.models.user import User
 
@@ -16,6 +21,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 @router.post("/login", response_model=TokenResponse)
 async def login(
+    request: Request,
     payload: UserLogin,
     db: AsyncSession = Depends(get_db),
     auth_service: AuthService = Depends(get_auth_service),
@@ -23,9 +29,38 @@ async def login(
     """
     Login with username or email + password.
     Returns a JWT access token on success.
+
+    Two independent layers of throttling sit above credential checking,
+    both enforced inside AuthService.login:
+    - Per-IP request rate limiting (coarse — one source, many identifiers)
+    - Per-identifier progressive lockout (fine — one identifier, repeated failures)
+
+    Both fail closed: if Redis is unreachable, login is rejected (503)
+    rather than silently proceeding without throttling.
     """
+    client_ip = request.client.host if request.client else None
     try:
-        return await auth_service.login(db, payload.identifier, payload.password)
+        return await auth_service.login(db, payload.identifier, payload.password, client_ip=client_ip)
+    except IpRateLimitExceededError as e:
+        logger.warning("Login blocked by IP rate limit (ip=%s)", client_ip)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many login requests from this address. Please try again later.",
+            headers={"Retry-After": str(e.retry_after_seconds)},
+        )
+    except AccountLockedError as e:
+        logger.warning("Login blocked by lockout (ip=%s)", client_ip)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed login attempts. Please try again later.",
+            headers={"Retry-After": str(e.retry_after_seconds)},
+        )
+    except LoginThrottleUnavailableError as e:
+        logger.error("Login rejected — throttling backend unavailable (ip=%s)", client_ip)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(e),
+        )
     except InvalidCredentialsError:
         logger.warning("Failed login attempt")
         raise HTTPException(

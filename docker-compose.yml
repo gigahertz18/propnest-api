@@ -13,6 +13,7 @@ services:
     depends_on:
       - db
       - minio
+      - redis
     networks:
       propnest_network:
         aliases:
@@ -51,6 +52,19 @@ services:
       propnest_network:
         aliases:
           - propnest.backend.minio
+
+  redis:
+    image: redis:7-alpine
+    container_name: propnest_redis
+    # No persistence needed - rate-limit/lockout state is short-lived and 
+    # safe to lose on restart (worst case: counters reset to zero).
+    command: redis-server --save "" --appendonly no
+    ports:
+      - "6379:6379"
+    networks:
+      propnest_network:
+        aliases:
+          - propnest.backend.redis
 
 networks:
   propnest_network:
