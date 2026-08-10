@@ -1,6 +1,7 @@
 import pytest
 import pytest_asyncio
 
+import redis.asyncio as redis
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import sessionmaker
@@ -8,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from httpx import AsyncClient, ASGITransport
 from unittest.mock import AsyncMock
 
-from app.core.redis_client import get_redis_client
+from app.core.redis_client import RedisClientManager
 from app.db.session import engine as app_engine
 
 from app.main import app
@@ -45,6 +46,7 @@ TestingSessionLocal = sessionmaker(
     expire_on_commit=False,
 )
 
+
 # ─── Redis Fixture ────────────────────────────────────────────────────────────
 @pytest_asyncio.fixture(autouse=True)
 async def _flush_redis():
@@ -54,11 +56,16 @@ async def _flush_redis():
     log in through `create_authenticated_user` (nearly every integration
     test file) would accumulate against the same fake test-client IP and
     eventually start tripping 429s unrelated to what the test is checking.
+
+    Uses its own short-lived client rather than app.state.redis - a FLUSHDB affects
+    the whole Redis DB server-side regardless of which client issues it, and this fixture
+    runs for every test (including plain unittests that never touch the FastAPI app at all).
     """
-    client = get_redis_client()
+    client = redis.from_url(settings.REDIS_URL, decode_responses=True)
     await client.flushdb()
     yield
     await client.flushdb()
+    await client.aclose()
 
 
 # ─── Test DB Setup ────────────────────────────────────────────────────────────
@@ -148,12 +155,20 @@ async def client(db):
         yield db
 
     app.dependency_overrides[get_db] = override_get_db
+    app.state.redis = RedisClientManager(
+        url=settings.REDIS_URL,
+        max_connections=settings.REDIS_MAX_CONNECTIONS,
+        socket_timeout=settings.REDIS_SOCKET_TIMEOUT,
+        socket_connect_timeout=settings.REDIS_SOCKET_CONNECT_TIMEOUT,
+        health_check_interval=settings.REDIS_HEALTH_CHECK_INTERVAL,
+    )
 
     transport = ASGITransport(app=app)
 
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
 
+    await app.state.redis.close()
     app.dependency_overrides.clear()
 
 

@@ -18,6 +18,7 @@ class InvalidCredentialsError(ServiceException):
 
     pass
 
+
 class AccountLockedError(ServiceException):
     """
     Raised when an identifier has exceeded LOGIN_MAX_FAILED_ATTEMPTS and
@@ -30,6 +31,29 @@ class AccountLockedError(ServiceException):
         super().__init__(message)
         self.retry_after_seconds = retry_after_seconds
 
+
+class IpRateLimitExceededError(ServiceException):
+    """
+    Raised when the per-IP request rate limit for /auth/login is exceeded (see IpRateLimitRepository).
+    Coarser than tand independent of AccountLockedError: this catches one source spraying many different
+    identifiers, which per-identifiere lockout alone wouldn't.
+    """
+
+    def __init__(self, retry_after_seconds: int, message: str = "Too many login requests from this address."):
+        super().__init__(message)
+        self.retry_after_seconds = retry_after_seconds
+
+
+class LoginThrottleUnavailableError(ServiceException):
+    """
+    Raised when Redis - backing both per-IP rate limiting and per-identifier lockout - is
+    unreachable. AuthService.login failse closed on this: the throttling mechanisms are treated
+    as a precondition for allowing login attempt at all, rathern than silently skipping protection during
+    Redis outage.
+    """
+
+    def __init__(self, message: str = "Login is temporarily unavailable. Please try again shortly."):
+        super().__init__(message)
 
 
 class CurrentPasswordRequiredError(ServiceException):

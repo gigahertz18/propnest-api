@@ -39,6 +39,12 @@ class BaseConfig:
     REDIS_DB: int = 0
     REDIS_PASSWORD: str | None = None
 
+    # Redis connection tuning - mirrors the pool_size/pool_pre_pign tuning
+    # already done for the SQLAlchemy engine below.
+    REDIS_MAX_CONNECTIONS: int = 20
+    REDIS_SOCKET_TIMEOUT: float = 2.0  # seconds a command can block before giving up
+    REDIS_SOCKET_CONNECT_TIMEOUT: float = 2.0
+    REDIS_HEALTH_CHECK_INTERVAL: int = 30  # seconds between pings on idle connections
 
     # Auth / JWT
     SECRET_KEY: str = "dev-secret-key-to-the-universe-pwease-override"
@@ -47,13 +53,13 @@ class BaseConfig:
     JWT_ISSUER: str = "propnest-api"
     JWT_AUDIENCE: str = "propnest-users"
 
-    # Login throttling — see AuthService.login / LoginAttemptRepository / rate_limit.py
-    LOGIN_RATE_LIMIT_PER_IP: str = "10/minute"
+    # Login throttling - see AuthService.login / LoginAttemptRepository/ IpRateLimitRepository
+    LOGIN_RATE_LIMIT_MAX_REQUESTS: int = 10
+    LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 60
     LOGIN_MAX_FAILED_ATTEMPTS: int = 5
     LOGIN_FAILURE_WINDOW_SECONDS: int = 900  # 15 min rolling window for counting failures
     LOGIN_LOCKOUT_BASE_SECONDS: int = 30
     LOGIN_LOCKOUT_MAX_SECONDS: int = 900  # 15 min cap, progressive backoff doubles up to this
-
 
     # CORS
     CORS_ORIGINS: list[str] = field(default_factory=lambda: ["http://localhost:3000"])
@@ -63,7 +69,7 @@ class BaseConfig:
         return f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
     @property
-    def REDIS_URL(self) ->:
+    def REDIS_URL(self) -> str:
         auth = f":{self.REDIS_PASSWORD}@" if self.REDIS_PASSWORD else ""
         return f"redis://{auth}{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
@@ -125,7 +131,8 @@ class UnittestConfig(BaseConfig):
     REDIS_DB: int = 1
 
     # Small, fast values so lockout/rate-limit tests don't need long sleeps.
-    LOGIN_RATE_LIMIT_PER_IP: str = "5/minute"
+    LOGIN_RATE_LIMIT_MAX_REQUESTS: int = 5
+    LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 60
     LOGIN_MAX_FAILED_ATTEMPTS: int = 3
     LOGIN_FAILURE_WINDOW_SECONDS: int = 30
     LOGIN_LOCKOUT_BASE_SECONDS: int = 2
@@ -144,6 +151,7 @@ class TestConfig(BaseConfig):
     DB_RETRY_INTERVAL: int = 1
 
     REDIS_DB: int = 2
+
 
 # ─── Staging ──────────────────────────────────────────────────────────────────
 @dataclass
@@ -211,7 +219,7 @@ class ProductionConfig(BaseConfig):
         if not self.REDIS_PASSWORD:
             errors.append(
                 "REDIS_PASSWORD is not set. Set the REDIS_PASSWORD environment variable "
-                "so login-lockout/rate-limit state isn't exposed on an authenticated Redis instance." 
+                "so login-lockout/rate-limit state isn't exposed on an authenticated Redis instance."
             )
         if self.ACCESS_TOKEN_EXPIRE_MINUTES > 30:
             errors.append(

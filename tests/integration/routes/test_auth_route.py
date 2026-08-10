@@ -1,8 +1,9 @@
 import pytest
 from datetime import datetime, timedelta, timezone
 
+from unittest.mock import patch
+from redis.exceptions import ConnectionError as RedisConnectionError
 from app.core.config import settings
-from app.core.redis_client import get_redis_client
 
 from jose import jwt
 from tests.factories import make_user_model
@@ -92,6 +93,7 @@ class TestLogin:
         )
         assert response.json()["detail"] == "Invalid credentials"
 
+
 @pytest.mark.asyncio
 class TestAccountLockout:
     """
@@ -179,7 +181,7 @@ class TestRateLimiting:
 
     async def test_exceeding_per_ip_limit_returns_429(self, client, db):
         await make_user_model(db, username="john", password="secret123")
-        limit = int(settings.LOGIN_RATE_LIMIT_PER_IP.split("/")[0])
+        limit = settings.LOGIN_RATE_LIMIT_MAX_REQUESTS
 
         for _ in range(limit):
             response = await client.post(
@@ -193,7 +195,24 @@ class TestRateLimiting:
             json={"identifier": "john", "password": "secret123"},
         )
         assert response.status_code == 429
+        assert "Retry-After" in response.headers
 
+
+@pytest.mark.asyncio
+class TestFailsClosedOnRedisOutage:
+    async def test_redis_unavailable_returns_503(self, client, db):
+        await make_user_model(db, username="john", password="secret123")
+
+        with patch(
+            "app.repositories.ip_rate_limit.IpRateLimitRepository.check",
+            side_effect=RedisConnectionError("simulated outage"),
+        ):
+            response = await client.post(
+                "/api/v1/auth/login",
+                json={"identifier": "john", "password": "secret123"},
+            )
+
+        assert response.status_code == 503
 
 
 @pytest.mark.asyncio

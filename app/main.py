@@ -6,14 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
+from redis.exceptions import RedisError
 
 from app.core.config import settings
 from app.core.logging import setup_logging
-from app.core.rate_limit import limiter
-from app.core.redis_client import close_redis_client
+from app.core.redis_client import RedisClientManager
 from app.db.session import engine
 from app.api.v1.routes import properties, auth, users, contracts, tenants, documents, payments
 
@@ -31,10 +28,17 @@ async def lifespan(app: FastAPI):
         max_retries=settings.DB_MAX_RETRIES,
         retry_interval=settings.DB_RETRY_INTERVAL,
     )
+    app.state.redis = RedisClientManager(
+        url=settings.REDIS_URL,
+        max_connections=settings.REDIS_MAX_CONNECTIONS,
+        socket_timeout=settings.REDIS_SOCKET_TIMEOUT,
+        socket_connect_timeout=settings.REDIS_SOCKET_CONNECT_TIMEOUT,
+        health_check_interval=settings.REDIS_HEALTH_CHECK_INTERVAL,
+    )
     logger.info("%s started in [%s] mode", settings.APP_NAME, settings.ENV)
     yield
     await engine.dispose()
-    await close_redis_client()
+    await app.state.redis.close()
     logger.info("Database connections closed")
 
 
@@ -76,11 +80,6 @@ app = FastAPI(
     redoc_url="/redoc" if settings.is_dev else None,
 )
 
-# ─── Rate Limiting ────────────────────────────────────────
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-app.add_middleware(SlowAPIMiddleware)
-
 # ─── CORS ─────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
@@ -107,6 +106,22 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
     return JSONResponse(
         status_code=status.HTTP_409_CONFLICT,
         content={"detail": "This action conflicts with existing related records and cannot be completed."},
+    )
+
+
+@app.exception_handler(RedisError)
+async def redis_error_handler(request: Request, exc: RedisError) -> JSONResponse:
+    """
+    Last-resort safety net for Redis connection/timeout errors that reach the route
+    layer without being translated into a domain exception first. AuthService.login should still
+    catch RedisError explicitly and fail closed with LoginThrottleUnavailableError (see
+    app/services/exceptions.py) - this handler exists so a future Redis call that's missed in a service
+    degrades into a 503 instead of a bare, unhandled 500.
+    """
+    logger.error("Unhandled RedisError reached the global handler: %s", exc)
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"detail": "A required service is temporarily unavailable. Please try again shortly."},
     )
 
 

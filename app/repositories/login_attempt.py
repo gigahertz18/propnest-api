@@ -14,6 +14,7 @@ kicks in for real accounts would reopen that exact side channel via a
 Lives outside BaseRepository (SQLAlchemy generic CRUD) since this reads
 and writes Redis through a completely different client, not Postgres.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

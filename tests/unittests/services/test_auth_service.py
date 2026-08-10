@@ -1,23 +1,33 @@
 """
-Unit tests for AuthService.login's lockout integration.
+Unit tests for AuthService.login's throttling integration: per-identifier
+lockout, per-IP rate limiting, and fail-closed behavior when Redis is
+unreachable.
 
-Login-attempt state and the user repo are both mocked here — the
-Redis-backed lockout mechanics themselves are covered by
-tests/unittests/repositories/test_login_attempt_repository.py. These
-tests only assert AuthService's *decisions*: when it checks the lock,
-when it records a failure/success, and what it raises.
+Login-attempt state, IP rate limiting, and the user repo are all mocked
+here — the Redis-backed mechanics themselves are covered by
+tests/unittests/repositories/test_login_attempt_repository.py and
+test_ip_rate_limit_repository.py. These tests only assert AuthService's
+*decisions*.
 """
+
 import uuid
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 from app.models.user import UserRole
 from app.repositories.login_attempt import LockoutStatus
+from app.repositories.ip_rate_limit import RateLimitStatus
 from app.services.auth_service import AuthService
-from app.services.exceptions import AccountLockedError, InvalidCredentialsError
+from app.services.exceptions import (
+    AccountLockedError,
+    InvalidCredentialsError,
+    IpRateLimitExceededError,
+    LoginThrottleUnavailableError,
+)
 
 
 def _fake_user(**overrides) -> SimpleNamespace:
@@ -48,8 +58,19 @@ def login_attempt_repo():
 
 
 @pytest.fixture
-def service(user_repo, login_attempt_repo):
-    return AuthService(user_repo=user_repo, login_attempt_repo=login_attempt_repo)
+def ip_rate_limit_repo():
+    repo = AsyncMock()
+    repo.check.return_value = RateLimitStatus(allowed=True)
+    return repo
+
+
+@pytest.fixture
+def service(user_repo, login_attempt_repo, ip_rate_limit_repo):
+    return AuthService(
+        user_repo=user_repo,
+        login_attempt_repo=login_attempt_repo,
+        ip_rate_limit_repo=ip_rate_limit_repo,
+    )
 
 
 @pytest.mark.asyncio
@@ -57,9 +78,7 @@ class TestLoginLockout:
     async def test_locked_identifier_short_circuits_before_touching_user_repo(
         self, service, user_repo, login_attempt_repo
     ):
-        login_attempt_repo.get_lock_status.return_value = LockoutStatus(
-            locked=True, retry_after_seconds=30
-        )
+        login_attempt_repo.get_lock_status.return_value = LockoutStatus(locked=True, retry_after_seconds=30)
 
         with pytest.raises(AccountLockedError) as exc_info:
             await service.login(db=AsyncMock(), identifier="john", password="x")
@@ -103,9 +122,7 @@ class TestLoginLockout:
         login_attempt_repo.record_success.assert_awaited_once_with("john")
         login_attempt_repo.record_failure.assert_not_called()
 
-    async def test_client_ip_is_passed_through_for_logging_only(
-        self, service, user_repo, login_attempt_repo
-    ):
+    async def test_client_ip_is_passed_through_for_logging_only(self, service, user_repo, login_attempt_repo):
         """client_ip shouldn't affect lockout keys — it's log-only context."""
         user_repo.get_by_identifier.return_value = _fake_user()
 
@@ -113,3 +130,69 @@ class TestLoginLockout:
             await service.login(db=AsyncMock(), identifier="john", password="x", client_ip="1.2.3.4")
 
         login_attempt_repo.record_success.assert_awaited_once_with("john")
+
+
+@pytest.mark.asyncio
+class TestIpRateLimit:
+    async def test_rate_limited_ip_short_circuits_before_lockout_check(
+        self, service, login_attempt_repo, ip_rate_limit_repo
+    ):
+        ip_rate_limit_repo.check.return_value = RateLimitStatus(allowed=False, retry_after_seconds=45)
+
+        with pytest.raises(IpRateLimitExceededError) as exc_info:
+            await service.login(db=AsyncMock(), identifier="john", password="x", client_ip="1.2.3.4")
+
+        assert exc_info.value.retry_after_seconds == 45
+        login_attempt_repo.get_lock_status.assert_not_called()
+
+    async def test_no_client_ip_skips_the_ip_check(self, service, user_repo, ip_rate_limit_repo):
+        user_repo.get_by_identifier.return_value = _fake_user()
+
+        with patch("app.services.auth_service.verify_password", return_value=True):
+            await service.login(db=AsyncMock(), identifier="john", password="x", client_ip=None)
+
+        ip_rate_limit_repo.check.assert_not_called()
+
+    async def test_ip_check_runs_with_the_given_ip(self, service, user_repo, ip_rate_limit_repo):
+        user_repo.get_by_identifier.return_value = _fake_user()
+
+        with patch("app.services.auth_service.verify_password", return_value=True):
+            await service.login(db=AsyncMock(), identifier="john", password="x", client_ip="1.2.3.4")
+
+        ip_rate_limit_repo.check.assert_awaited_once_with("1.2.3.4")
+
+
+@pytest.mark.asyncio
+class TestFailsClosedOnRedisOutage:
+    """
+    Redis backs both throttling mechanisms. If it's unreachable,
+    AuthService.login must reject the attempt rather than silently
+    proceed unthrottled — see LoginThrottleUnavailableError.
+    """
+
+    async def test_ip_rate_limit_check_failure_fails_closed(self, service, ip_rate_limit_repo):
+        ip_rate_limit_repo.check.side_effect = RedisConnectionError("boom")
+
+        with pytest.raises(LoginThrottleUnavailableError):
+            await service.login(db=AsyncMock(), identifier="john", password="x", client_ip="1.2.3.4")
+
+    async def test_lockout_check_failure_fails_closed(self, service, login_attempt_repo):
+        login_attempt_repo.get_lock_status.side_effect = RedisConnectionError("boom")
+
+        with pytest.raises(LoginThrottleUnavailableError):
+            await service.login(db=AsyncMock(), identifier="john", password="x")
+
+    async def test_record_failure_call_failing_fails_closed(self, service, user_repo, login_attempt_repo):
+        user_repo.get_by_identifier.return_value = None
+        login_attempt_repo.record_failure.side_effect = RedisConnectionError("boom")
+
+        with pytest.raises(LoginThrottleUnavailableError):
+            await service.login(db=AsyncMock(), identifier="ghost", password="x")
+
+    async def test_record_success_call_failing_fails_closed(self, service, user_repo, login_attempt_repo):
+        user_repo.get_by_identifier.return_value = _fake_user()
+        login_attempt_repo.record_success.side_effect = RedisConnectionError("boom")
+
+        with patch("app.services.auth_service.verify_password", return_value=True):
+            with pytest.raises(LoginThrottleUnavailableError):
+                await service.login(db=AsyncMock(), identifier="john", password="x")

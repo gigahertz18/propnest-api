@@ -7,18 +7,28 @@ against a real test Postgres DB rather than a mock. The autouse
 `_flush_redis` fixture in tests/conftest.py guarantees a clean keyspace
 before every test.
 """
+
 import asyncio
 
 import pytest
+import pytest_asyncio
+
+import redis.asyncio as redis
 
 from app.core.config import settings
-from app.core.redis_client import get_redis_client
 from app.repositories.login_attempt import LoginAttemptRepository
 
 
+@pytest_asyncio.fixture
+async def redis_client():
+    client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+    yield client
+    await client.aclose()
+
+
 @pytest.fixture
-def repo():
-    return LoginAttemptRepository(client=get_redis_client())
+def repo(redis_client):
+    return LoginAttemptRepository(client=redis_client)
 
 
 @pytest.mark.asyncio
