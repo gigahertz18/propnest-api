@@ -173,6 +173,7 @@ async def make_tenant_model(db, user_id: uuid.UUID | None = None, **kwargs) -> T
     TenantService.link_user, not tenant creation.
     """
     data = make_tenant(**kwargs)
+    data["email"] = data["email"].strip().lower()
     obj = Tenant(id=uuid.uuid4(), user_id=user_id, **data)
     db.add(obj)
     await db.flush()

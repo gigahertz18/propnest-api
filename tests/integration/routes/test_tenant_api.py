@@ -165,6 +165,30 @@ class TestCreateTenantRoute:
         )
         assert response.status_code == 403
 
+    async def test_duplicate_email_returns_409(self, client, db, authenticate_manager):
+        ctx = await authenticate_manager()
+        await make_tenant_model(db, email="taken@example.com")
+        payload = make_tenant(email="taken@example.com")
+        payload["date_of_birth"] = payload["date_of_birth"].isoformat()
+        response = await client.post(
+            "/api/v1/tenants/",
+            json=payload,
+            headers=ctx.headers,
+        )
+        assert response.status_code == 409
+
+    async def test_duplicate_email_is_case_insensitive(self, client, db, authenticate_manager):
+        ctx = await authenticate_manager()
+        await make_tenant_model(db, email="Taken@Example.Com")
+        payload = make_tenant(email="taken@example.com")
+        payload["date_of_birth"] = payload["date_of_birth"].isoformat()
+        response = await client.post(
+            "/api/v1/tenants/",
+            json=payload,
+            headers=ctx.headers,
+        )
+        assert response.status_code == 409
+
 
 @pytest.mark.asyncio
 class TestUpdateTenantRoute:
@@ -223,6 +247,17 @@ class TestUpdateTenantRoute:
             headers=ctx.headers,
         )
         assert response.status_code == 403
+
+    async def test_update_to_existing_email_returns_409(self, client, db, authenticate_manager):
+        ctx = await authenticate_manager()
+        await make_tenant_model(db, email="taken@example.com")
+        tenant = await make_tenant_model(db, email="mine@example.com")
+        response = await client.patch(
+            f"/api/v1/tenants/{tenant.id}",
+            json={"email": "taken@example.com"},
+            headers=ctx.headers,
+        )
+        assert response.status_code == 409
 
 
 @pytest.mark.asyncio

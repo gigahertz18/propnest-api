@@ -11,6 +11,7 @@ from app.services.exceptions import (
     RelatedResourceNotFoundError,
     UserNotFoundError,
     TenantAlreadyLinkedError,
+    TenantAlreadyExistsError,
     TenantForbiddenError,
     TenantInUseError,
 )
@@ -56,7 +57,12 @@ async def create_tenant(
     tenant_service: TenantService = Depends(get_tenant_service),
     current_user: User = Depends(require_manager_or_above),
 ):
-    return await tenant_service.create_tenant(db, payload, current_user=current_user)
+    try:
+        return await tenant_service.create_tenant(db, payload, current_user=current_user)
+    except TenantForbiddenError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except TenantAlreadyExistsError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
 @router.patch(
@@ -76,6 +82,8 @@ async def update_tenant(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except TenantForbiddenError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except TenantAlreadyExistsError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
 @router.delete(

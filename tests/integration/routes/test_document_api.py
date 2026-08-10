@@ -221,7 +221,7 @@ class TestCreateDocumentRoute:
         """Same as above, but for a mismatched tenant_id supplied alongside contract_id."""
         auth_ctx = await authenticate_admin()
         tenant = await make_tenant_model(db)
-        unrelated_tenant = await make_tenant_model(db)
+        unrelated_tenant = await make_tenant_model(db, email="unrelated@example.com")
         prop = await make_property_model(db)
         contract = await make_contract_model(db, property_id=prop.id, tenant_id=tenant.id)
 
