@@ -93,8 +93,6 @@ In addition to `DB_PASSWORD`, `SECRET_KEY`, and `MINIO_ROOT_PASSWORD`, productio
 
 ---
 
----
-
 ## Testing & Quality
 
 ```bash
