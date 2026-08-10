@@ -40,7 +40,7 @@ The backend follows a layered structure to keep business logic out of the HTTP l
 app/
 ├── api/v1/routes/      # HTTP layer — request/response handling only
 ├── services/           # Business logic, orchestration, domain exceptions
-├── repositories/       # Data access — generic CRUD base + per-entity repos (plus a Redis-backed one, LoginAttemptRepository, for login lockout state)
+├── repositories/       # Data access — generic CRUD base + per-entity repos (plus two Redis-backed ones: LoginAttemptRepository for login lockout, IpRateLimitRepository for per-IP throttling)
 ├── models/             # SQLAlchemy models (User, Property, Tenant, Contract, Payment, Document)
 ├── schemas/            # Pydantic request/response schemas
 ├── core/                # Config (env-based: dev/test/staging/prod), security, logging, dependencies
@@ -51,7 +51,7 @@ app/
 
 **Transaction ownership:** service methods own database commits. The shared `get_db()` dependency only opens the session for the request and rolls back on exception; it does not commit.
 
-**Login throttling:** `/auth/login` is protected by two independent layers above credential checking — a per-IP request rate limit (`slowapi`, route-level decorator) and a per-identifier progressive lockout after repeated failures (`AuthService` + `LoginAttemptRepository`). Lockout is keyed on the normalized identifier itself, not the user id, so a nonexistent username locks out identically to a real one — this preserves the existing timing-attack/enumeration protections in `verify_password` instead of reopening them through a 429-vs-401 difference. Both mechanisms are backed by Redis so they hold across multiple backend instances.
+**Login throttling:** `/auth/login` is protected by two independent layers above credential checking, both enforced inside `AuthService.login` — a per-IP request rate limit (`IpRateLimitRepository`, async-native fixed-window counter) and a per-identifier progressive lockout after repeated failures (`LoginAttemptRepository`). Lockout is keyed on the normalized identifier itself, not the user id, so a nonexistent username locks out identically to a real one — this preserves the existing timing-attack/enumeration protections in `verify_password` instead of reopening them through a 429-vs-401 difference. Both mechanisms are backed by Redis so they hold across multiple backend instances, and both fail closed: if Redis is unreachable, login is rejected (503) rather than silently proceeding unthrottled.
 
 **Config** is environment-aware via a small class hierarchy (`BaseConfig` → `DevelopmentConfig` / `UnittestConfig` / staging / prod), so tests run against a dedicated test database and never touch dev data.
 
@@ -80,7 +80,8 @@ make seed password=yourpassword
 ```
 
 ---
-### Production environmnet variables
+
+### Production environment variables
 
 In addition to `DB_PASSWORD`, `SECRET_KEY`, and `MINIO_ROOT_PASSWORD`, production also requires:
 
