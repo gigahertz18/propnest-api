@@ -224,10 +224,6 @@ class TestTenantServiceLinkUser:
                     Exception('duplicate key value violates unique constraint "ix_tenants_user_id"'),
                 )
 
-        # svc = TenantService(
-        #     tenant_repo=FailingRepo({tenant.id: tenant}),
-        #     user_repo=MockReadOnlyRepo({user.id: user}),
-        # )
         svc = _make_service(tenants=FailingRepo({tenant.id: tenant}), users=MockReadOnlyRepo({user.id: user}))
 
         with pytest.raises(TenantAlreadyLinkedError):
@@ -243,10 +239,6 @@ class TestTenantServiceLinkUser:
             async def update(self, db, id, payload):
                 raise IntegrityError("UPDATE", {}, Exception("some unrelated constraint violation"))
 
-        # svc = TenantService(
-        #     tenant_repo=FailingRepo({tenant.id: tenant}),
-        #     user_repo=MockReadOnlyRepo({user.id: user}),
-        # )
         svc = _make_service(
             tenants=FailingRepo({tenant.id: tenant}),
             users=MockReadOnlyRepo({user.id: user}),
@@ -430,8 +422,7 @@ def _make_regular_user():
 @pytest.mark.asyncio
 class TestCreateTenant:
     async def test_admin_can_create_tenant(self, mock_db):
-        # repo = MockCRUDRepo()
-        # svc = TenantService(tenant_repo=repo)
+
         svc = _make_service()
         payload = make_tenant()
 
@@ -440,8 +431,6 @@ class TestCreateTenant:
         assert result is not None
 
     async def test_manager_can_create_tenant(self, mock_db):
-        # repo = MockCRUDRepo()
-        # svc = TenantService(tenant_repo=repo)
         svc = _make_service()
         payload = make_tenant()
 
@@ -453,9 +442,8 @@ class TestCreateTenant:
         """A brand-new tenant has no owner to check ownership against —
         this is the one place role alone (not resource ownership) is the
         whole check, and it must not be skippable."""
-        # repo = MockCRUDRepo()
+
         repo = MockTenantRepo()
-        # svc = TenantService(tenant_repo=repo)
         svc = _make_service(tenants=repo)
         payload = make_tenant()
 
@@ -465,8 +453,7 @@ class TestCreateTenant:
         assert repo.created_payloads == []
 
     async def test_current_user_is_required(self, mock_db):
-        # repo = MockCRUDRepo()
-        # svc = TenantService(tenant_repo=repo)
+
         svc = _make_service()
         payload = make_tenant()
 

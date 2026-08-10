@@ -72,9 +72,6 @@ class TenantService(ResourceAuthorizationMixin):
         if role not in (UserRole.ADMIN, UserRole.MANAGER):
             raise TenantForbiddenError("User not authorized to create tenants.")
 
-        # tenant = await self.tenant_repo.create(db, payload)
-        # await db.commit()
-        # return tenant
         # Pre-check for fast feedback in the common case
         email = self._extract_email(payload)
         if email and await self.tenant_repo.get_by_email(db, email):
