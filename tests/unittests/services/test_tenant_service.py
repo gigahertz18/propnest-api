@@ -12,6 +12,7 @@ from app.services.exceptions import (
     UserNotFoundError,
     TenantAlreadyLinkedError,
     TenantForbiddenError,
+    TenantAlreadyExistsError,
 )
 from tests.mock_repos import MockCRUDRepo, MockReadOnlyRepo
 from tests.factories import make_tenant
@@ -103,10 +104,14 @@ async def test_tenant_service_forwards_pagination_defaults(mock_db):
 
 
 class MockTenantRepo(MockCRUDRepo):
-    """Adds get_by_user_id on top of MockCRUDRepo, mirroring TenantRepository."""
+    """Adds get_by_user_id/get_by_email on top of MockCRUDRepo, mirroring TenantRepository."""
 
     async def get_by_user_id(self, db, user_id):
         results = await self._filter_by(user_id=user_id)
+        return results[0] if results else None
+
+    async def get_by_email(self, db, email):
+        results = await self._filter_by(email=email)
         return results[0] if results else None
 
 
@@ -115,9 +120,22 @@ def _make_tenant(user_id=None):
 
 
 def _make_service(tenants=None, users=None) -> TenantService:
+    if tenants is None:
+        tenants_repo = MockTenantRepo({})
+    elif isinstance(tenants, dict):
+        tenants_repo = MockTenantRepo(tenants)
+    else:
+        tenants_repo = tenants
+
+    if users is None:
+        users_repo = MockReadOnlyRepo({})
+    elif isinstance(users, dict):
+        users_repo = MockReadOnlyRepo(users)
+    else:
+        users_repo = users
     return TenantService(
-        tenant_repo=MockTenantRepo(tenants or {}),
-        user_repo=MockReadOnlyRepo(users or {}),
+        tenant_repo=tenants_repo,
+        user_repo=users_repo,
     )
 
 
@@ -206,10 +224,7 @@ class TestTenantServiceLinkUser:
                     Exception('duplicate key value violates unique constraint "ix_tenants_user_id"'),
                 )
 
-        svc = TenantService(
-            tenant_repo=FailingRepo({tenant.id: tenant}),
-            user_repo=MockReadOnlyRepo({user.id: user}),
-        )
+        svc = _make_service(tenants=FailingRepo({tenant.id: tenant}), users=MockReadOnlyRepo({user.id: user}))
 
         with pytest.raises(TenantAlreadyLinkedError):
             await svc.link_user(mock_db, tenant.id, user.id, current_user=_make_admin())
@@ -224,9 +239,9 @@ class TestTenantServiceLinkUser:
             async def update(self, db, id, payload):
                 raise IntegrityError("UPDATE", {}, Exception("some unrelated constraint violation"))
 
-        svc = TenantService(
-            tenant_repo=FailingRepo({tenant.id: tenant}),
-            user_repo=MockReadOnlyRepo({user.id: user}),
+        svc = _make_service(
+            tenants=FailingRepo({tenant.id: tenant}),
+            users=MockReadOnlyRepo({user.id: user}),
         )
 
         with pytest.raises(IntegrityError):
@@ -311,7 +326,7 @@ class TestTenantServiceAuthorization:
     async def test_admin_bypasses_ownership_check(self, mock_db):
         tenant = _make_tenant()
         repo = MockOwnershipTenantRepo({tenant.id: tenant}, owners={tenant.id: {uuid4()}})
-        svc = TenantService(tenant_repo=repo)
+        svc = _make_service(tenants=repo)
         admin = _make_admin()
 
         result = await svc.get_tenant(mock_db, tenant.id, current_user=admin)
@@ -320,7 +335,7 @@ class TestTenantServiceAuthorization:
     async def test_manager_can_access_unclaimed_tenant(self, mock_db):
         tenant = _make_tenant()
         repo = MockOwnershipTenantRepo({tenant.id: tenant})
-        svc = TenantService(tenant_repo=repo)
+        svc = _make_service(tenants=repo)
         manager = _make_manager()
 
         result = await svc.get_tenant(mock_db, tenant.id, current_user=manager)
@@ -330,7 +345,7 @@ class TestTenantServiceAuthorization:
         tenant = _make_tenant()
         manager = _make_manager()
         repo = MockOwnershipTenantRepo({tenant.id: tenant}, owners={tenant.id: {manager.id}})
-        svc = TenantService(tenant_repo=repo)
+        svc = _make_service(tenants=repo)
 
         result = await svc.get_tenant(mock_db, tenant.id, current_user=manager)
         assert result is tenant
@@ -338,7 +353,7 @@ class TestTenantServiceAuthorization:
     async def test_manager_cannot_access_another_managers_tenant(self, mock_db):
         tenant = _make_tenant()
         repo = MockOwnershipTenantRepo({tenant.id: tenant}, owners={tenant.id: {uuid4()}})
-        svc = TenantService(tenant_repo=repo)
+        svc = _make_service(tenants=repo)
         manager = _make_manager()
 
         with pytest.raises(TenantForbiddenError):
@@ -347,7 +362,7 @@ class TestTenantServiceAuthorization:
     async def test_update_tenant_enforces_authorization(self, mock_db):
         tenant = _make_tenant()
         repo = MockOwnershipTenantRepo({tenant.id: tenant}, owners={tenant.id: {uuid4()}})
-        svc = TenantService(tenant_repo=repo)
+        svc = _make_service(tenants=repo)
         manager = _make_manager()
 
         with pytest.raises(TenantForbiddenError):
@@ -356,7 +371,7 @@ class TestTenantServiceAuthorization:
     async def test_delete_tenant_enforces_authorization(self, mock_db):
         tenant = _make_tenant()
         repo = MockOwnershipTenantRepo({tenant.id: tenant}, owners={tenant.id: {uuid4()}})
-        svc = TenantService(tenant_repo=repo)
+        svc = _make_service(tenants=repo)
         manager = _make_manager()
 
         with pytest.raises(TenantForbiddenError):
@@ -370,7 +385,7 @@ class TestTenantServiceAuthorization:
             {owned.id: owned, unowned.id: unowned},
             owners={owned.id: {manager.id}, unowned.id: {uuid4()}},
         )
-        svc = TenantService(tenant_repo=repo)
+        svc = _make_service(tenants=repo)
 
         result = await svc.list_tenants(mock_db, current_user=manager)
         assert result.items == [owned]
@@ -379,7 +394,7 @@ class TestTenantServiceAuthorization:
     async def test_list_tenants_admin_sees_everything(self, mock_db):
         t1, t2 = _make_tenant(), _make_tenant()
         repo = MockCRUDRepo({t1.id: t1, t2.id: t2})
-        svc = TenantService(tenant_repo=repo)
+        svc = _make_service(tenants=repo)
         admin = _make_admin()
 
         result = await svc.list_tenants(mock_db, current_user=admin)
@@ -390,7 +405,7 @@ class TestTenantServiceAuthorization:
         tenant = _make_tenant()
         user = SimpleNamespace(id=uuid4())
         repo = MockOwnershipTenantRepo({tenant.id: tenant}, owners={tenant.id: {uuid4()}})
-        svc = TenantService(tenant_repo=repo, user_repo=MockReadOnlyRepo({user.id: user}))
+        svc = _make_service(tenants=repo, users=MockReadOnlyRepo({user.id: user}))
         manager = _make_manager()
 
         with pytest.raises(TenantForbiddenError):
@@ -407,8 +422,8 @@ def _make_regular_user():
 @pytest.mark.asyncio
 class TestCreateTenant:
     async def test_admin_can_create_tenant(self, mock_db):
-        repo = MockCRUDRepo()
-        svc = TenantService(tenant_repo=repo)
+
+        svc = _make_service()
         payload = make_tenant()
 
         result = await svc.create_tenant(mock_db, payload=payload, current_user=_make_admin())
@@ -416,8 +431,7 @@ class TestCreateTenant:
         assert result is not None
 
     async def test_manager_can_create_tenant(self, mock_db):
-        repo = MockCRUDRepo()
-        svc = TenantService(tenant_repo=repo)
+        svc = _make_service()
         payload = make_tenant()
 
         result = await svc.create_tenant(mock_db, payload=payload, current_user=_make_manager())
@@ -428,8 +442,9 @@ class TestCreateTenant:
         """A brand-new tenant has no owner to check ownership against —
         this is the one place role alone (not resource ownership) is the
         whole check, and it must not be skippable."""
-        repo = MockCRUDRepo()
-        svc = TenantService(tenant_repo=repo)
+
+        repo = MockTenantRepo()
+        svc = _make_service(tenants=repo)
         payload = make_tenant()
 
         with pytest.raises(TenantForbiddenError):
@@ -438,12 +453,67 @@ class TestCreateTenant:
         assert repo.created_payloads == []
 
     async def test_current_user_is_required(self, mock_db):
-        repo = MockCRUDRepo()
-        svc = TenantService(tenant_repo=repo)
+
+        svc = _make_service()
         payload = make_tenant()
 
         with pytest.raises(TypeError):
             await svc.create_tenant(mock_db, payload=payload)
+
+    async def test_raises_when_email_already_exists(self, mock_db):
+        existing = SimpleNamespace(id=uuid4(), email="taken@example.com")
+        repo = MockTenantRepo({existing.id: existing})
+        svc = _make_service(tenants=repo)
+        payload = make_tenant(email="taken@example.com")
+
+        with pytest.raises(TenantAlreadyExistsError):
+            await svc.create_tenant(mock_db, payload=payload, current_user=_make_admin())
+
+        assert repo.created_payloads == []
+
+    async def test_translates_integrity_error_to_email_conflict(self, mock_db):
+        """Simulates a race where the pre-check passes but a concurrent
+        create win first, mirroring UserService's equivalent test."""
+
+        class FailingCreateRepo(MockTenantRepo):
+            async def create(self, db, payload):
+                raise IntegrityError(
+                    "INSERT", {}, Exception('duplicate key value violates unique constraint "ix_tenants_email"')
+                )
+
+        svc = _make_service(tenants=FailingCreateRepo())
+        payload = make_tenant(email="race@example.com")
+
+        with pytest.raises(TenantAlreadyExistsError):
+            await svc.create_tenant(mock_db, payload=payload, current_user=_make_admin())
+
+
+@pytest.mark.asyncio
+class TestUpdateTenantEmailUniqueness:
+    async def test_raises_when_email_already_exists(self, mock_db):
+        target = _make_tenant()
+        other = SimpleNamespace(id=uuid4(), user_id=None, email="taken@example.com")
+        repo = MockTenantRepo({target.id: target, other.id: other})
+        svc = _make_service(tenants=repo)
+
+        with pytest.raises(TenantAlreadyExistsError):
+            await svc.update_tenant(
+                mock_db,
+                target.id,
+                payload={"email": "taken@example.com"},
+                current_user=_make_admin(),
+            )
+
+    async def test_updating_own_email_to_same_value_is_allowed(self, mock_db):
+        target = SimpleNamespace(id=uuid4(), user_id=None, email="mine@example.com")
+        repo = MockTenantRepo({target.id: target})
+        svc = _make_service(tenants=repo)
+
+        result = await svc.update_tenant(
+            mock_db, target.id, payload={"email": "mine@example.com"}, current_user=_make_admin()
+        )
+
+        assert result is not None
 
 
 # ─── _authorize_user_to_tenant fails closed for unclaimed tenants ───────────
@@ -460,7 +530,7 @@ class TestAuthorizeUserToTenantFailsClosed:
         ever runs."""
         tenant = _make_tenant()
         repo = MockOwnershipTenantRepo({tenant.id: tenant})  # unclaimed
-        svc = TenantService(tenant_repo=repo)
+        svc = _make_service(tenants=repo)
         user = _make_regular_user()
 
         with pytest.raises(TenantForbiddenError):
@@ -469,7 +539,7 @@ class TestAuthorizeUserToTenantFailsClosed:
     async def test_unrecognized_role_is_forbidden_for_unclaimed_tenant(self, mock_db):
         tenant = _make_tenant()
         repo = MockOwnershipTenantRepo({tenant.id: tenant})  # unclaimed
-        svc = TenantService(tenant_repo=repo)
+        svc = _make_service(tenants=repo)
         stub = SimpleNamespace(id=uuid4(), role=None)
 
         with pytest.raises(TenantForbiddenError):

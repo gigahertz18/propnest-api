@@ -12,6 +12,10 @@ from app.models.property import Property
 from app.schemas.tenant import TenantCreate, TenantUpdate
 
 
+def _normalize_email(email: str) -> str:
+    return email.strip().lower()
+
+
 class TenantRepository(BaseRepository[Tenant, TenantCreate, TenantUpdate]):
     """
     Tenant-specific queries on top of the generic BaseRepository.
@@ -24,9 +28,11 @@ class TenantRepository(BaseRepository[Tenant, TenantCreate, TenantUpdate]):
         email: str,
     ) -> Tenant | None:
 
+        normalized = _normalize_email(email)
+
         return await self._first(
             db,
-            self.model.email == email,
+            self.model.email == normalized,
         )
 
     async def get_by_phone_number(
@@ -95,6 +101,40 @@ class TenantRepository(BaseRepository[Tenant, TenantCreate, TenantUpdate]):
         user_id: uuid.UUID,
     ) -> Tenant | None:
         return await self._first(db, self.model.user_id == user_id)
+
+    async def create(self, db: AsyncSession, payload: TenantCreate) -> Tenant:
+        """Override create to normalize email, mirroring UserRepository"""
+        data = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
+
+        email = data.get("email")
+        if email is not None:
+            data["email"] = _normalize_email(email)
+
+        obj = self.model(**data)
+        db.add(obj)
+        await db.flush()
+        await db.refresh(obj)
+
+        return obj
+
+    async def update(self, db: AsyncSession, id: uuid.UUID, payload: TenantUpdate) -> Tenant | None:
+        """Override update to normalize email, mirroring UserRepository"""
+        obj = await self.get_by_id(db, id)
+        if not obj:
+            return None
+
+        updates = payload.model_dump(exclude_unset=True) if hasattr(payload, "model_dump") else dict(payload)
+
+        email = updates.get("email")
+        if "email" in updates and email is not None:
+            updates["email"] = _normalize_email(email)
+
+        for field, value in updates.items():
+            setattr(obj, field, value)
+
+        await db.flush()
+        await db.refresh(obj)
+        return obj
 
     def _accessible_by_manager_clause(self, manager_id: uuid.UUID):
         """

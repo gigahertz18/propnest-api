@@ -18,7 +18,7 @@ class Tenant(Base, TimestampMixin):
 
     full_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
 
-    email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
     phone_number: Mapped[str] = mapped_column(String(20), nullable=False)
     current_address: Mapped[str] = mapped_column(String(500), nullable=False)
     date_of_birth: Mapped[Date] = mapped_column(Date, nullable=False)

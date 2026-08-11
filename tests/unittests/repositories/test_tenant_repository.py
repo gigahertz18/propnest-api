@@ -105,14 +105,24 @@ class TestTenantRepositoryCreate:
         assert result.occupation == "Developer"
         assert result.notes == "Some notes here"
 
-    async def test_duplicate_email_is_allowed(self, db):
-        # No unique constraint on email — two tenants can share one.
-        # This test documents the current behaviour; add a DB constraint
-        # and flip this to expect an error when that changes.
+    async def test_duplicate_email_raises(self, db):
         await make_tenant_model(db, email="shared@example.com")
         payload = TenantCreate(**make_tenant(email="shared@example.com"))
+
+        with pytest.raises(IntegrityError):
+            await tenant_repo.create(db, payload)
+
+    async def test_duplicate_email_is_case_insensitive(self, db):
+        await make_tenant_model(db, email="shared@example.com")
+        payload = TenantCreate(**make_tenant(email="Shared@Example.COM"))
+        with pytest.raises(IntegrityError):
+            await tenant_repo.create(db, payload)
+
+    async def test_create_normalizes_email(self, db):
+        payload = TenantCreate(**make_tenant(email="Mixed@Example.COM"))
         result = await tenant_repo.create(db, payload)
-        assert result is not None
+
+        assert result.email == "mixed@example.com"
 
 
 @pytest.mark.asyncio
@@ -131,6 +141,11 @@ class TestTenantRepositoryUpdate:
         tenant = await make_tenant_model(db)
         result = await tenant_repo.update(db, tenant.id, TenantUpdate(email="new@example.com"))
         assert result.email == "new@example.com"
+
+    async def test_update_normalizes_email(self, db):
+        tenant = await make_tenant_model(db)
+        result = await tenant_repo.update(db, tenant.id, TenantUpdate(email="Update@Example.Com"))
+        assert result.email == "update@example.com"
 
     async def test_update_is_active_to_false(self, db):
         tenant = await make_tenant_model(db)
@@ -187,13 +202,6 @@ class TestTenantRepositoryGetByEmail:
         await make_tenant_model(db, email="exact@example.com")
         result = await tenant_repo.get_by_email(db, "exact")
         assert result is None
-
-    async def test_returns_first_on_duplicate_email(self, db):
-        # Documents current behaviour — no uniqueness enforced at DB level
-        await make_tenant_model(db, email="dup@example.com", full_name="First")
-        await make_tenant_model(db, email="dup@example.com", full_name="Second")
-        result = await tenant_repo.get_by_email(db, "dup@example.com")
-        assert result is not None
 
 
 @pytest.mark.asyncio

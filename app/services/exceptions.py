@@ -233,6 +233,12 @@ class TenantAlreadyLinkedError(ServiceException):
     pass
 
 
+class TenantAlreadyExistsError(ServiceException):
+    """Raised when trying to create/update a tenant with a duplicate email."""
+
+    pass
+
+
 # ─── Payment Related Exception ──────────────────────────────────────────────
 class PaymentForbiddenError(ResourceForbiddenError):
     """

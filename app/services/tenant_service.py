@@ -21,6 +21,7 @@ from app.services.exceptions import (
     TenantAlreadyLinkedError,
     TenantForbiddenError,
     TenantInUseError,
+    TenantAlreadyExistsError,
 )
 
 
@@ -71,9 +72,19 @@ class TenantService(ResourceAuthorizationMixin):
         if role not in (UserRole.ADMIN, UserRole.MANAGER):
             raise TenantForbiddenError("User not authorized to create tenants.")
 
-        tenant = await self.tenant_repo.create(db, payload)
-        await db.commit()
-        return tenant
+        # Pre-check for fast feedback in the common case
+        email = self._extract_email(payload)
+        if email and await self.tenant_repo.get_by_email(db, email):
+            raise TenantAlreadyExistsError("A tenant with this email already exists.")
+
+        # Concurrent requests can still race past the pre-check - translate the resulting
+        # IntegrityError into a domain exception
+        try:
+            tenant = await self.tenant_repo.create(db, payload)
+            await db.commit()
+            return tenant
+        except IntegrityError as e:
+            self._raise_conflict(e)
 
     async def update_tenant(
         self,
@@ -87,7 +98,18 @@ class TenantService(ResourceAuthorizationMixin):
         # detection — matches PropertyService/ContractService rather than
         # leaving the route layer to check for a None return.
         await self.get_tenant(db, id, current_user=current_user)
-        tenant = await self.tenant_repo.update(db, id, payload)
+
+        email = self._extract_email(payload)
+        if email:
+            existing = await self.tenant_repo.get_by_email(db, email)
+            if existing and existing.id != id:
+                raise TenantAlreadyExistsError("A tenant with this email already exists.")
+
+        try:
+            tenant = await self.tenant_repo.update(db, id, payload)
+        except IntegrityError as e:
+            self._raise_conflict(e)
+
         await db.commit()
         return tenant
 
@@ -231,3 +253,22 @@ class TenantService(ResourceAuthorizationMixin):
         accessible = await self.tenant_repo.is_accessible_by_manager(db, tenant_id, current_user.id)
         if not accessible:
             raise TenantForbiddenError("User not authorized to manage this tenant.")
+
+    @staticmethod
+    def _extract_email(payload) -> str | None:
+        """Supports both TenantCreate/TenantUpdate (Pydantic) and plain
+        dict payloads — mirrors the dict/Pydantic duality already
+        handled by BaseRepository.create/update."""
+        if hasattr(payload, "email"):
+            return payload.email
+        if isinstance(payload, dict):
+            return payload.get("email")
+        return None
+
+    @staticmethod
+    def _raise_conflict(e: IntegrityError) -> None:
+        """Translate an email unique-constraint violation into TenantAlreadyExistsError."""
+        msg = integrity_error_message(e)
+        if "email" in msg:
+            raise TenantAlreadyExistsError("A tenant with this email already exists.") from e
+        raise
