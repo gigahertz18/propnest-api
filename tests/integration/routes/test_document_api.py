@@ -500,16 +500,20 @@ class TestDeleteDocumentRoute:
         response = await client.delete(f"/api/v1/documents/{doc.id}", headers=outsider_ctx.headers)
         assert response.status_code == 403
 
-    async def test_returns_503_when_storage_deletion_fails(self, client, db, authenticate_admin):
+    async def test_deletes_successfully_even_when_storage_removal_fails(self, client, db, authenticate_admin):
         auth_ctx = await authenticate_admin()
         doc = await make_document_model(db)
+        document_id = doc.id
 
         app.dependency_overrides[get_storage_client] = lambda: FakeStorageClient(
             raise_on_remove=Exception("storage is down")
         )
 
-        response = await client.delete(f"/api/v1/documents/{doc.id}", headers=auth_ctx.headers)
-        assert response.status_code == 503
+        response = await client.delete(f"/api/v1/documents/{document_id}", headers=auth_ctx.headers)
+        assert response.status_code == 204
+
+        response = await client.get(f"/api/v1/documents/{document_id}", headers=auth_ctx.headers)
+        assert response.status_code == 404
 
 
 # ─── PATCH /{id}/file ───────────────────────────────────────────────────

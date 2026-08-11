@@ -13,7 +13,6 @@ from app.schemas.base import PaginatedResponse
 from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate, DocumentResponse
 from app.services.document_service import DocumentService
 from app.services.exceptions import (
-    DocumentDeletionError,
     DocumentUploadError,
     DocumentValidationError,
     RelatedResourceNotFoundError,
@@ -222,5 +221,3 @@ async def delete_document(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except DocumentForbiddenError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
-    except DocumentDeletionError as e:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))

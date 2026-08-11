@@ -116,6 +116,7 @@ Every push and PR runs through CI: secret scanning (gitleaks) → lint → forma
 - Add structured request tracing (correlation IDs) across the logging setup for multi-instance debugging.
 - Introduce a metrics endpoint (Prometheus-compatible) — currently logging-only, no time-series observability.
 - Move from single-VM Docker Compose to a Kubernetes deployment with separate scaling for the API vs. background/migration jobs.
+- Document deletion currently reorders the DB delete before the MinIO delete and logs (rather than reconciles) any storage object left behind by a failed cleanup. At scale, this should become soft-delete + an async purge job, once background task infra (Celery/APScheduler) exists for something else too — building it just for this one call site wasn't worth it yet.
 
 ---
 
