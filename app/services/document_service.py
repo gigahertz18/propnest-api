@@ -377,23 +377,32 @@ class DocumentService(ResourceAuthorizationMixin):
             tenant_id=doc.tenant_id,
         )
 
-        savepoint = await db.begin_nested()
         storage_key = self._build_storage_key(doc_id, doc.file_name)
+
         try:
             deleted = await self.document_repo.delete(db, doc_id)
-
-            if deleted and storage_client is not None:
-                self._delete_from_storage(storage_client, storage_key)
-
-            await savepoint.commit()
             await db.commit()
-            return deleted
-        except DocumentDeletionError as exc:
-            await savepoint.rollback()
-            raise DocumentDeletionError(f"Document delete rolled back: {exc}") from exc
         except Exception:
-            await savepoint.rollback()
+            await db.rollback()
             raise
+
+        # The DB row is gone and durably committed. The storage object is
+        # irreversible once removed, so it's deleted only after that point
+        # is guaranteed - never inside a transaction that might not commit.
+        # A failure here can't be rolled back either way, so it's logged as
+        # an orphan for manual/scheduled cleanup rather than raised: the
+        # delete already succeeded from the caller's point of view.
+        if deleted and storage_client is not None:
+            try:
+                self._delete_from_storage(storage_client, storage_key)
+            except DocumentDeletionError:
+                logger.error(
+                    f"Document {doc_id} deleted from DB but storage object "
+                    f"{storage_key} could not be removed; orphaned in MinIO "
+                    f"and needs manual cleanup."
+                )
+
+        return deleted
 
     # ─── Reporting support ──────────────────────────────────────────────
     # Not yet called by any route — held here for an upcoming reporting

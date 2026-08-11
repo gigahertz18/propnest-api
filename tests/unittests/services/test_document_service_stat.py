@@ -6,7 +6,7 @@ import pytest
 
 from app.services.document_service import DocumentService
 from app.schemas.document import DocumentCreate
-from app.services.exceptions import DocumentDeletionError, DocumentUploadError
+from app.services.exceptions import DocumentUploadError
 
 from tests.factories import make_admin
 
@@ -113,7 +113,7 @@ async def test_delete_document_skips_storage_cleanup_when_no_storage_client_is_p
     assert result is not None
 
 
-async def test_delete_document_translates_storage_failures(mock_db):
+async def test_delete_document_succeeds_even_when_storage_delete_fails(mock_db):
     class FailingStorage:
         def remove_object(self, bucket, name):
             raise RuntimeError("Network error")
@@ -127,10 +127,12 @@ async def test_delete_document_translates_storage_failures(mock_db):
 
     svc = DocumentService(document_repo=FakeRepo())  # type: ignore[arg-type]
 
-    with pytest.raises(DocumentDeletionError):
-        await svc.delete_document(
-            db=mock_db,
-            doc_id=uuid4(),
-            current_user=make_admin(),
-            storage_client=FailingStorage(),
-        )
+    result = await svc.delete_document(
+        db=mock_db,
+        doc_id=uuid4(),
+        current_user=make_admin(),
+        storage_client=FailingStorage(),
+    )
+
+    assert result is not None
+    mock_db.commit.assert_called_once()

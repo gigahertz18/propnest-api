@@ -1312,11 +1312,10 @@ class TestCreateDocumentStorageKeyIsolation:
 
 @pytest.mark.asyncio
 class TestDeleteDocumentRollback:
-    """Covers delete_document's generic except branch (lines 277-279):
-    any failure that isn't already a DocumentDeletionError still rolls
-    back the savepoint before propagating."""
+    """Covers delete_document's failure branch: any failure raised before
+    the DB commit rolls back the DB session before propagating."""
 
-    async def test_rolls_back_savepoint_on_unexpected_error(self, mock_db):
+    async def test_rolls_back_db_on_unexpected_error(self, mock_db):
         doc_id = uuid4()
         doc = SimpleNamespace(id=doc_id, file_name="test.pdf", property_id=None, contract_id=None, tenant_id=None)
 
@@ -1329,4 +1328,37 @@ class TestDeleteDocumentRollback:
         with pytest.raises(RuntimeError):
             await svc.delete_document(mock_db, doc_id, current_user=make_admin())
 
-        mock_db.begin_nested.return_value.rollback.assert_called_once()
+        mock_db.rollback.assert_called_once()
+        mock_db.commit.assert_not_called()
+
+    async def test_does_not_delete_from_storage_if_db_commit_fails(self, mock_db):
+        doc_id = uuid4()
+        doc = SimpleNamespace(id=doc_id, file_name="test.pdf", property_id=None, contract_id=None, tenant_id=None)
+        svc = _make_service(documents={doc_id: doc})
+        storage = FakeStorageClient()
+
+        mock_db.commit.side_effect = RuntimeError("db is down")
+
+        with pytest.raises(RuntimeError):
+            await svc.delete_document(mock_db, doc_id, current_user=make_admin(), storage_client=storage)
+
+        mock_db.rollback.assert_called_once()
+        assert storage.remove_calls == []
+
+
+@pytest.mark.asyncio
+class TestDeleteDocumentStorageFailure:
+    """The document row is the source of truth for whether a delete
+    succeeded. A storage-side failure is logged as an orphan for cleanup,
+    not raised - the delete has already durably committed by that point."""
+
+    async def test_deletes_document_when_storage_delete_fails(self, mock_db):
+        doc_id = uuid4()
+        doc = SimpleNamespace(id=doc_id, file_name="test.pdf", property_id=None, contract_id=None, tenant_id=None)
+        svc = _make_service(documents={doc_id: doc})
+
+        result = await svc.delete_document(mock_db, doc_id, current_user=make_admin(), storage_client=FailingStorage())
+
+        assert result is not None
+        mock_db.commit.assert_called_once()
+        mock_db.rollback.assert_not_called()
