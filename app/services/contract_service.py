@@ -117,15 +117,6 @@ class ContractService(ResourceAuthorizationMixin):
         """
         contract = await self.get_contract(db, contract_id, current_user=current_user)
 
-        # validates related resources and enforces authorization
-        await self._prepare_contract_context(
-            db,
-            contract=contract,
-            property_id=contract.property_id,
-            tenant_id=contract.tenant_id,
-            current_user=current_user,
-        )
-
         try:
 
             contract = await self.contract_repo.update(db, contract_id, payload)
@@ -143,13 +134,6 @@ class ContractService(ResourceAuthorizationMixin):
     ) -> Contract | None:
 
         contract = await self.get_contract(db, contract_id, current_user=current_user)
-
-        await self._prepare_contract_context(
-            db,
-            current_user,
-            property_id=contract.property_id,
-            tenant_id=contract.tenant_id,
-        )
 
         try:
             contract = await self.contract_repo.delete(db, contract_id)

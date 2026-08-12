@@ -340,6 +340,24 @@ class TestUpdatePayment:
 
         assert repo.updated_payloads == []
 
+    async def test_fetches_contract_only_once(self, mock_db):
+        """update_payment must not re-fetch the contract it already
+        resolved for authorization — see issue #55."""
+        manager_id, payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4(), uuid4()
+        payment = SimpleNamespace(id=payment_id, contract_id=contract_id, status="PAID")
+        contract_repo = MockReadOnlyRepo({contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)})
+        svc = _make_service(
+            payments={payment_id: payment},
+            contracts=contract_repo,
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)},
+        )
+
+        await svc.update_payment(
+            mock_db, payment_id, PaymentUpdate(status="REFUNDED"), current_user=make_manager(manager_id)
+        )
+
+        assert contract_repo.get_by_id_calls == [contract_id]
+
 
 # ─── delete_payment ──────────────────────────────────────────────────────────
 
@@ -421,6 +439,22 @@ class TestDeletePayment:
             await svc.delete_payment(mock_db, payment_id, current_user=make_regular_user())
 
         assert repo.deleted_ids == []
+
+    async def test_fetches_contract_only_once(self, mock_db):
+        """delete_payment must not re-fetch the contract it already
+        resolved for authorization — see issue #55."""
+        manager_id, payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4(), uuid4()
+        payment = SimpleNamespace(id=payment_id, contract_id=contract_id)
+        contract_repo = MockReadOnlyRepo({contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)})
+        svc = _make_service(
+            payments={payment_id: payment},
+            contracts=contract_repo,
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)},
+        )
+
+        await svc.delete_payment(mock_db, payment_id, current_user=make_manager(manager_id))
+
+        assert contract_repo.get_by_id_calls == [contract_id]
 
 
 # ─── Delegated read-only passthroughs ───────────────────────────────────────

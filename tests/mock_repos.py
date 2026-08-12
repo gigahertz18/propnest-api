@@ -40,8 +40,10 @@ class MockReadOnlyRepo:
 
     def __init__(self, records: dict | None = None):
         self.records = records or {}
+        self.get_by_id_calls: list = []
 
     async def get_by_id(self, db, id):
+        self.get_by_id_calls.append(id)
         return self.records.get(id)
 
 

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.contract import Contract
 from app.models.payment import Payment
 from app.models.user import User
 from app.repositories.contract import ContractRepository
@@ -149,13 +150,19 @@ class PaymentService(ResourceAuthorizationMixin):
         contract_id: UUID | None = None,
     ) -> PaymentContext:
         ids = self._resolve_ids(payment, contract_id=contract_id)
-        await self._validate_related_resources(db, **ids)
+
+        contract: Contract | None = None
+        if ids["contract_id"] is not None:
+            contract = await self._get_contract(db, ids["contract_id"])
+            if contract is None:
+                raise RelatedResourceNotFoundError(f"Contract {ids['contract_id']} not found.")
 
         await self._authorize_user_to_property(
             db,
             current_user,
             property_id=None,
             contract_id=ids["contract_id"],
+            contract=contract,
         )
 
         return PaymentContext(
