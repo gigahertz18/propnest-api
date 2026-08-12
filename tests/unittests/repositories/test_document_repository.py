@@ -2,6 +2,8 @@ import pytest
 import pytest_asyncio
 import uuid
 
+from datetime import datetime, timezone
+
 from app.repositories.document import document_repo
 from app.schemas.document import DocumentRelinkUpdate, DocumentFileUpdate
 from tests.factories import (
@@ -10,6 +12,7 @@ from tests.factories import (
     make_property_model,
     make_tenant_model,
     make_contract_model,
+    make_manager_model,
 )
 
 # ─── Shared fixtures ──────────────────────────────────────────────────────────
@@ -31,6 +34,12 @@ async def tenant(db):
 async def contract(db, property_, tenant):
     """A persisted Contract for FK references."""
     return await make_contract_model(db, property_id=property_.id, tenant_id=tenant.id)
+
+
+@pytest_asyncio.fixture
+async def manager(db):
+    """A persisted Manager for FK references."""
+    return await make_manager_model(db)
 
 
 # ─── get_all ──────────────────────────────────────────────────────────────────
@@ -420,3 +429,67 @@ class TestDocumentRepositoryGetByType:
     async def test_returns_empty_list_when_no_match(self, db):
         result = await document_repo.get_by_type(db, "application/octet-stream")
         assert result == []
+
+
+# ─── get_all_for_manager ───────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+class TestDocumentRepositoryGetAllForManager:
+    async def test_returns_document_directly_on_managers_property(self, db, manager):
+        owned_property = await make_property_model(db, manager_id=manager.id)
+        doc = await make_document_model(db, property_id=owned_property.id)
+
+        result = await document_repo.get_all_for_manager(db, manager.id)
+        assert any(d.id == doc.id for d in result)
+
+    async def test_returns_document_linked_via_contract_on_managers_property(self, db, manager, tenant):
+        owned_property = await make_property_model(db, manager_id=manager.id)
+        owned_contract = await make_contract_model(db, property_id=owned_property.id, tenant_id=tenant.id)
+        doc = await make_document_model(db, contract_id=owned_contract.id)
+
+        result = await document_repo.get_all_for_manager(db, manager.id)
+        assert any(d.id == doc.id for d in result)
+
+    async def test_excludes_documents_on_other_managers_properties(self, db, manager):
+        other_mgr = await make_manager_model(db, username="other_mgr_doc", email="other_mgr_doc@example.com")
+        other_property = await make_property_model(db, name="Other Property", manager_id=other_mgr.id)
+        await make_document_model(db, property_id=other_property.id)
+
+        result = await document_repo.get_all_for_manager(db, manager.id)
+        assert result == []
+
+    async def test_excludes_unattached_document_with_no_property_or_contract(self, db, manager):
+        await make_document_model(db, property_id=None, contract_id=None)
+
+        result = await document_repo.get_all_for_manager(db, manager.id)
+        assert result == []
+
+    async def test_respects_skip_and_limit(self, db, manager):
+        owned_property = await make_property_model(db, manager_id=manager.id)
+        for i in range(5):
+            await make_document_model(db, file_name=f"managed_{i}.pdf", property_id=owned_property.id)
+
+        result = await document_repo.get_all_for_manager(db, manager.id, skip=2, limit=2)
+        assert len(result) == 2
+
+    async def test_pagination_stable_on_created_at_tie(self, db, manager):
+        """Regression test for the base-repository ordering bug — exercised
+        through the manager-scoped query, which has its own explicit
+        order_by(Document.created_at, Document.id) rather than going through
+        BaseRepository._build_query's default branch."""
+        owned_property = await make_property_model(db, manager_id=manager.id)
+        same_ts = datetime.now(timezone.utc)
+        docs = []
+        for i in range(4):
+            d = await make_document_model(db, file_name=f"tied_{i}.pdf", property_id=owned_property.id)
+            d.created_at = same_ts
+            docs.append(d)
+        await db.flush()
+
+        page_1 = await document_repo.get_all_for_manager(db, manager.id, skip=0, limit=2)
+        page_2 = await document_repo.get_all_for_manager(db, manager.id, skip=2, limit=2)
+
+        seen_ids = [d.id for d in page_1] + [d.id for d in page_2]
+        assert sorted(seen_ids) == sorted(d.id for d in docs)
+        assert len(seen_ids) == len(set(seen_ids))

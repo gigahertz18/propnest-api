@@ -1,16 +1,28 @@
 import pytest
 import pytest_asyncio
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from pydantic import ValidationError
 
 from app.repositories.contract import contract_repo
 from app.schemas.contract import ContractCreate, ContractUpdate
 from app.models.contract import RentalType
-from tests.factories import make_contract, make_contract_model, make_property_model, make_tenant_model
+from tests.factories import (
+    make_contract,
+    make_contract_model,
+    make_property_model,
+    make_tenant_model,
+    make_manager_model,
+)
 
 # ─── Shared fixtures ──────────────────────────────────────────────────────────
+
+
+@pytest_asyncio.fixture
+async def manager(db):
+    """A persisted manager for FK reference."""
+    return await make_manager_model(db)
 
 
 @pytest_asyncio.fixture
@@ -468,3 +480,68 @@ class TestContractRepositoryGetActiveContractByProperty:
         """A UUID that was never inserted should return None, not raise."""
         result = await contract_repo.get_active_contract_by_property(db, uuid.uuid4())
         assert result is None
+
+
+# ─── get_all_for_manager / count_all_for_manager ─────────────────────────────
+
+
+@pytest.mark.asyncio
+class TestContractRepositoryGetAllForManager:
+    async def test_returns_only_contracts_for_managers_own_properties(self, db, tenant, manager):
+        other_mgr = await make_manager_model(db, username="other_mgr", email="other_mgr@example.com")
+        owned_property = await make_property_model(db, manager_id=manager.id)
+        other_property = await make_property_model(db, name="Other Property", manager_id=other_mgr.id)
+
+        owned_contract = await make_contract_model(db, property_id=owned_property.id, tenant_id=tenant.id)
+        await make_contract_model(db, property_id=other_property.id, tenant_id=tenant.id)
+
+        result = await contract_repo.get_all_for_manager(db, manager.id)
+        assert len(result) == 1
+        assert result[0].id == owned_contract.id
+
+    async def test_returns_empty_list_when_manager_owns_no_properties(self, db, property_, tenant):
+        await make_contract_model(db, property_id=property_.id, tenant_id=tenant.id)
+        result = await contract_repo.get_all_for_manager(db, uuid.uuid4())
+        assert result == []
+
+    async def test_count_matches_get_all_for_manager(self, db, tenant, manager):
+        owned_property = await make_property_model(db, manager_id=manager.id)
+        # Two distinct properties to avoid the active-contract-per-property
+        # uniqueness constraint exercised elsewhere in this file.
+        second_property = await make_property_model(db, name="Second Property", manager_id=manager.id)
+        await make_contract_model(db, property_id=owned_property.id, tenant_id=tenant.id)
+        await make_contract_model(db, property_id=second_property.id, tenant_id=tenant.id)
+
+        total = await contract_repo.count_all_for_manager(db, manager.id)
+        assert total == 2
+
+    async def test_respects_skip_and_limit(self, db, tenant, manager):
+        for i in range(5):
+            p = await make_property_model(db, name=f"Managed Property {i}", manager_id=manager.id)
+            await make_contract_model(db, property_id=p.id, tenant_id=tenant.id)
+
+        result = await contract_repo.get_all_for_manager(db, manager.id, skip=2, limit=2)
+        assert len(result) == 2
+
+    # ── Ordering-tie regression (ties to the created_at/id secondary-sort fix) ──
+
+    async def test_pagination_stable_on_created_at_tie(self, db, tenant, manager):
+        """Regression test for the base-repository ordering bug — exercised
+        through the manager-scoped query, which has its own explicit
+        order_by(Contract.created_at, Contract.id) rather than going through
+        BaseRepository._build_query's default branch."""
+        same_ts = datetime.now(timezone.utc)
+        contracts = []
+        for i in range(4):
+            p = await make_property_model(db, name=f"Tied Property {i}", manager_id=manager.id)
+            c = await make_contract_model(db, property_id=p.id, tenant_id=tenant.id)
+            c.created_at = same_ts
+            contracts.append(c)
+        await db.flush()
+
+        page_1 = await contract_repo.get_all_for_manager(db, manager.id, skip=0, limit=2)
+        page_2 = await contract_repo.get_all_for_manager(db, manager.id, skip=2, limit=2)
+
+        seen_ids = [c.id for c in page_1] + [c.id for c in page_2]
+        assert sorted(seen_ids) == sorted(c.id for c in contracts)
+        assert len(seen_ids) == len(set(seen_ids))

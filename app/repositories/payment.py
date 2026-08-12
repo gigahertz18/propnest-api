@@ -57,7 +57,7 @@ class PaymentRepository(BaseRepository[Payment, PaymentCreate, PaymentUpdate]):
             select(Payment)
             .join(Contract, Contract.id == Payment.contract_id)
             .where(Contract.property_id.in_(owned_property_ids))
-            .order_by(Payment.created_at)
+            .order_by(Payment.created_at, Payment.id)
             .offset(skip)
             .limit(limit)
         )

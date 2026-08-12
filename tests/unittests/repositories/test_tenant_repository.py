@@ -1,12 +1,12 @@
 import pytest
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 
 from sqlalchemy.exc import IntegrityError
 
 from app.repositories.tenant import tenant_repo, TenantRepository
 from app.schemas.tenant import TenantCreate, TenantUpdate
-from tests.factories import make_tenant, make_tenant_model, make_user_model
+from tests.factories import make_tenant, make_tenant_model, make_user_model, make_manager_model
 
 
 @pytest.mark.asyncio
@@ -448,3 +448,49 @@ class TestTenantRepositoryPaginationClamping:
         captured = self._capture(monkeypatch)
         await tenant_repo.get_by_date_of_birth(db, date(2000, 1, 1), skip=-5)
         assert captured["offset"] == 0
+
+
+# ─── get_all_for_manager ───────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+class TestTenantRepositoryGetAllForManager:
+    async def test_unclaimed_tenant_visible_to_any_manager(self, db):
+        manager = await make_manager_model(db)
+        tenant = await make_tenant_model(db, email="unclaimed@example.com")
+
+        result = await tenant_repo.get_all_for_manager(db, manager.id)
+        assert any(t.id == tenant.id for t in result)
+
+    async def test_respects_skip_and_limit(self, db):
+        manager = await make_manager_model(db)
+        for i in range(5):
+            await make_tenant_model(db, full_name=f"Managed Tenant {i}", email=f"managed{i}@example.com")
+
+        result = await tenant_repo.get_all_for_manager(db, manager.id, skip=2, limit=2)
+        assert len(result) == 2
+
+    async def test_pagination_stable_on_created_at_tie(self, db):
+        """Regression test for the base-repository ordering bug — exercised
+        through the manager-scoped query, which has its own explicit
+        order_by(self.model.created_at, self.model.id) rather than going
+        through BaseRepository._build_query's default branch.
+
+        Uses unclaimed tenants (no contract) since those are visible to any
+        manager under `_accessible_by_manager_clause`, without needing
+        property/contract scaffolding."""
+        manager = await make_manager_model(db)
+        same_ts = datetime.now(timezone.utc)
+        tenants = []
+        for i in range(4):
+            t = await make_tenant_model(db, full_name=f"Tied Tenant {i}", email=f"tied{i}@example.com")
+            t.created_at = same_ts
+            tenants.append(t)
+        await db.flush()
+
+        page_1 = await tenant_repo.get_all_for_manager(db, manager.id, skip=0, limit=2)
+        page_2 = await tenant_repo.get_all_for_manager(db, manager.id, skip=2, limit=2)
+
+        seen_ids = [t.id for t in page_1] + [t.id for t in page_2]
+        assert sorted(seen_ids) == sorted(t.id for t in tenants)
+        assert len(seen_ids) == len(set(seen_ids))

@@ -1,6 +1,8 @@
 import pytest
 import pytest_asyncio
 import uuid
+
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from pydantic import ValidationError
@@ -279,3 +281,24 @@ class TestPaymentRepositoryGetAllForManager:
 
         total = await payment_repo.count_all_for_manager(db, manager.id)
         assert total == 2
+
+    async def test_pagination_stable_on_created_at_tie(self, db, tenant, manager):
+        """Regression test for the base-repository ordering bug, exercised
+        through the manager-scoped query which has its own explicit order_by."""
+        owned_property = await make_property_model(db, manager_id=manager.id)
+        owned_contract = await make_contract_model(db, property_id=owned_property.id, tenant_id=tenant.id)
+
+        same_ts = datetime.now(timezone.utc)
+        payments = []
+        for i in range(4):
+            p = await make_payment_model(db, owned_contract.id, amount=1000.00 + i)
+            p.created_at = same_ts
+            payments.append(p)
+        await db.flush()
+
+        page_1 = await payment_repo.get_all_for_manager(db, manager.id, skip=0, limit=2)
+        page_2 = await payment_repo.get_all_for_manager(db, manager.id, skip=2, limit=2)
+
+        seen_ids = [p.id for p in page_1] + [p.id for p in page_2]
+        assert sorted(seen_ids) == sorted(p.id for p in payments)
+        assert len(seen_ids) == len(set(seen_ids))
