@@ -4,6 +4,13 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: propnest_backend
+    # Match whichever host UID/GID owns the bind-mounted repo below —
+    # the image's own non-root `appuser` (baked in for the no-bind-mount,
+    # production case) won't generally match the host user, so writes
+    # under the mounted tree (e.g. .ruff_cache, logs/) would otherwise
+    # fail with EACCES. HOST_UID/HOST_GID are exported by the Makefile's
+    # $(COMPOSE) (plain `UID`/`GID` are readonly shell variables).
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     ports:
       - "8000:8000"
     environment:

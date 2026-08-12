@@ -1,7 +1,10 @@
 ENV ?= dev
 
 COMPOSE_FILE = docker-compose.yml
-COMPOSE      = ENV=$(ENV) docker compose -f $(COMPOSE_FILE)
+# HOST_UID/HOST_GID (not UID/GID - those are readonly shell variables and
+# can't be reassigned) are exported so docker-compose.yml's backend `user:`
+# override can match whichever host user owns the bind-mounted repo.
+COMPOSE      = HOST_UID=$$(id -u) HOST_GID=$$(id -g) ENV=$(ENV) docker compose -f $(COMPOSE_FILE)
 
 # Test commands always inject ENV=unittest into the exec'd process
 # so UnittestConfig is used regardless of what ENV the container was started with
