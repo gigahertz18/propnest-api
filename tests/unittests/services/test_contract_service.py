@@ -622,6 +622,24 @@ class TestUpdateContract:
                 mock_db, contract_id, ContractUpdate(rent_amount=Decimal("2000.00")), current_user=make_admin()
             )
 
+    async def test_fetches_property_only_once(self, mock_db):
+        """update_contract must not re-fetch the property it already
+        resolved for authorization — see issue #55."""
+        manager_id, contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4(), uuid4()
+        contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="ACTIVE")
+        property_repo = MockReadOnlyRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)})
+        svc = _make_service(
+            contracts={contract_id: contract},
+            properties=property_repo,
+            tenants={tenant_id: SimpleNamespace(id=tenant_id)},
+        )
+
+        await svc.update_contract(
+            mock_db, contract_id, ContractUpdate(status="INACTIVE"), current_user=make_manager(manager_id)
+        )
+
+        assert property_repo.get_by_id_calls == [prop_id]
+
 
 # ─── delete_contract ─────────────────────────────────────────────────────────
 
@@ -723,6 +741,22 @@ class TestDeleteContract:
         result = await svc.delete_contract(mock_db, contract_id, current_user=make_admin())
 
         assert result is None
+
+    async def test_fetches_property_only_once(self, mock_db):
+        """delete_contract must not re-fetch the property it already
+        resolved for authorization — see issue #55."""
+        manager_id, contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4(), uuid4()
+        contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="ACTIVE")
+        property_repo = MockReadOnlyRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)})
+        svc = _make_service(
+            contracts={contract_id: contract},
+            properties=property_repo,
+            tenants={tenant_id: SimpleNamespace(id=tenant_id)},
+        )
+
+        await svc.delete_contract(mock_db, contract_id, current_user=make_manager(manager_id))
+
+        assert property_repo.get_by_id_calls == [prop_id]
 
 
 # ─── Delegated read-only passthroughs ───────────────────────────────────────

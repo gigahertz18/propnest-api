@@ -4,6 +4,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.contract import Contract
 from app.models.property import Property
 from app.models.user import User, UserRole
 from app.repositories.contract import ContractRepository
@@ -49,15 +50,20 @@ class ResourceAuthorizationMixin:
         *,
         property_id: UUID | None,
         contract_id: UUID | None,
+        contract: Contract | None = None,
     ) -> Property | None:
         """
         Resolve "the property this operation concerns".
 
         `contract_id` is authoritative when present: resolve the contract first,
         then resolve and return its property. `property_id` is only used when no contract is supplied.
+
+        `contract` lets a caller pass in an entity it already fetched
+        (e.g. for an existence check) so this doesn't fetch it again.
         """
         if contract_id:
-            contract = await self._get_contract(db, contract_id)
+            if contract is None:
+                contract = await self._get_contract(db, contract_id)
             if not contract:
                 raise RelatedResourceNotFoundError(f"Contract {contract_id} not found.")
 
@@ -115,6 +121,7 @@ class ResourceAuthorizationMixin:
         *,
         property_id: UUID | None,
         contract_id: UUID | None,
+        contract: Contract | None = None,
     ) -> None:
         """
         Enforce manager-ownership for an operation resolved to a
@@ -134,7 +141,7 @@ class ResourceAuthorizationMixin:
         if role != UserRole.MANAGER:
             raise self.forbidden_error("User not authorized to manage this resource.")
 
-        prop = await self._resolve_property(db, property_id=property_id, contract_id=contract_id)
+        prop = await self._resolve_property(db, property_id=property_id, contract_id=contract_id, contract=contract)
 
         if prop is None or prop.manager_id != current_user.id:
             raise self.forbidden_error("User not authorized to manage this resource.")

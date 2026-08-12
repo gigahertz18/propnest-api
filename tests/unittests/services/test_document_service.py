@@ -659,6 +659,33 @@ class TestUpdateDocumentAuthorization:
                 current_user=make_manager(),
             )
 
+    async def test_no_relink_requested_fetches_contract_at_most_once_per_authorization_pass(self, mock_db):
+        """update_document legitimately re-authorizes against the resolved
+        target (see test_manager_cannot_reassign_to_unauthorized_property),
+        but when no relink is requested it must not *also* double-fetch the
+        contract within that single re-authorization pass — see issue #55."""
+        manager_id = uuid4()
+        prop_id = uuid4()
+        contract_id = uuid4()
+        doc_id, doc = self._make_doc(contract_id=contract_id)
+        contract_repo = MockReadOnlyRepo(
+            {contract_id: SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=None)}
+        )
+        svc = _make_service(
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)},
+            contracts=contract_repo,
+            documents={doc_id: doc},
+        )
+
+        await svc.update_document(
+            mock_db,
+            doc_id,
+            DocumentRelinkUpdate(),
+            current_user=make_manager(manager_id),
+        )
+
+        assert contract_repo.get_by_id_calls == [contract_id, contract_id]
+
 
 @pytest.mark.asyncio
 class TestDeleteDocumentAuthorization:
@@ -755,6 +782,26 @@ class TestDeleteDocumentAuthorization:
         svc = _make_service(documents={doc_id: doc})
         with pytest.raises(DocumentForbiddenError):
             await svc.delete_document(mock_db, doc_id, current_user=make_manager())
+
+    async def test_fetches_contract_only_once(self, mock_db):
+        """delete_document must not re-fetch the contract it already
+        resolved for authorization — see issue #55."""
+        manager_id = uuid4()
+        prop_id = uuid4()
+        contract_id = uuid4()
+        doc_id, doc = self._make_doc(contract_id=contract_id)
+        contract_repo = MockReadOnlyRepo(
+            {contract_id: SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=None)}
+        )
+        svc = _make_service(
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)},
+            contracts=contract_repo,
+            documents={doc_id: doc},
+        )
+
+        await svc.delete_document(mock_db, doc_id, current_user=make_manager(manager_id))
+
+        assert contract_repo.get_by_id_calls == [contract_id]
 
 
 @pytest.mark.asyncio

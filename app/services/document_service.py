@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 
 
 from app.core.config import settings
+from app.models.contract import Contract
 from app.models.document import Document
 from app.models.user import User
 from app.repositories.document import DocumentRepository
@@ -368,15 +369,6 @@ class DocumentService(ResourceAuthorizationMixin):
 
         doc = await self.get_document(db, doc_id, current_user=current_user)
 
-        await self._prepare_document_context(
-            db,
-            current_user,
-            doc=doc,
-            property_id=doc.property_id,
-            contract_id=doc.contract_id,
-            tenant_id=doc.tenant_id,
-        )
-
         storage_key = self._build_storage_key(doc_id, doc.file_name)
 
         try:
@@ -561,12 +553,14 @@ class DocumentService(ResourceAuthorizationMixin):
             DocumentValidationError: provided relationship ids conflict with each other.
         """
 
-        resolved_prop_id, resolved_contract_id, resolved_tenant_id = await self._resolve_document_relationship(
-            db,
-            doc=doc,
-            property_id=property_id,
-            contract_id=contract_id,
-            tenant_id=tenant_id,
+        resolved_prop_id, resolved_contract_id, resolved_tenant_id, contract = (
+            await self._resolve_document_relationship(
+                db,
+                doc=doc,
+                property_id=property_id,
+                contract_id=contract_id,
+                tenant_id=tenant_id,
+            )
         )
 
         await self._authorize_user_to_property(
@@ -574,6 +568,7 @@ class DocumentService(ResourceAuthorizationMixin):
             current_user,
             property_id=resolved_prop_id,
             contract_id=resolved_contract_id,
+            contract=contract,
         )
 
         return DocumentContext(
@@ -591,7 +586,7 @@ class DocumentService(ResourceAuthorizationMixin):
         property_id: UUID | None,
         contract_id: UUID | None,
         tenant_id: UUID | None,
-    ) -> tuple[UUID | None, UUID | None, UUID | None]:
+    ) -> tuple[UUID | None, UUID | None, UUID | None, Contract | None]:
         """Normalize the relationship ids for document write operations.
 
         If a contract is present, it is the source of truth and any supplied
@@ -614,7 +609,7 @@ class DocumentService(ResourceAuthorizationMixin):
                 property_id=resolved_property_id,
                 tenant_id=resolved_tenant_id,
             )
-            return resolved_property_id, None, resolved_tenant_id
+            return resolved_property_id, None, resolved_tenant_id, None
 
         contract = await self._get_contract(db, effective_contract_id)
         if contract is None:
@@ -635,7 +630,7 @@ class DocumentService(ResourceAuthorizationMixin):
                 f"Tenant {resolved_tenant_id} does not match contract {effective_contract_id}"
             )
 
-        return contract.property_id, contract.id, contract.tenant_id
+        return contract.property_id, contract.id, contract.tenant_id, contract
 
     def _build_storage_key(self, document_id: UUID, file_name: str) -> str:
         filename = Path(file_name).name
