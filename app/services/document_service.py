@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import logging
+import tempfile
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from io import BytesIO
 from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID, uuid4
@@ -72,6 +72,13 @@ class DocumentService(ResourceAuthorizationMixin):
     }
 
     _SIGNATURE_PEEK_SIZE = 4096
+    # Bound each read from the incoming stream so a single call never
+    # pulls more than one chunk into memory at a time.
+    _UPLOAD_CHUNK_SIZE = 64 * 1024
+    # SpooledTemporaryFile stays in-memory up to this size, then
+    # transparently spills to disk — caps per-request resident memory
+    # regardless of _MAX_FILE_SIZE.
+    _SPOOL_MAX_SIZE = 1 * 1024 * 1024
     _PDF_MAGIC = b"%PDF-"
     _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
     _JPEG_MAGIC = b"\xff\xd8\xff"
@@ -260,32 +267,37 @@ class DocumentService(ResourceAuthorizationMixin):
             "tenant_id": ctx.tenant_id,
         }
 
-        # Read once so the same bytes can be written to more than one
-        # storage key without re-reading file_obj (single-pass stream)
-        data, content_type = self._read_and_validate_upload(resolved_payload, file_obj)
+        # Read once so the same spooled stream can be written to more than
+        # one storage key without re-reading file_obj (single-pass read of
+        # the source; `_put_object` reseeks it for each destination write).
+        spooled, content_type, size = self._read_and_validate_upload(resolved_payload, file_obj)
 
-        # Stage to one-off key first - never directly to storage_key,
-        # which may equal old_storage_key (unchanged filename) and is
-        # where the current, still-DB-reference file lives until the update below commits
-        staging_key = self._build_staging_key(doc_id)
-        self._put_object(storage_client, staging_key, data, content_type)
+        try:
+            # Stage to one-off key first - never directly to storage_key,
+            # which may equal old_storage_key (unchanged filename) and is
+            # where the current, still-DB-reference file lives until the update below commits
+            staging_key = self._build_staging_key(doc_id)
+            self._put_object(storage_client, staging_key, spooled, size, content_type)
 
-        updated = await self._commit_file_replacement(
-            db,
-            doc_id,
-            resolved_payload,
-            storage_client,
-            staging_key,
-        )
-        self._promote_staged_upload(
-            storage_client,
-            doc_id,
-            staging_key,
-            storage_key,
-            data,
-            content_type,
-        )
-        self._finalize_replacement_cleanup(storage_client, staging_key, old_storage_key, storage_key)
+            updated = await self._commit_file_replacement(
+                db,
+                doc_id,
+                resolved_payload,
+                storage_client,
+                staging_key,
+            )
+            self._promote_staged_upload(
+                storage_client,
+                doc_id,
+                staging_key,
+                storage_key,
+                spooled,
+                size,
+                content_type,
+            )
+            self._finalize_replacement_cleanup(storage_client, staging_key, old_storage_key, storage_key)
+        finally:
+            spooled.close()
 
         return updated
 
@@ -318,7 +330,8 @@ class DocumentService(ResourceAuthorizationMixin):
         doc_id: UUID,
         staging_key: str,
         storage_key: str,
-        data: bytes,
+        stream,
+        size: int,
         content_type: str,
     ) -> None:
         """DB commit succeeded - promote the staged bytes to the
@@ -326,7 +339,7 @@ class DocumentService(ResourceAuthorizationMixin):
         and need manual repair."""
 
         try:
-            self._put_object(storage_client, storage_key, data, content_type)
+            self._put_object(storage_client, storage_key, stream, size, content_type)
         except DocumentUploadError as exc:
             logger.critical(
                 f"Promoting staged upload {staging_key} to {storage_key} for Document {doc_id} failed; "
@@ -433,18 +446,22 @@ class DocumentService(ResourceAuthorizationMixin):
         magic bytes, never trusted from `file_obj.content_type` or
         `payload.file_type` alone."""
 
-        data, content_type = self._read_and_validate_upload(payload, file_obj)
-        self._put_object(storage_client, storage_key, data, content_type)
+        spooled, content_type, size = self._read_and_validate_upload(payload, file_obj)
+        try:
+            self._put_object(storage_client, storage_key, spooled, size, content_type)
+        finally:
+            spooled.close()
 
     def _read_and_validate_upload(
         self,
         payload: DocumentCreate | DocumentFileUpdate,
         file_obj,
-    ) -> tuple[bytes, str]:
-        """Read `file_obj` fully into memory and validate it, without
-        touching storage. Returns `(data, sniffed_content_type)` so the
-        same validated bytes can be written to more than one storage key
-        (see `replace_document_file`). Raises DocumentUploadError on
+    ) -> tuple[tempfile.SpooledTemporaryFile, str, int]:
+        """Read `file_obj` and validate it, without touching storage.
+        Returns `(spooled_file, sniffed_content_type, size)` so the same
+        validated stream can be written to more than one storage key
+        (see `replace_document_file`) — callers are responsible for
+        closing `spooled_file` once done. Raises DocumentUploadError on
         any validation failure."""
 
         stream = getattr(file_obj, "file", file_obj)
@@ -473,32 +490,53 @@ class DocumentService(ResourceAuthorizationMixin):
         if sniffed_type != declared_type:
             raise DocumentUploadError("File type mismatch")
 
-        # Now read the remainder, capped one byte past the size limit
-        # so we can detect an oversized file without loading it all into memory.
-        remaining_cap = self._MAX_FILE_SIZE + 1 - len(prefix)
-        remainder = stream.read(remaining_cap) if remaining_cap > 0 else b""
-        data = prefix + remainder
-        if data is not None and len(data) > self._MAX_FILE_SIZE:
-            raise DocumentUploadError("File too large")
+        # Stream the remainder into a spooled file in bounded chunks,
+        # capped one byte past the size limit so an oversized file is
+        # detected without ever holding the full body as one contiguous
+        # in-memory buffer. Below _SPOOL_MAX_SIZE this behaves like a
+        # BytesIO; above it, it spills to disk instead of the heap.
+        spooled = tempfile.SpooledTemporaryFile(max_size=self._SPOOL_MAX_SIZE)
+        try:
+            spooled.write(prefix)
+            total = len(prefix)
+            remaining_cap = self._MAX_FILE_SIZE + 1 - total
+            while remaining_cap > 0:
+                chunk = stream.read(min(self._UPLOAD_CHUNK_SIZE, remaining_cap))
+                if not chunk:
+                    break
+                spooled.write(chunk)
+                total += len(chunk)
+                remaining_cap -= len(chunk)
 
-        return data, sniffed_type
+            if total > self._MAX_FILE_SIZE:
+                raise DocumentUploadError("File too large")
+        except Exception:
+            spooled.close()
+            raise
+
+        spooled.seek(0)
+        return spooled, sniffed_type, total
 
     def _put_object(
         self,
         storage_client,
         storage_key: str,
-        data: bytes,
+        stream,
+        size: int,
         content_type: str,
     ) -> None:
-        """Write already-validated bytes to `storage_key`. Raises
+        """Write an already-validated, seekable stream to `storage_key`.
+        Seeks to the start first so the same stream can be reused across
+        multiple destinations (see `replace_document_file`). Raises
         DocumentUploadError on failure."""
         bucket = settings.MINIO_BUCKET_NAME
+        stream.seek(0)
         try:
             storage_client.put_object(
                 bucket,
                 storage_key,
-                BytesIO(data),
-                len(data),
+                stream,
+                size,
                 content_type=content_type,
             )
         except Exception as e:
