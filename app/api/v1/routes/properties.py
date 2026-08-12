@@ -9,9 +9,7 @@ from app.schemas.base import PaginatedResponse
 from app.schemas.property import PropertyCreate, PropertyUpdate, PropertyResponse, PropertyAssignManager
 from app.services.property_service import PropertyService
 from app.services.exceptions import (
-    RelatedResourceNotFoundError,
     PropertyAlreadyExistsError,
-    PropertyForbiddenError,
     UserNotFoundError,
     PropertyManagerAssignmentError,
     PropertyInUseError,
@@ -46,12 +44,7 @@ async def get_property(
     current_user: User = Depends(require_manager_or_above),
 ):
     """Get a single property by ID."""
-    try:
-        return await property_service.get_property(db, property_id, current_user=current_user)
-    except RelatedResourceNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except PropertyForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    return await property_service.get_property(db, property_id, current_user=current_user)
 
 
 @router.post(
@@ -70,8 +63,6 @@ async def create_property(
         return await property_service.create_property(db, payload, current_user=current_user)
     except PropertyAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
-    except PropertyForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
 @router.patch("/{property_id}", response_model=PropertyResponse)
@@ -85,8 +76,6 @@ async def update_property(
     """Partially update a property — only send fields you want to change."""
     try:
         return await property_service.update_property(db, property_id, payload, current_user=current_user)
-    except RelatedResourceNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except PropertyAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
@@ -101,8 +90,6 @@ async def delete_property(
     """Delete a property."""
     try:
         await property_service.delete_property(db, property_id, current_user=current_user)
-    except RelatedResourceNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except PropertyInUseError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
@@ -132,8 +119,6 @@ async def assign_manager(
     try:
         return await property_service.assign_manager(db, property_id, payload.manager_id, current_user)
 
-    except RelatedResourceNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except UserNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except PropertyManagerAssignmentError as e:

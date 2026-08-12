@@ -15,8 +15,6 @@ from app.services.document_service import DocumentService
 from app.services.exceptions import (
     DocumentUploadError,
     DocumentValidationError,
-    RelatedResourceNotFoundError,
-    DocumentForbiddenError,
 )
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
@@ -46,12 +44,7 @@ async def get_document(
     document_service: DocumentService = Depends(get_document_service),
     current_user: User = Depends(require_manager_or_above),
 ):
-    try:
-        return await document_service.get_document(db, document_id, current_user)
-    except RelatedResourceNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except DocumentForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    return await document_service.get_document(db, document_id, current_user)
 
 
 @router.post(
@@ -67,10 +60,6 @@ async def create_document(
 ):
     try:
         return await document_service.create_document(db, payload, current_user=current_user)
-    except RelatedResourceNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except DocumentForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except DocumentValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -113,10 +102,6 @@ async def upload_document(
         )
     except DocumentUploadError:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to store document")
-    except RelatedResourceNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except DocumentForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except DocumentValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -161,10 +146,6 @@ async def replace_document_file(
             storage_client=storage_client,
             current_user=current_user,
         )
-    except RelatedResourceNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except DocumentForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except DocumentUploadError:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to store document")
     except DocumentValidationError as e:
@@ -187,13 +168,7 @@ async def update_document(
     document_service: DocumentService = Depends(get_document_service),
 ):
     try:
-
-        updated = await document_service.update_document(db, document_id, payload, current_user=current_user)
-        return updated
-    except RelatedResourceNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except DocumentForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+        return await document_service.update_document(db, document_id, payload, current_user=current_user)
     except DocumentValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -209,15 +184,9 @@ async def delete_document(
     current_user: object = Depends(require_manager_or_above),
     document_service: DocumentService = Depends(get_document_service),
 ):
-    try:
-        deleted = await document_service.delete_document(
-            db,
-            document_id,
-            storage_client=storage_client,
-            current_user=current_user,
-        )
-        return deleted
-    except RelatedResourceNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except DocumentForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    return await document_service.delete_document(
+        db,
+        document_id,
+        storage_client=storage_client,
+        current_user=current_user,
+    )

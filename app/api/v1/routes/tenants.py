@@ -8,11 +8,9 @@ from app.models.user import User
 from app.schemas.base import PaginatedResponse
 from app.schemas.tenant import TenantCreate, TenantUpdate, TenantResponse, TenantLinkUser
 from app.services.exceptions import (
-    RelatedResourceNotFoundError,
     UserNotFoundError,
     TenantAlreadyLinkedError,
     TenantAlreadyExistsError,
-    TenantForbiddenError,
     TenantInUseError,
 )
 from app.services.tenant_service import TenantService
@@ -38,12 +36,7 @@ async def get_tenant(
     tenant_service: TenantService = Depends(get_tenant_service),
     current_user: User = Depends(require_manager_or_above),
 ):
-    try:
-        return await tenant_service.get_tenant(db, tenant_id, current_user=current_user)
-    except RelatedResourceNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except TenantForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    return await tenant_service.get_tenant(db, tenant_id, current_user=current_user)
 
 
 @router.post(
@@ -59,8 +52,6 @@ async def create_tenant(
 ):
     try:
         return await tenant_service.create_tenant(db, payload, current_user=current_user)
-    except TenantForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except TenantAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
@@ -78,10 +69,6 @@ async def update_tenant(
 ):
     try:
         return await tenant_service.update_tenant(db, tenant_id, payload, current_user=current_user)
-    except RelatedResourceNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except TenantForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except TenantAlreadyExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
@@ -98,10 +85,6 @@ async def delete_tenant(
 ):
     try:
         return await tenant_service.delete_tenant(db, tenant_id, current_user=current_user)
-    except RelatedResourceNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except TenantForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except TenantInUseError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
@@ -125,14 +108,10 @@ async def link_tenant_user(
     """
     try:
         return await tenant_service.link_user(db, tenant_id, payload.user_id, current_user)
-    except RelatedResourceNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except UserNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except TenantAlreadyLinkedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
-    except TenantForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
 @router.delete(
@@ -147,9 +126,4 @@ async def unlink_tenant_user(
 ):
     """Remove portal-access linkage. The tenant record and its contracts/
     documents are untouched — only the user_id association is cleared."""
-    try:
-        return await tenant_service.unlink_user(db, tenant_id, current_user)
-    except RelatedResourceNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except TenantForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    return await tenant_service.unlink_user(db, tenant_id, current_user)

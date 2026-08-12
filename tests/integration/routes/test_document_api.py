@@ -645,3 +645,37 @@ class TestReplaceDocumentFileRoute:
             headers=auth_ctx.headers,
         )
         assert response.status_code == 400
+
+    async def test_returns_500_with_generic_detail_when_promotion_leaves_storage_inconsistent(
+        self, client, db, authenticate_admin
+    ):
+        """The DB commit succeeds, but promoting the staged upload to its
+        canonical key afterward fails — DocumentService deliberately lets
+        DocumentStorageInconsistentError escape uncaught here (see
+        replace_document_file's docstring), so this must be the global
+        ServiceException handler's generic 500, not a raw unhandled crash
+        and not str(exc) (which could leak internal storage error text)."""
+        auth_ctx = await authenticate_admin()
+        doc = await make_document_model(db, file_name="original.pdf")
+
+        class FailsOnSecondPut(FakeStorageClient):
+            def __init__(self):
+                super().__init__()
+                self._puts = 0
+
+            def put_object(self, *args, **kwargs):
+                self._puts += 1
+                if self._puts >= 2:
+                    raise RuntimeError("MinIO blip")
+                super().put_object(*args, **kwargs)
+
+        app.dependency_overrides[get_storage_client] = lambda: FailsOnSecondPut()
+
+        response = await client.put(
+            f"/api/v1/documents/{doc.id}/file",
+            files={"file": ("new.pdf", b"%PDF-1.4 new content", "application/pdf")},
+            data={"file_type": "application/pdf"},
+            headers=auth_ctx.headers,
+        )
+        assert response.status_code == 500
+        assert response.json() == {"detail": "An unexpected error occurred while processing this request."}

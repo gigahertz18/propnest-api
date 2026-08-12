@@ -10,7 +10,6 @@ from app.services.exceptions import (
     EmailAlreadyExistsError,
     UsernameAlreadyExistsError,
     ManagerAssignedToPropertyError,
-    UserForbiddenError,
     CurrentPasswordRequiredError,
     InvalidCredentialsError,
 )
@@ -50,8 +49,6 @@ async def get_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User {user_id} not found",
         )
-    except UserForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
 @router.post(
@@ -109,9 +106,6 @@ async def update_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User {user_id} not found",
         )
-    except UserForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
-
     except CurrentPasswordRequiredError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except InvalidCredentialsError as e:
@@ -140,5 +134,3 @@ async def delete_user(
         )
     except ManagerAssignedToPropertyError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
-    except UserForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
