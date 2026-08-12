@@ -81,7 +81,7 @@ class DocumentRepository(BaseRepository[Document, DocumentCreate, DocumentRelink
                     and_(Document.contract_id.is_not(None), Contract.property_id.in_(owned_property_ids)),
                 )
             )
-            .order_by(Document.created_at)
+            .order_by(Document.created_at, Document.id)
             .offset(skip)
             .limit(limit)
         )

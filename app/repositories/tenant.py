@@ -172,7 +172,7 @@ class TenantRepository(BaseRepository[Tenant, TenantCreate, TenantUpdate]):
         stmt = (
             select(self.model)
             .where(self._accessible_by_manager_clause(manager_id))
-            .order_by(self.model.created_at)
+            .order_by(self.model.created_at, self.model.id)
             .offset(skip)
             .limit(limit)
         )

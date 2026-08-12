@@ -36,7 +36,7 @@ class BaseRepository(Generic[ModelType, CreateSchema, UpdateSchema]):
         if order_by is not None:
             statement = statement.order_by(order_by)
         elif hasattr(self.model, "created_at"):
-            statement = statement.order_by(self.model.created_at)
+            statement = statement.order_by(self.model.created_at, self.model.id)
 
         if offset is not None:
             statement = statement.offset(offset)

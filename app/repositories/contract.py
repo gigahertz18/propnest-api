@@ -79,7 +79,7 @@ class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate
         stmt = (
             select(Contract)
             .where(Contract.property_id.in_(owned_property_ids))
-            .order_by(Contract.created_at)
+            .order_by(Contract.created_at, Contract.id)
             .offset(skip)
             .limit(limit)
         )
