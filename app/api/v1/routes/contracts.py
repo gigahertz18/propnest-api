@@ -11,8 +11,6 @@ from app.schemas.contract import ContractCreate, ContractUpdate, ContractRespons
 from app.services.contract_service import ContractService
 from app.services.exceptions import (
     ContractActiveError,
-    RelatedResourceNotFoundError,
-    ContractForbiddenError,
     ContractInUseError,
 )
 
@@ -43,12 +41,7 @@ async def get_contract(
     contract_service: ContractService = Depends(get_contract_service),
     current_user: User = Depends(require_manager_or_above),
 ):
-    try:
-        return await contract_service.get_contract(db, contract_id, current_user)
-    except RelatedResourceNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ContractForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    return await contract_service.get_contract(db, contract_id, current_user)
 
 
 @router.post(
@@ -68,8 +61,6 @@ async def create_contract(
         return await contract_service.create_contract(db, payload, current_user)
     except ContractActiveError:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Property already has an active contract")
-    except ContractForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
 @router.patch(
@@ -85,10 +76,6 @@ async def update_contract(
 ):
     try:
         return await contract_service.update_contract(db, contract_id, payload, current_user)
-    except RelatedResourceNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ContractForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except ContractActiveError:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Property already has an active contract")
 
@@ -105,9 +92,5 @@ async def delete_contract(
 ):
     try:
         return await contract_service.delete_contract(db, contract_id, current_user)
-    except RelatedResourceNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ContractForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except ContractInUseError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))

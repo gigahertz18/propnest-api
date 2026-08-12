@@ -8,7 +8,6 @@ from app.models.user import User
 from app.schemas.base import PaginatedResponse
 from app.schemas.payment import PaymentCreate, PaymentUpdate, PaymentResponse
 from app.services.payment_service import PaymentService
-from app.services.exceptions import PaymentForbiddenError, RelatedResourceNotFoundError
 
 router = APIRouter(prefix="/payments", tags=["Payments"])
 
@@ -37,12 +36,7 @@ async def get_payment(
     payment_service: PaymentService = Depends(get_payment_service),
     current_user: User = Depends(require_manager_or_above),
 ):
-    try:
-        return await payment_service.get_payment(db, payment_id, current_user)
-    except RelatedResourceNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except PaymentForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    return await payment_service.get_payment(db, payment_id, current_user)
 
 
 @router.post(
@@ -56,15 +50,10 @@ async def create_payment(
     current_user: User = Depends(require_manager_or_above),
     payment_service: PaymentService = Depends(get_payment_service),
 ):
-    try:
-        # Resource-level auth: managers may only record payments for
-        # contracts on properties they are assigned to. Admins can record
-        # payments for any contract.
-        return await payment_service.create_payment(db, payload, current_user)
-    except RelatedResourceNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except PaymentForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    # Resource-level auth: managers may only record payments for
+    # contracts on properties they are assigned to. Admins can record
+    # payments for any contract.
+    return await payment_service.create_payment(db, payload, current_user)
 
 
 @router.patch(
@@ -78,12 +67,7 @@ async def update_payment(
     current_user: User = Depends(require_manager_or_above),
     payment_service: PaymentService = Depends(get_payment_service),
 ):
-    try:
-        updated = await payment_service.update_payment(db, payment_id, payload, current_user)
-    except RelatedResourceNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except PaymentForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    updated = await payment_service.update_payment(db, payment_id, payload, current_user)
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Payment {payment_id} not found")
     return updated
@@ -99,9 +83,4 @@ async def delete_payment(
     current_user: User = Depends(require_manager_or_above),
     payment_service: PaymentService = Depends(get_payment_service),
 ):
-    try:
-        return await payment_service.delete_payment(db, payment_id, current_user)
-    except RelatedResourceNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except PaymentForbiddenError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    return await payment_service.delete_payment(db, payment_id, current_user)
