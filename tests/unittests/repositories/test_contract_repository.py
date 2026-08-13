@@ -226,6 +226,16 @@ class TestContractRepositoryCreateEdgeCases:
                 )
             )
 
+    def test_invalid_status_raises_validation_error(self, db, property_, tenant):
+        with pytest.raises(ValidationError):
+            ContractCreate(
+                **make_contract(
+                    property_id=property_.id,
+                    tenant_id=tenant.id,
+                    status="BOGUS",
+                )
+            )
+
 
 # ─── update ───────────────────────────────────────────────────────────────────
 
@@ -293,6 +303,10 @@ class TestContractRespositoryUpdateEdgeCases:
     def test_invalid_booking_source_raises_validation_error(self, db):
         with pytest.raises(ValidationError):
             ContractUpdate(booking_source="invalid_platform")
+
+    def test_invalid_status_raises_validation_error(self, db):
+        with pytest.raises(ValidationError):
+            ContractUpdate(status="BOGUS")
 
 
 # ─── delete ───────────────────────────────────────────────────────────────────

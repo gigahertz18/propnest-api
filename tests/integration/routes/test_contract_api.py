@@ -24,7 +24,7 @@ class TestListContractRoute:
     async def test_returns_all_contracts(self, client, db, authenticate_admin):
         prop = await make_property_model(db)
         tenant = await make_tenant_model(db)
-        for status in ("ACTIVE", "EXPIRED", "TERMINATED", "CANCELLED"):
+        for status in ("ACTIVE", "EXPIRED", "TERMINATED", "TERMINATED"):
             await make_contract_model(db, prop.id, tenant.id, status=status)
 
         auth_ctx = await authenticate_admin()
@@ -37,7 +37,7 @@ class TestListContractRoute:
     async def test_total_stays_full_on_second_page(self, client, db, authenticate_admin):
         prop = await make_property_model(db)
         tenant = await make_tenant_model(db)
-        for status in ("ACTIVE", "EXPIRED", "TERMINATED", "CANCELLED"):
+        for status in ("ACTIVE", "EXPIRED", "TERMINATED", "TERMINATED"):
             await make_contract_model(db, prop.id, tenant.id, status=status)
 
         auth_ctx = await authenticate_admin()

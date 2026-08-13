@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.models.payment import PAYMENT_METHODS
+from app.models.payment import PAYMENT_METHODS, PaymentStatus
 from app.schemas.base import BaseResponse
 
 
@@ -14,7 +14,7 @@ class PaymentBase(BaseModel):
     amount: Decimal = Field(gt=0, description="Must be greater than zero.")
     paid_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     payment_method: str | None = None
-    status: str = "PAID"
+    status: PaymentStatus = PaymentStatus.PAID
 
 
 # ─── Create ───────────────────────────────────────────────
@@ -40,7 +40,7 @@ class PaymentUpdate(BaseModel):
     amount: Decimal | None = Field(default=None, gt=0, description="Must be greater than zero.")
     paid_at: datetime | None = None
     payment_method: str | None = None
-    status: str | None = None
+    status: PaymentStatus | None = None
 
     @model_validator(mode="after")
     def validate_payment_method(self) -> "PaymentUpdate":

@@ -1,7 +1,8 @@
+import enum
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
-from sqlalchemy import ForeignKey, Numeric, DateTime, String, Uuid, CheckConstraint
+from sqlalchemy import ForeignKey, Numeric, DateTime, String, Uuid, CheckConstraint, Enum
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.constraints import sql_in_clause
@@ -10,6 +11,12 @@ from app.models.base import TimestampMixin
 
 # Listing platforms as a constant — easy to extend without a native enum migration
 PAYMENT_METHODS = ("cash", "bank transfer", "gcash", "maya")
+
+
+class PaymentStatus(str, enum.Enum):
+    PAID = "PAID"
+    PENDING = "PENDING"
+    REFUNDED = "REFUNDED"
 
 
 class Payment(Base, TimestampMixin):
@@ -36,7 +43,11 @@ class Payment(Base, TimestampMixin):
         nullable=True,
     )
 
-    status: Mapped[str] = mapped_column(String(10), default="PAID")
+    status: Mapped[PaymentStatus] = mapped_column(
+        Enum(PaymentStatus, name="payment_status_enum"),
+        nullable=False,
+        default=PaymentStatus.PAID,
+    )
 
     __table_args__ = (
         CheckConstraint(

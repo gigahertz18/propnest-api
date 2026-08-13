@@ -4,7 +4,7 @@ from decimal import Decimal
 from pydantic import BaseModel, model_validator, Field
 
 from app.schemas.base import BaseResponse
-from app.models.contract import RentalType, BOOKING_SOURCE
+from app.models.contract import RentalType, BOOKING_SOURCE, ContractStatus
 
 
 # ─── Base ─────────────────────────────────────────────────
@@ -17,7 +17,7 @@ class ContractBase(BaseModel):
     rent_amount: Decimal = Field(gt=0, description="Must be greater than zero.")
     deposit: Decimal | None = Field(default=None, gt=0, description="Must be greater than 0 if provided.")
     booking_source: str = "direct"
-    status: str = "ACTIVE"
+    status: ContractStatus = ContractStatus.ACTIVE
 
 
 # ─── Create ───────────────────────────────────────────────
@@ -45,7 +45,7 @@ class ContractUpdate(BaseModel):
     rent_amount: Decimal | None = Field(default=None, gt=0, description="Must be greater than zero.")
     deposit: Decimal | None = Field(default=None, gt=0, description="Must be greater than zero if provided.")
     booking_source: str | None = None
-    status: str | None = None
+    status: ContractStatus | None = None
 
     @model_validator(mode="after")
     def validate_dates_and_booking_source(self) -> "ContractUpdate":
