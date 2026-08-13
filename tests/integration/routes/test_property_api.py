@@ -207,6 +207,7 @@ class TestDeletePropertyRoute:
             headers=ctx.headers,
         )
         assert response.status_code == 204
+        assert response.content == b""
 
     async def test_deleted_property_is_gone(self, client, db, authenticate_admin):
         ctx = await authenticate_admin()

@@ -82,9 +82,9 @@ async def delete_tenant(
     db: AsyncSession = Depends(get_db),
     tenant_service: TenantService = Depends(get_tenant_service),
     current_user: User = Depends(require_manager_or_above),
-):
+) -> None:
     try:
-        return await tenant_service.delete_tenant(db, tenant_id, current_user=current_user)
+        await tenant_service.delete_tenant(db, tenant_id, current_user=current_user)
     except TenantInUseError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 

@@ -194,6 +194,16 @@ class TestUpdateContractRoute:
 
 @pytest.mark.asyncio
 class TestDeleteContractRoute:
+    async def test_deletes_contract_successfully(self, client, db, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, prop.id, tenant.id)
+
+        response = await client.delete(f"/api/v1/contracts/{contract.id}", headers=auth_ctx.headers)
+        assert response.status_code == 204
+        assert response.content == b""
+
     async def test_returns_404_when_not_found(self, client, authenticate_admin):
         auth_ctx = await authenticate_admin()
         response = await client.delete(f"/api/v1/contracts/{uuid.uuid4()}", headers=auth_ctx.headers)

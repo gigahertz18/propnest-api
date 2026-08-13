@@ -474,6 +474,7 @@ class TestDeleteDocumentRoute:
 
         response = await client.delete(f"/api/v1/documents/{doc.id}", headers=auth_ctx.headers)
         assert response.status_code == 204
+        assert response.content == b""
 
     async def test_deleted_document_is_gone(self, client, db, authenticate_admin):
         auth_ctx = await authenticate_admin()
@@ -511,6 +512,7 @@ class TestDeleteDocumentRoute:
 
         response = await client.delete(f"/api/v1/documents/{document_id}", headers=auth_ctx.headers)
         assert response.status_code == 204
+        assert response.content == b""
 
         response = await client.get(f"/api/v1/documents/{document_id}", headers=auth_ctx.headers)
         assert response.status_code == 404

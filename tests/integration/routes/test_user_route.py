@@ -296,6 +296,7 @@ class TestDeleteUserRoute:
         user = await make_user_model(db, username="todelete", email="delete@example.com")
         response = await client.delete(f"/api/v1/users/{user.id}", headers=ctx.headers)
         assert response.status_code == 204
+        assert response.content == b""
 
     async def test_admin_cannot_delete_themselves(self, client, authenticate_admin):
         ctx = await authenticate_admin()

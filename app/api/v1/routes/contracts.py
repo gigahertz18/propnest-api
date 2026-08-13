@@ -89,8 +89,8 @@ async def delete_contract(
     db: AsyncSession = Depends(get_db),
     current_user: object = Depends(require_manager_or_above),
     contract_service: ContractService = Depends(get_contract_service),
-):
+) -> None:
     try:
-        return await contract_service.delete_contract(db, contract_id, current_user)
+        await contract_service.delete_contract(db, contract_id, current_user)
     except ContractInUseError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
