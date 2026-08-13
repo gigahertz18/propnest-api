@@ -1,6 +1,6 @@
 import uuid
 
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from datetime import datetime, date
 
 from app.schemas.base import BaseResponse
@@ -8,7 +8,7 @@ from app.schemas.base import BaseResponse
 
 class TenantBase(BaseModel):
     full_name: str
-    email: str
+    email: EmailStr
     phone_number: str
     date_of_birth: date
     current_address: str
@@ -27,7 +27,7 @@ class TenantUpdate(BaseModel):
     """All fields optional — only send what you want to change."""
 
     full_name: str | None = None
-    email: str | None = None
+    email: EmailStr | None = None
     phone_number: str | None = None
     date_of_birth: date | None = None
     current_address: str | None = None
