@@ -122,7 +122,7 @@ async def delete_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
     user_service: UserService = Depends(get_user_service),
-):
+) -> None:
     """Delete a user. Admin only."""
 
     try:

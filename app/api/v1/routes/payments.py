@@ -82,5 +82,5 @@ async def delete_payment(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_manager_or_above),
     payment_service: PaymentService = Depends(get_payment_service),
-):
-    return await payment_service.delete_payment(db, payment_id, current_user)
+) -> None:
+    await payment_service.delete_payment(db, payment_id, current_user)

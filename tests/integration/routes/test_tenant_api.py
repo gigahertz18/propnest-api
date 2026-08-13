@@ -270,6 +270,7 @@ class TestDeleteTenantRoute:
             headers=ctx.headers,
         )
         assert response.status_code == 204
+        assert response.content == b""
 
     async def test_deleted_tenant_is_gone(self, client, db, authenticate_manager):
         ctx = await authenticate_manager()

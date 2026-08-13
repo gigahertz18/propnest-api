@@ -228,3 +228,4 @@ class TestDeletePaymentRoute:
 
         response = await client.delete(f"/api/v1/payments/{payment.id}", headers=auth_ctx.headers)
         assert response.status_code == 204
+        assert response.content == b""

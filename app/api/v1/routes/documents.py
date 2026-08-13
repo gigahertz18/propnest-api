@@ -183,8 +183,8 @@ async def delete_document(
     storage_client=Depends(get_storage_client),
     current_user: object = Depends(require_manager_or_above),
     document_service: DocumentService = Depends(get_document_service),
-):
-    return await document_service.delete_document(
+) -> None:
+    await document_service.delete_document(
         db,
         document_id,
         storage_client=storage_client,

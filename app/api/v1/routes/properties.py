@@ -86,7 +86,7 @@ async def delete_property(
     db: AsyncSession = Depends(get_db),
     property_service: PropertyService = Depends(get_property_service),
     current_user: User = Depends(require_admin),
-):
+) -> None:
     """Delete a property."""
     try:
         await property_service.delete_property(db, property_id, current_user=current_user)
