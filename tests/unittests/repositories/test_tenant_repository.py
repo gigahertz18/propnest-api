@@ -179,7 +179,7 @@ class TestTenantRepositoryUpdate:
         assert fetched.full_name == "Saved Name"
 
 
-class TestTenantRepositoryUpdatedEdgeCases:
+class TestTenantRepositoryUpdateEdgeCases:
     def test_update_invalid_email_format_raises_validation_error(self):
         with pytest.raises(ValidationError):
             TenantUpdate(email="not-an-email")
