@@ -150,6 +150,10 @@ class TestPaymentRepositoryCreateEdgeCases:
         with pytest.raises(ValidationError):
             PaymentCreate(**make_payment(contract_id=contract.id, payment_method="bitcoin"))
 
+    def test_invalid_status_raises_validation_error(self, db, contract):
+        with pytest.raises(ValidationError):
+            PaymentCreate(**make_payment(contract_id=contract.id, status="BOGUS"))
+
 
 # ─── update ───────────────────────────────────────────────────────────────────
 
@@ -180,6 +184,10 @@ class TestPaymentRepositoryUpdateEdgeCases:
     def test_non_positive_amount_raises_validation_error(self):
         with pytest.raises(ValidationError):
             PaymentUpdate(amount=0)
+
+    def test_invalid_status_raises_validation_error(self):
+        with pytest.raises(ValidationError):
+            PaymentUpdate(status="BOGUS")
 
 
 # ─── delete ───────────────────────────────────────────────────────────────────

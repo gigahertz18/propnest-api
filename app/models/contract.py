@@ -75,10 +75,10 @@ class Contract(Base, TimestampMixin):
         server_default=text("'direct'"),
     )
 
-    status: Mapped[str] = mapped_column(
-        String(10),
+    status: Mapped[ContractStatus] = mapped_column(
+        Enum(ContractStatus, name="contract_status_enum"),
         nullable=False,
-        default=ContractStatus.ACTIVE.value,
+        default=ContractStatus.ACTIVE,
         server_default=text("'ACTIVE'"),
     )
 

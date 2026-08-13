@@ -449,7 +449,7 @@ class TestUpdateContract:
     async def test_raises_when_contract_not_found(self, mock_db):
         svc = _make_service()
         with pytest.raises(RelatedResourceNotFoundError):
-            await svc.update_contract(mock_db, uuid4(), ContractUpdate(status="INACTIVE"), current_user=make_admin())
+            await svc.update_contract(mock_db, uuid4(), ContractUpdate(status="EXPIRED"), current_user=make_admin())
 
     async def test_admin_can_update_any_contract(self, mock_db):
         contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
@@ -461,10 +461,10 @@ class TestUpdateContract:
         )
 
         result = await svc.update_contract(
-            mock_db, contract_id, ContractUpdate(status="INACTIVE"), current_user=make_admin()
+            mock_db, contract_id, ContractUpdate(status="EXPIRED"), current_user=make_admin()
         )
 
-        assert result.status == "INACTIVE"
+        assert result.status == "EXPIRED"
         assert mock_db.commit.called
 
     async def test_manager_can_update_owned_contract(self, mock_db):
@@ -477,10 +477,10 @@ class TestUpdateContract:
         )
 
         result = await svc.update_contract(
-            mock_db, contract_id, ContractUpdate(status="INACTIVE"), current_user=make_manager(manager_id)
+            mock_db, contract_id, ContractUpdate(status="EXPIRED"), current_user=make_manager(manager_id)
         )
 
-        assert result.status == "INACTIVE"
+        assert result.status == "EXPIRED"
 
     async def test_manager_forbidden_for_unowned_contract(self, mock_db):
         contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
@@ -494,7 +494,7 @@ class TestUpdateContract:
 
         with pytest.raises(ContractForbiddenError):
             await svc.update_contract(
-                mock_db, contract_id, ContractUpdate(status="INACTIVE"), current_user=make_manager()
+                mock_db, contract_id, ContractUpdate(status="EXPIRED"), current_user=make_manager()
             )
 
         assert repo.updated_payloads == []
@@ -511,7 +511,7 @@ class TestUpdateContract:
         repo = svc.contract_repo
 
         with pytest.raises(TypeError):
-            await svc.update_contract(mock_db, contract_id, ContractUpdate(status="INACTIVE"))
+            await svc.update_contract(mock_db, contract_id, ContractUpdate(status="EXPIRED"))
 
         assert repo.updated_payloads == []
 
@@ -527,7 +527,7 @@ class TestUpdateContract:
 
         with pytest.raises(ContractForbiddenError):
             await svc.update_contract(
-                mock_db, contract_id, ContractUpdate(status="INACTIVE"), current_user=make_regular_user()
+                mock_db, contract_id, ContractUpdate(status="EXPIRED"), current_user=make_regular_user()
             )
 
         assert repo.updated_payloads == []
@@ -550,7 +550,7 @@ class TestUpdateContract:
         )
 
         result = await svc.update_contract(
-            mock_db, contract_id, ContractUpdate(status="INACTIVE"), current_user=make_admin()
+            mock_db, contract_id, ContractUpdate(status="EXPIRED"), current_user=make_admin()
         )
 
         assert result is None
@@ -635,7 +635,7 @@ class TestUpdateContract:
         )
 
         await svc.update_contract(
-            mock_db, contract_id, ContractUpdate(status="INACTIVE"), current_user=make_manager(manager_id)
+            mock_db, contract_id, ContractUpdate(status="EXPIRED"), current_user=make_manager(manager_id)
         )
 
         assert property_repo.get_by_id_calls == [prop_id]
@@ -787,9 +787,9 @@ class TestDelegatedRepoPassthroughs:
         assert await svc.get_by_tenant(mock_db, tenant_id) == [contract]
 
     async def test_get_by_status(self, mock_db):
-        contract = SimpleNamespace(id=uuid4(), status="INACTIVE")
+        contract = SimpleNamespace(id=uuid4(), status="EXPIRED")
         svc = _make_service(contracts={contract.id: contract})
-        assert await svc.get_by_status(mock_db, "INACTIVE") == [contract]
+        assert await svc.get_by_status(mock_db, "EXPIRED") == [contract]
 
     async def test_get_by_rental_type(self, mock_db):
         contract = SimpleNamespace(id=uuid4(), rental_type=RentalType.short_term)
