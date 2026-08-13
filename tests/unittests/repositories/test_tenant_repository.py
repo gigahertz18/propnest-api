@@ -2,6 +2,7 @@ import pytest
 import uuid
 from datetime import date, datetime, timezone
 
+from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 
 from app.repositories.tenant import tenant_repo, TenantRepository
@@ -125,6 +126,16 @@ class TestTenantRepositoryCreate:
         assert result.email == "mixed@example.com"
 
 
+class TestTenantRepositoryCreateEdgeCases:
+    def test_invalid_email_format_raises_validation_error(self):
+        with pytest.raises(ValidationError):
+            TenantCreate(**make_tenant(email="not-an-email"))
+
+    def test_empty_email_raises_validation_error(self):
+        with pytest.raises(ValidationError):
+            TenantCreate(**make_tenant(email=""))
+
+
 @pytest.mark.asyncio
 class TestTenantRepositoryUpdate:
     async def test_updates_full_name(self, db):
@@ -166,6 +177,12 @@ class TestTenantRepositoryUpdate:
         await tenant_repo.update(db, tenant.id, TenantUpdate(full_name="Saved Name"))
         fetched = await tenant_repo.get_by_id(db, tenant.id)
         assert fetched.full_name == "Saved Name"
+
+
+class TestTenantRepositoryUpdatedEdgeCases:
+    def test_update_invalid_email_format_raises_validation_error(self):
+        with pytest.raises(ValidationError):
+            TenantUpdate(email="not-an-email")
 
 
 @pytest.mark.asyncio
