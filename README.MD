@@ -81,15 +81,45 @@ make seed password=yourpassword
 
 ---
 
-### Production environment variables
+## Deploying
 
-In addition to `DB_PASSWORD`, `SECRET_KEY`, and `MINIO_ROOT_PASSWORD`, production also requires:
+`docker-compose.yml` (the file `make up` uses) is dev-postured on purpose: it bind-mounts
+the source tree, and publishes Postgres/MinIO/Redis directly to the host so they're easy
+to inspect locally. **Don't reuse it against a reachable server** — none of its
+credentials are meant to survive outside a laptop.
+
+`docker-compose.prod.yml` is the deployable counterpart: it runs the built image only (no
+bind mount), starts the app with `ENV=prod`, publishes only the API's port (8000), and
+keeps Postgres/MinIO/Redis reachable only on the internal `propnest_network` — the same
+way `backend` already reaches them. Redis is also started with `--requirepass`, since the
+dev compose file's Redis has no authentication at all.
+
+To deploy:
+
+```bash
+cp .env.prod.example .env.prod
+# fill in .env.prod with real secrets - see the comments in the file
+
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+docker compose --env-file .env.prod -f docker-compose.prod.yml exec backend alembic upgrade head
+```
+
+`ProductionConfig.validate()` (`app/core/config.py`) runs once at startup and refuses to
+boot if any required secret is missing, empty, or still a known-insecure default — the
+env vars below are what it checks:
 
 | Variable | Purpose |
 | --- | --- |
-| `REDIS_PASSWORD` | Required - `ProductionConfig.validate()` fails to startup if unset. The Redis instance backing rate limiting/lockout must be configured with a matching `requirepass`. |
-| `REDIS_HOST` | Optional, defaults to `redis` (the compose service name). |
-| `REDIS_PORT` | Optional, defaults to `6379`. |
+| `SECRET_KEY` | Required. Must be ≥32 characters and not a known-insecure default. |
+| `DB_PASSWORD` | Required. Must not be a known-insecure default. |
+| `MINIO_ROOT_PASSWORD` | Required. Must not be a known-insecure default. |
+| `REDIS_PASSWORD` | Required. The Redis instance backing rate limiting/lockout must be configured with a matching `requirepass` (`docker-compose.prod.yml` does this). |
+| `CORS_ORIGINS` | Optional, comma-separated frontend origins. Defaults to none if unset. |
+
+This setup doesn't include a reverse proxy or TLS termination — that's out of scope for a
+beta serving family users over a private/known-recipient link. If you do put this on a
+reachable host, put a TLS terminator (e.g. Caddy or nginx) in front of port 8000 rather
+than exposing it directly.
 
 ---
 

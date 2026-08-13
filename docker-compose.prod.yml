@@ -1,0 +1,79 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: propnest_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ENV=prod
+      - SECRET_KEY=${SECRET_KEY}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
+    depends_on:
+      - db
+      - minio
+      - redis
+    networks:
+      propnest_network:
+        aliases:
+          - propnest.backend.api
+
+  db:
+    image: postgres:16-alpine
+    container_name: propnest_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-propnest}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-propnest_db}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      propnest_network:
+        aliases:
+          - propnest.backend.postgres
+    # No `ports:` — reachable only from other containers on propnest_network,
+    # the same way `backend` already reaches it.
+
+  minio:
+    image: minio/minio:RELEASE.2024-11-07T00-52-20Z
+    container_name: propnest_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-propnest_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_VOLUMES: "/data"
+    volumes:
+      - miniodata:/data
+    networks:
+      propnest_network:
+        aliases:
+          - propnest.backend.minio
+    # No `ports:` — the console (9001) and API (9000) stay internal-only.
+
+  redis:
+    image: redis:7-alpine
+    container_name: propnest_redis
+    restart: unless-stopped
+    # --requirepass: unlike the dev compose file, this Redis instance is
+    # protected — it holds login-lockout/rate-limit state (see AuthService).
+    command: redis-server --save "" --appendonly no --requirepass ${REDIS_PASSWORD}
+    networks:
+      propnest_network:
+        aliases:
+          - propnest.backend.redis
+    # No `ports:` — reachable only from other containers on propnest_network.
+
+networks:
+  propnest_network:
+    driver: bridge
+
+volumes:
+  pgdata:
+  miniodata:
