@@ -7,6 +7,7 @@ from app.core.security import hash_password
 from app.models.collection import Collection
 from app.models.contract import Contract, RentalType as ContractRentalType
 from app.models.document import Document
+from app.models.lease import BillingCycle, Lease, RenewalOption
 from app.models.payment import Payment
 from app.models.property import Property, PropertyStatus
 from app.models.tenant import Tenant
@@ -317,6 +318,56 @@ async def make_collection_model(db, property_id: uuid.UUID, **kwargs) -> Collect
     """
     data = make_collection(property_id=property_id, **kwargs)
     obj = Collection(id=uuid.uuid4(), **data)
+    db.add(obj)
+    await db.flush()
+    await db.refresh(obj)
+    return obj
+
+
+# ─── Lease ────────────────────────────────────────────────────────────────────
+
+
+def make_lease(
+    contract_id: uuid.UUID | None = None,
+    monthly_rent: float = 15000.00,
+    due_day: int = 5,
+    billing_cycle: BillingCycle = BillingCycle.monthly,
+    security_deposit: float | None = 15000.00,
+    advance_payment: float | None = None,
+    late_fee_amount: float | None = 500.00,
+    late_fee_percent: float | None = None,
+    grace_period_days: int = 3,
+    renewal_option: RenewalOption = RenewalOption.none,
+    status: str = "ACTIVE",
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> dict:
+    """Returns a dict matching LeaseCreate schema."""
+    _start = start_date or date.today()
+    return {
+        "contract_id": contract_id,
+        "monthly_rent": monthly_rent,
+        "due_day": due_day,
+        "billing_cycle": billing_cycle.value,
+        "security_deposit": security_deposit,
+        "advance_payment": advance_payment,
+        "late_fee_amount": late_fee_amount,
+        "late_fee_percent": late_fee_percent,
+        "grace_period_days": grace_period_days,
+        "renewal_option": renewal_option.value,
+        "status": status,
+        "start_date": _start,
+        "end_date": end_date,
+    }
+
+
+async def make_lease_model(db, contract_id: uuid.UUID, **kwargs) -> Lease:
+    """
+    Creates and persists a Lease directly in the test DB.
+    Requires a pre-existing contract id (FK constraint).
+    """
+    data = make_lease(contract_id=contract_id, **kwargs)
+    obj = Lease(id=uuid.uuid4(), **data)
     db.add(obj)
     await db.flush()
     await db.refresh(obj)

@@ -274,6 +274,28 @@ class CollectionValidationError(ServiceException):
     pass
 
 
+# ─── Lease ───────────────────────────────────────────────────────────────────
+class LeaseForbiddenError(ResourceForbiddenError):
+    """Raised when a lease operation is attempted by a manager who doesn't
+    own the property tied to the lease's contract."""
+
+    pass
+
+
+class LeaseRentalTypeError(ServiceException):
+    """Raised when attempting to create a Lease against a Contract whose
+    rental_type isn't long_term — Lease is long-term-specific by design."""
+
+    pass
+
+
+class LeaseAlreadyExistsError(ServiceException):
+    """Raised when attempting to create a second Lease for a Contract that
+    already has one — Lease is 1:1 with Contract via a unique contract_id."""
+
+    pass
+
+
 # ─── Delete conflicts (FK protection) ───────────────────────────────────────
 # Raised when a delete is rejected by the DB because a dependent row still
 # references the target (RESTRICT/NO ACTION foreign keys with no
