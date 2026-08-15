@@ -31,7 +31,7 @@ from app.services.auth_service import AuthService
 from app.services.collection_service import CollectionService
 from app.services.contract_service import ContractService
 from app.services.document_service import DocumentService
-from app.services.notification_service import NotificationService
+from app.services.notification_service import LoggingNotificationChannel, NotificationService
 from app.services.payment_service import PaymentService
 from app.services.property_service import PropertyService
 from app.services.tenant_service import TenantService
@@ -181,8 +181,8 @@ def get_auth_service(
 
 
 def get_notification_service() -> NotificationService:
-    """FastAPI dependency to construct `NotificationService`."""
-    return NotificationService()
+    """FastAPI dependency to construct `NotificationService` with its default channels."""
+    return NotificationService(channels=[LoggingNotificationChannel()])
 
 
 def get_user_service() -> UserService:
