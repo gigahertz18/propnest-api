@@ -259,6 +259,21 @@ class PaymentAlreadyVoidedError(ServiceException):
     pass
 
 
+# ─── Collection ──────────────────────────────────────────────────────────────
+class CollectionForbiddenError(ResourceForbiddenError):
+    """Raised when a collection operation is attempted by a manager who
+    doesn't own the collection's property."""
+
+    pass
+
+
+class CollectionValidationError(ServiceException):
+    """Raised when a collection's provided `contract_id` doesn't belong to
+    its `property_id`."""
+
+    pass
+
+
 # ─── Delete conflicts (FK protection) ───────────────────────────────────────
 # Raised when a delete is rejected by the DB because a dependent row still
 # references the target (RESTRICT/NO ACTION foreign keys with no

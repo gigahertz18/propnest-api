@@ -4,6 +4,7 @@ from datetime import date, datetime, timezone
 from types import SimpleNamespace
 
 from app.core.security import hash_password
+from app.models.collection import Collection
 from app.models.contract import Contract, RentalType as ContractRentalType
 from app.models.document import Document
 from app.models.payment import Payment
@@ -229,6 +230,7 @@ def make_document(
     contract_id: uuid.UUID | None = None,
     property_id: uuid.UUID | None = None,
     tenant_id: uuid.UUID | None = None,
+    collection_id: uuid.UUID | None = None,
 ) -> dict:
     """Returns a dict matching the public DocumentCreate schema."""
     return {
@@ -237,6 +239,7 @@ def make_document(
         "contract_id": contract_id,
         "property_id": property_id,
         "tenant_id": tenant_id,
+        "collection_id": collection_id,
     }
 
 
@@ -283,6 +286,37 @@ async def make_payment_model(db, contract_id: uuid.UUID, **kwargs) -> Payment:
     """
     data = make_payment(contract_id=contract_id, **kwargs)
     obj = Payment(id=uuid.uuid4(), **data)
+    db.add(obj)
+    await db.flush()
+    await db.refresh(obj)
+    return obj
+
+
+# ─── Collection ───────────────────────────────────────────────────────────────
+
+
+def make_collection(
+    property_id: uuid.UUID | None = None,
+    contract_id: uuid.UUID | None = None,
+    name: str = "Test Collection",
+    description: str | None = "A test collection",
+) -> dict:
+    """Returns a dict matching CollectionCreate schema."""
+    return {
+        "name": name,
+        "description": description,
+        "property_id": property_id,
+        "contract_id": contract_id,
+    }
+
+
+async def make_collection_model(db, property_id: uuid.UUID, **kwargs) -> Collection:
+    """
+    Creates and persists a Collection directly in the test DB.
+    Requires a pre-existing property id (FK constraint).
+    """
+    data = make_collection(property_id=property_id, **kwargs)
+    obj = Collection(id=uuid.uuid4(), **data)
     db.add(obj)
     await db.flush()
     await db.refresh(obj)

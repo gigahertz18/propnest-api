@@ -15,6 +15,7 @@ from app.models.contract import Contract
 from app.models.document import Document
 from app.models.user import User
 from app.repositories.document import DocumentRepository
+from app.repositories.collection import CollectionRepository
 from app.repositories.contract import ContractRepository
 from app.repositories.property import PropertyRepository
 from app.repositories.tenant import TenantRepository
@@ -48,6 +49,7 @@ class DocumentContext:
     property_id: UUID | None
     contract_id: UUID | None
     tenant_id: UUID | None
+    collection_id: UUID | None
 
 
 class DocumentService(ResourceAuthorizationMixin):
@@ -93,11 +95,13 @@ class DocumentService(ResourceAuthorizationMixin):
         property_repo: PropertyRepository | None = None,
         contract_repo: ContractRepository | None = None,
         tenant_repo: TenantRepository | None = None,
+        collection_repo: CollectionRepository | None = None,
     ) -> None:
         self.document_repo = document_repo
         self.property_repo = property_repo
         self.contract_repo = contract_repo
         self.tenant_repo = tenant_repo
+        self.collection_repo = collection_repo
 
     async def list_documents(
         self,
@@ -149,6 +153,7 @@ class DocumentService(ResourceAuthorizationMixin):
             property_id=payload.property_id,
             contract_id=payload.contract_id,
             tenant_id=payload.tenant_id,
+            collection_id=payload.collection_id,
         )
 
         doc_id = uuid4()
@@ -164,6 +169,7 @@ class DocumentService(ResourceAuthorizationMixin):
             "property_id": ctx.property_id,
             "contract_id": ctx.contract_id,
             "tenant_id": ctx.tenant_id,
+            "collection_id": ctx.collection_id,
         }
         # Step 1: upload to storage first - before any DB write.
         # If this fails, nothing is written to the DB
@@ -206,12 +212,14 @@ class DocumentService(ResourceAuthorizationMixin):
             property_id=payload.property_id,
             contract_id=payload.contract_id,
             tenant_id=payload.tenant_id,
+            collection_id=payload.collection_id,
         )
 
         resolved_payload = DocumentRelinkUpdate(
             property_id=ctx.property_id,
             contract_id=ctx.contract_id,
             tenant_id=ctx.tenant_id,
+            collection_id=ctx.collection_id,
         )
 
         doc = await self.document_repo.update(db, doc_id, resolved_payload)
@@ -254,6 +262,7 @@ class DocumentService(ResourceAuthorizationMixin):
             property_id=payload.property_id,
             contract_id=payload.contract_id,
             tenant_id=payload.tenant_id,
+            collection_id=payload.collection_id,
         )
         storage_key = self._build_storage_key(doc_id, payload.file_name)
         old_storage_key = self._build_storage_key(doc_id, doc.file_name)
@@ -265,6 +274,7 @@ class DocumentService(ResourceAuthorizationMixin):
             "property_id": ctx.property_id,
             "contract_id": ctx.contract_id,
             "tenant_id": ctx.tenant_id,
+            "collection_id": ctx.collection_id,
         }
 
         # Read once so the same spooled stream can be written to more than
@@ -579,8 +589,9 @@ class DocumentService(ResourceAuthorizationMixin):
         property_id: UUID | None = None,
         contract_id: UUID | None = None,
         tenant_id: UUID | None = None,
+        collection_id: UUID | None = None,
     ) -> DocumentContext:
-        """Resolve, normalize, and authorize the property/contract/tenant context.
+        """Resolve, normalize, and authorize the property/contract/tenant/collection context.
 
         Contract-backed documents are normalized through a single helper so the  contract
         remains the source of truth and the contract/property/tenant checks stay in one place.
@@ -591,13 +602,14 @@ class DocumentService(ResourceAuthorizationMixin):
             DocumentValidationError: provided relationship ids conflict with each other.
         """
 
-        resolved_prop_id, resolved_contract_id, resolved_tenant_id, contract = (
+        resolved_prop_id, resolved_contract_id, resolved_tenant_id, resolved_collection_id, contract = (
             await self._resolve_document_relationship(
                 db,
                 doc=doc,
                 property_id=property_id,
                 contract_id=contract_id,
                 tenant_id=tenant_id,
+                collection_id=collection_id,
             )
         )
 
@@ -614,6 +626,7 @@ class DocumentService(ResourceAuthorizationMixin):
             property_id=resolved_prop_id,
             contract_id=resolved_contract_id,
             tenant_id=resolved_tenant_id,
+            collection_id=resolved_collection_id,
         )
 
     async def _resolve_document_relationship(
@@ -624,30 +637,35 @@ class DocumentService(ResourceAuthorizationMixin):
         property_id: UUID | None,
         contract_id: UUID | None,
         tenant_id: UUID | None,
-    ) -> tuple[UUID | None, UUID | None, UUID | None, Contract | None]:
+        collection_id: UUID | None,
+    ) -> tuple[UUID | None, UUID | None, UUID | None, UUID | None, Contract | None]:
         """Normalize the relationship ids for document write operations.
 
         If a contract is present, it is the source of truth and any supplied
-        property_id / tenant_id must match it.
+        property_id / tenant_id must match it. `collection_id` is independent
+        of the contract — only existence is validated, not ownership.
         """
         resolved_ids = self._resolve_ids(
             doc,
             property_id=property_id,
             contract_id=contract_id,
             tenant_id=tenant_id,
+            collection_id=collection_id,
         )
 
         effective_contract_id = resolved_ids.get("contract_id")
         resolved_property_id = resolved_ids.get("property_id")
         resolved_tenant_id = resolved_ids.get("tenant_id")
+        resolved_collection_id = resolved_ids.get("collection_id")
 
         if not effective_contract_id:
             await self._validate_related_resources(
                 db,
                 property_id=resolved_property_id,
                 tenant_id=resolved_tenant_id,
+                collection_id=resolved_collection_id,
             )
-            return resolved_property_id, None, resolved_tenant_id, None
+            return resolved_property_id, None, resolved_tenant_id, resolved_collection_id, None
 
         contract = await self._get_contract(db, effective_contract_id)
         if contract is None:
@@ -657,6 +675,7 @@ class DocumentService(ResourceAuthorizationMixin):
             db,
             property_id=resolved_property_id,
             tenant_id=resolved_tenant_id,
+            collection_id=resolved_collection_id,
         )
 
         if resolved_property_id and resolved_property_id != contract.property_id:
@@ -668,7 +687,7 @@ class DocumentService(ResourceAuthorizationMixin):
                 f"Tenant {resolved_tenant_id} does not match contract {effective_contract_id}"
             )
 
-        return contract.property_id, contract.id, contract.tenant_id, contract
+        return contract.property_id, contract.id, contract.tenant_id, resolved_collection_id, contract
 
     def _build_storage_key(self, document_id: UUID, file_name: str) -> str:
         filename = Path(file_name).name

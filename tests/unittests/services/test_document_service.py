@@ -816,6 +816,7 @@ class TestReplaceDocumentFile:
             property_id=kwargs.get("property_id"),
             contract_id=kwargs.get("contract_id"),
             tenant_id=kwargs.get("tenant_id"),
+            collection_id=kwargs.get("collection_id"),
         )
 
     def _make_payload(self, file_name="replacement.pdf", file_type="application/pdf", **kwargs):
@@ -825,6 +826,7 @@ class TestReplaceDocumentFile:
             property_id=kwargs.get("property_id"),
             contract_id=kwargs.get("contract_id"),
             tenant_id=kwargs.get("tenant_id"),
+            collection_id=kwargs.get("collection_id"),
         )
 
     def _make_file_obj(self, filename="replacement.pdf"):
