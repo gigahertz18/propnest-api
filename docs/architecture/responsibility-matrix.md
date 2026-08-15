@@ -8,6 +8,7 @@
 | Documents | Metadata, storage, access policy | Upload/list/download/delete UX |
 | Collections | Grouping model and rules | Collection management UX |
 | Payments | Financial record semantics and state | Payment entry/history/status |
+| Audit Logs | Transactional audit-write mechanism, entity/actor query filtering | Admin audit viewer |
 | Billing | Recurring charge generation and state machine | Billing view/status/payment application |
 | Receipts | Numbering, PDF generation, immutable storage | View/download/reprint |
 | Dashboard | Aggregations and authoritative metrics | Dashboard presentation |

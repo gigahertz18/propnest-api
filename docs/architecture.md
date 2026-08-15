@@ -128,6 +128,7 @@ Contract / Lease
 Document
 Collection
 Payment
+AuditLog
 ```
 
 Models should describe persistence concerns:

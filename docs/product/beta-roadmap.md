@@ -7,7 +7,7 @@ The backend GitHub issue set is the source of truth for this repository's produc
 - Collections — done
 - complete Payments — done
 - Notifications abstraction — outstanding
-- Audit Logs — outstanding
+- Audit Logs — done
 
 ## Phase 2
 
