@@ -17,6 +17,7 @@ from app.models.user import User, UserRole
 
 from app.repositories.ip_rate_limit import IpRateLimitRepository
 from app.repositories.login_attempt import LoginAttemptRepository
+from app.repositories.audit_log import audit_log_repo
 from app.repositories.collection import collection_repo
 from app.repositories.contract import contract_repo
 from app.repositories.document import document_repo
@@ -25,6 +26,7 @@ from app.repositories.payment import payment_repo
 from app.repositories.tenant import tenant_repo
 from app.repositories.user import user_repo
 
+from app.services.audit_log_service import AuditLogService
 from app.services.auth_service import AuthService
 from app.services.collection_service import CollectionService
 from app.services.contract_service import ContractService
@@ -231,6 +233,10 @@ def get_collection_service() -> CollectionService:
         property_repo=property_repo,
         contract_repo=contract_repo,
     )
+
+
+def get_audit_log_service() -> AuditLogService:
+    return AuditLogService(audit_log_repo=audit_log_repo)
 
 
 def get_storage_client() -> Minio:

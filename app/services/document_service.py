@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 
 
 from app.core.config import settings
+from app.models.audit_log import AuditAction
 from app.models.contract import Contract
 from app.models.document import Document
 from app.models.user import User
@@ -21,6 +22,7 @@ from app.repositories.property import PropertyRepository
 from app.repositories.tenant import TenantRepository
 from app.schemas.base import PaginatedResponse
 from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate
+from app.services.audit import write_audit_log
 from app.services.base import ResourceAuthorizationMixin
 from app.services.exceptions import (
     DocumentUploadError,
@@ -183,6 +185,7 @@ class DocumentService(ResourceAuthorizationMixin):
         # If this failes, attempt to clean up the orphaned storage object
         try:
             document = await self.document_repo.create(db, create_payload)
+            write_audit_log(db, current_user, AuditAction.CREATE, "Document", doc_id)
             await db.commit()
             return document
         except Exception:
@@ -223,6 +226,7 @@ class DocumentService(ResourceAuthorizationMixin):
         )
 
         doc = await self.document_repo.update(db, doc_id, resolved_payload)
+        write_audit_log(db, current_user, AuditAction.UPDATE, "Document", doc_id)
         await db.commit()
         return doc
 
@@ -295,6 +299,7 @@ class DocumentService(ResourceAuthorizationMixin):
                 resolved_payload,
                 storage_client,
                 staging_key,
+                current_user,
             )
             self._promote_staged_upload(
                 storage_client,
@@ -318,11 +323,13 @@ class DocumentService(ResourceAuthorizationMixin):
         resolved_payload: DocumentFileUpdate,
         storage_client,
         staging_key: str,
+        current_user: User,
     ) -> Document | None:
         """Commit the DB update; on failure, remove the now-orphaned
         staging object and re-raise the original error."""
         try:
             updated = await self.document_repo.update(db, doc_id, resolved_payload)
+            write_audit_log(db, current_user, AuditAction.UPDATE, "Document", doc_id)
             await db.commit()
             return updated
         except Exception:
@@ -396,6 +403,7 @@ class DocumentService(ResourceAuthorizationMixin):
 
         try:
             deleted = await self.document_repo.delete(db, doc_id)
+            write_audit_log(db, current_user, AuditAction.DELETE, "Document", doc_id)
             await db.commit()
         except Exception:
             await db.rollback()

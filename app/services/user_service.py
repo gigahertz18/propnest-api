@@ -4,9 +4,11 @@ from sqlalchemy.exc import IntegrityError
 from uuid import UUID
 
 from app.core.security import verify_password
+from app.models.audit_log import AuditAction
 from app.models.user import User, UserRole
 from app.repositories.user import UserRepository
 from app.schemas.user import UserCreate, UserUpdate
+from app.services.audit import write_audit_log
 from app.services.notification_service import NotificationService
 from app.services.utils import integrity_error_message
 from app.services.exceptions import (
@@ -50,7 +52,7 @@ class UserService:
             raise UserNotFoundError("User not found")
         return user
 
-    async def create_user(self, db: AsyncSession, payload: UserCreate) -> User:
+    async def create_user(self, db: AsyncSession, payload: UserCreate, current_user: User) -> User:
         # No self-or-admin check needed: this creates a brand-new account,
         # so there's no existing resource to own. Admin-only role gating
         # at the route layer (require_admin) is sufficient here — there's
@@ -65,6 +67,7 @@ class UserService:
         # the resulting IntegrityError into a domain exception
         try:
             user = await self.user_repo.create(db, payload)
+            write_audit_log(db, current_user, AuditAction.CREATE, "User", user.id)
             await db.commit()
             return user
         except IntegrityError as e:
@@ -99,6 +102,7 @@ class UserService:
 
         if not user:
             raise UserNotFoundError("User not found")
+        write_audit_log(db, current_user, AuditAction.UPDATE, "User", id)
         await db.commit()
 
         if payload.password is not None:
@@ -118,6 +122,7 @@ class UserService:
         if not user:
             raise UserNotFoundError("User not found")
 
+        write_audit_log(db, current_user, AuditAction.DELETE, "User", id)
         try:
             await db.commit()
         except IntegrityError as e:

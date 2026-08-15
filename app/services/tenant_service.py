@@ -7,12 +7,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+from app.models.audit_log import AuditAction
 from app.models.tenant import Tenant
 from app.models.user import User, UserRole
 from app.repositories.tenant import TenantRepository
 from app.repositories.user import UserRepository
 from app.schemas.base import PaginatedResponse
 from app.schemas.tenant import TenantCreate, TenantUpdate
+from app.services.audit import write_audit_log
 from app.services.base import ResourceAuthorizationMixin
 from app.services.utils import integrity_error_message
 from app.services.exceptions import (
@@ -81,6 +83,7 @@ class TenantService(ResourceAuthorizationMixin):
         # IntegrityError into a domain exception
         try:
             tenant = await self.tenant_repo.create(db, payload)
+            write_audit_log(db, current_user, AuditAction.CREATE, "Tenant", tenant.id)
             await db.commit()
             return tenant
         except IntegrityError as e:
@@ -110,6 +113,7 @@ class TenantService(ResourceAuthorizationMixin):
         except IntegrityError as e:
             self._raise_conflict(e)
 
+        write_audit_log(db, current_user, AuditAction.UPDATE, "Tenant", id)
         await db.commit()
         return tenant
 
@@ -123,6 +127,7 @@ class TenantService(ResourceAuthorizationMixin):
 
         try:
             tenant = await self.tenant_repo.delete(db, id)
+            write_audit_log(db, current_user, AuditAction.DELETE, "Tenant", id)
             await db.commit()
             return tenant
         except IntegrityError as e:
@@ -210,6 +215,7 @@ class TenantService(ResourceAuthorizationMixin):
 
         try:
             tenant = await self.tenant_repo.update(db, tenant_id, {"user_id": user_id})
+            write_audit_log(db, current_user, AuditAction.UPDATE, "Tenant", tenant_id)
             await db.commit()
             return tenant
         except IntegrityError as e:
@@ -229,6 +235,7 @@ class TenantService(ResourceAuthorizationMixin):
         await self.get_tenant(db, tenant_id, current_user=current_user)
 
         tenant = await self.tenant_repo.update(db, tenant_id, {"user_id": None})
+        write_audit_log(db, current_user, AuditAction.UPDATE, "Tenant", tenant_id)
         await db.commit()
         return tenant
 

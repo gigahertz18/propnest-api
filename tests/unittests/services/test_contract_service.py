@@ -404,6 +404,11 @@ class TestCreateContract:
                 mock_db, _payload(property_id=prop_id, tenant_id=tenant_id), current_user=make_admin()
             )
 
+        # Regression: the repo write failed before write_audit_log ran, so
+        # no audit row was ever added to the session — nothing to orphan.
+        assert not mock_db.add.called
+        assert not mock_db.commit.called
+
     async def test_translates_integrity_error_mentioning_property_id(self, mock_db):
         class Repo(MockContractRepo):
             async def create(self, db, payload):

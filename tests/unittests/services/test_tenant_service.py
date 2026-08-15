@@ -27,7 +27,7 @@ async def test_tenant_service_delegates_to_repo_methods(mock_db):
             return "byid"
 
         async def create(self, db, payload):
-            return "created"
+            return SimpleNamespace(id=uuid4(), marker="created")
 
         async def update(self, db, id, payload):
             return "updated"
@@ -61,7 +61,7 @@ async def test_tenant_service_delegates_to_repo_methods(mock_db):
     assert list_result.items == ["t1"]
     assert list_result.total == 1
     assert await svc.get_tenant(db=mock_db, id=1, current_user=admin) == "byid"
-    assert await svc.create_tenant(db=mock_db, payload=None, current_user=admin) == "created"
+    assert (await svc.create_tenant(db=mock_db, payload=None, current_user=admin)).marker == "created"
     assert await svc.update_tenant(db=mock_db, id=1, payload=None, current_user=admin) == "updated"
     assert await svc.delete_tenant(db=mock_db, id=1, current_user=admin) == "deleted"
     assert await svc.get_by_email(db=mock_db, email="e") == "email"
