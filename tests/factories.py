@@ -263,6 +263,7 @@ def make_payment(
     paid_at: datetime | None = None,
     payment_method: str | None = "cash",
     status: str = "PAID",
+    reference_number: str | None = None,
 ) -> dict:
     """Returns a dict matching PaymentCreate schema."""
     return {
@@ -271,6 +272,7 @@ def make_payment(
         "paid_at": paid_at or datetime.now(timezone.utc),
         "payment_method": payment_method,
         "status": status,
+        "reference_number": reference_number,
     }
 
 

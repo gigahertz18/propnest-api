@@ -199,6 +199,116 @@ class TestUpdatePaymentRoute:
         assert response.status_code == 200
         assert response.json()["status"] == "REFUNDED"
 
+    async def test_returns_422_when_setting_status_to_voided(self, client, db, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, prop.id, tenant.id)
+        payment = await make_payment_model(db, contract.id, status="PAID")
+
+        response = await client.patch(
+            f"/api/v1/payments/{payment.id}", json={"status": "VOIDED"}, headers=auth_ctx.headers
+        )
+        assert response.status_code == 422
+
+    async def test_returns_409_when_updating_a_voided_payment(self, client, db, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, prop.id, tenant.id)
+        payment = await make_payment_model(db, contract.id, status="VOIDED")
+
+        response = await client.patch(
+            f"/api/v1/payments/{payment.id}", json={"amount": 999.0}, headers=auth_ctx.headers
+        )
+        assert response.status_code == 409
+
+
+@pytest.mark.asyncio
+class TestCorrectPaymentRoute:
+    async def test_returns_404_when_not_found(self, client, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        payload = {"amount": 5000.0, "payment_method": "cash"}
+        response = await client.post(
+            f"/api/v1/payments/{uuid.uuid4()}/corrections", json=payload, headers=auth_ctx.headers
+        )
+        assert response.status_code == 404
+
+    async def test_returns_403_when_manager_not_authorized_for_contract(self, client, db, authenticate_manager):
+        owner_mgr = await make_manager_model(db, username="owner_mgr4", email="owner_mgr4@example.com")
+        prop = await make_property_model(db, manager_id=owner_mgr.id)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, prop.id, tenant.id)
+        payment = await make_payment_model(db, contract.id)
+
+        other_mgr_ctx = await authenticate_manager(username="other_mgr4", email="other_mgr4@example.com")
+
+        payload = {"amount": 5000.0, "payment_method": "cash"}
+        response = await client.post(
+            f"/api/v1/payments/{payment.id}/corrections", json=payload, headers=other_mgr_ctx.headers
+        )
+        assert response.status_code == 403
+
+    async def test_admin_can_correct_payment(self, client, db, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, prop.id, tenant.id)
+        payment = await make_payment_model(db, contract.id, amount=1000.0)
+
+        payload = {"amount": 2500.0, "payment_method": "gcash", "reference_number": "REF-1"}
+        response = await client.post(
+            f"/api/v1/payments/{payment.id}/corrections", json=payload, headers=auth_ctx.headers
+        )
+        assert response.status_code == 201
+        body = response.json()
+        assert body["corrects_payment_id"] == str(payment.id)
+        assert body["contract_id"] == str(contract.id)
+        assert body["amount"] == "2500.00"
+        assert body["reference_number"] == "REF-1"
+
+        original = await client.get(f"/api/v1/payments/{payment.id}", headers=auth_ctx.headers)
+        assert original.json()["status"] == "VOIDED"
+
+    async def test_manager_can_correct_owned_payment(self, client, db, authenticate_manager):
+        mgr_ctx = await authenticate_manager()
+        tenant = await make_tenant_model(db)
+        prop = await make_property_model(db, manager_id=mgr_ctx.user.id)
+        contract = await make_contract_model(db, prop.id, tenant.id)
+        payment = await make_payment_model(db, contract.id)
+
+        payload = {"amount": 3000.0, "payment_method": "cash"}
+        response = await client.post(
+            f"/api/v1/payments/{payment.id}/corrections", json=payload, headers=mgr_ctx.headers
+        )
+        assert response.status_code == 201
+
+    async def test_returns_409_when_correcting_an_already_voided_payment(self, client, db, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, prop.id, tenant.id)
+        payment = await make_payment_model(db, contract.id, status="VOIDED")
+
+        payload = {"amount": 3000.0, "payment_method": "cash"}
+        response = await client.post(
+            f"/api/v1/payments/{payment.id}/corrections", json=payload, headers=auth_ctx.headers
+        )
+        assert response.status_code == 409
+
+    async def test_returns_422_for_invalid_payment_method(self, client, db, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, prop.id, tenant.id)
+        payment = await make_payment_model(db, contract.id)
+
+        payload = {"amount": 3000.0, "payment_method": "bitcoin"}
+        response = await client.post(
+            f"/api/v1/payments/{payment.id}/corrections", json=payload, headers=auth_ctx.headers
+        )
+        assert response.status_code == 422
+
 
 @pytest.mark.asyncio
 class TestDeletePaymentRoute:

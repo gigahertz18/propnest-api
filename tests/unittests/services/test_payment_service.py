@@ -4,9 +4,11 @@ from decimal import Decimal
 from types import SimpleNamespace
 from uuid import uuid4
 
-from app.schemas.payment import PaymentCreate, PaymentUpdate
+from app.models.payment import PaymentStatus
+from app.schemas.payment import PaymentCreate, PaymentCorrectionCreate, PaymentUpdate
 from app.services.payment_service import PaymentService
 from app.services.exceptions import (
+    PaymentAlreadyVoidedError,
     PaymentForbiddenError,
     RelatedResourceNotFoundError,
     ResourceForbiddenError,
@@ -357,6 +359,129 @@ class TestUpdatePayment:
         )
 
         assert contract_repo.get_by_id_calls == [contract_id]
+
+    async def test_raises_when_payment_already_voided(self, mock_db):
+        payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4()
+        payment = SimpleNamespace(id=payment_id, contract_id=contract_id, status=PaymentStatus.VOIDED)
+        svc = _make_service(
+            payments={payment_id: payment},
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+        repo = svc.payment_repo
+
+        with pytest.raises(PaymentAlreadyVoidedError):
+            await svc.update_payment(mock_db, payment_id, PaymentUpdate(amount=Decimal("1.00")), make_admin())
+
+        assert repo.updated_payloads == []
+        assert not mock_db.commit.called
+
+
+# ─── void_and_correct_payment ────────────────────────────────────────────────
+
+
+def _correction_payload(**kwargs):
+    defaults = dict(amount=Decimal("12000.00"), payment_method="bank transfer")
+    defaults.update(kwargs)
+    return PaymentCorrectionCreate(**defaults)
+
+
+@pytest.mark.asyncio
+class TestVoidAndCorrectPayment:
+    async def test_raises_when_not_found(self, mock_db):
+        svc = _make_service()
+        with pytest.raises(RelatedResourceNotFoundError):
+            await svc.void_and_correct_payment(mock_db, uuid4(), _correction_payload(), make_admin())
+
+    async def test_admin_can_correct_any_payment(self, mock_db):
+        payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4()
+        payment = SimpleNamespace(id=payment_id, contract_id=contract_id, status=PaymentStatus.PAID)
+        svc = _make_service(
+            payments={payment_id: payment},
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+
+        result = await svc.void_and_correct_payment(mock_db, payment_id, _correction_payload(), make_admin())
+
+        assert result.corrects_payment_id == payment_id
+        assert result.contract_id == contract_id
+        assert result.amount == Decimal("12000.00")
+        assert result.status == PaymentStatus.PAID
+        assert payment.status == PaymentStatus.VOIDED
+        assert mock_db.commit.called
+
+    async def test_manager_can_correct_owned_payment(self, mock_db):
+        manager_id, payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4(), uuid4()
+        payment = SimpleNamespace(id=payment_id, contract_id=contract_id, status=PaymentStatus.PAID)
+        svc = _make_service(
+            payments={payment_id: payment},
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)},
+        )
+
+        result = await svc.void_and_correct_payment(
+            mock_db, payment_id, _correction_payload(), make_manager(manager_id)
+        )
+        assert result.corrects_payment_id == payment_id
+        assert payment.status == PaymentStatus.VOIDED
+
+    async def test_manager_forbidden_for_unowned_payment(self, mock_db):
+        payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4()
+        payment = SimpleNamespace(id=payment_id, contract_id=contract_id, status=PaymentStatus.PAID)
+        svc = _make_service(
+            payments={payment_id: payment},
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+        repo = svc.payment_repo
+
+        with pytest.raises(PaymentForbiddenError):
+            await svc.void_and_correct_payment(mock_db, payment_id, _correction_payload(), make_manager())
+
+        assert repo.created_payloads == []
+        assert payment.status == PaymentStatus.PAID
+        assert not mock_db.commit.called
+
+    async def test_user_role_is_forbidden(self, mock_db):
+        payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4()
+        payment = SimpleNamespace(id=payment_id, contract_id=contract_id, status=PaymentStatus.PAID)
+        svc = _make_service(
+            payments={payment_id: payment},
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+
+        with pytest.raises(PaymentForbiddenError):
+            await svc.void_and_correct_payment(mock_db, payment_id, _correction_payload(), make_regular_user())
+
+    async def test_current_user_is_required(self, mock_db):
+        payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4()
+        payment = SimpleNamespace(id=payment_id, contract_id=contract_id, status=PaymentStatus.PAID)
+        svc = _make_service(
+            payments={payment_id: payment},
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+
+        with pytest.raises(TypeError):
+            await svc.void_and_correct_payment(mock_db, payment_id, _correction_payload())
+
+    async def test_raises_when_already_voided(self, mock_db):
+        payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4()
+        payment = SimpleNamespace(id=payment_id, contract_id=contract_id, status=PaymentStatus.VOIDED)
+        svc = _make_service(
+            payments={payment_id: payment},
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+        repo = svc.payment_repo
+
+        with pytest.raises(PaymentAlreadyVoidedError):
+            await svc.void_and_correct_payment(mock_db, payment_id, _correction_payload(), make_admin())
+
+        assert repo.created_payloads == []
+        assert not mock_db.commit.called
 
 
 # ─── delete_payment ──────────────────────────────────────────────────────────

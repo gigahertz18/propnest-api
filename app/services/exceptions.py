@@ -249,6 +249,16 @@ class PaymentForbiddenError(ResourceForbiddenError):
     pass
 
 
+class PaymentAlreadyVoidedError(ServiceException):
+    """
+    Raised when an operation requires a payment to still be active but it's
+    already VOIDED — either a second correction attempt against the same
+    payment, or any other update to a payment made immutable by voiding.
+    """
+
+    pass
+
+
 # ─── Delete conflicts (FK protection) ───────────────────────────────────────
 # Raised when a delete is rejected by the DB because a dependent row still
 # references the target (RESTRICT/NO ACTION foreign keys with no
