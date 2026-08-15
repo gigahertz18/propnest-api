@@ -136,6 +136,21 @@ class TestPaymentRepositoryCreate:
         result = await payment_repo.create(db, payload)
         assert result.payment_method is None
 
+    async def test_reference_number_is_optional(self, db, contract):
+        payload = PaymentCreate(**make_payment(contract_id=contract.id))
+        result = await payment_repo.create(db, payload)
+        assert result.reference_number is None
+
+    async def test_creates_payment_with_reference_number(self, db, contract):
+        payload = PaymentCreate(**make_payment(contract_id=contract.id, reference_number="REF-12345"))
+        result = await payment_repo.create(db, payload)
+        assert result.reference_number == "REF-12345"
+
+    async def test_creates_payment_with_check_method(self, db, contract):
+        payload = PaymentCreate(**make_payment(contract_id=contract.id, payment_method="check"))
+        result = await payment_repo.create(db, payload)
+        assert result.payment_method == "check"
+
 
 class TestPaymentRepositoryCreateEdgeCases:
     def test_amount_zero_raises_validation_error(self, db, contract):
@@ -170,6 +185,11 @@ class TestPaymentRepositoryUpdate:
         assert result is not None
         assert result.amount == Decimal("999.99")
 
+    async def test_updates_reference_number(self, db, payment):
+        result = await payment_repo.update(db, payment.id, PaymentUpdate(reference_number="REF-999"))
+        assert result is not None
+        assert result.reference_number == "REF-999"
+
     async def test_returns_none_when_not_found(self, db):
         result = await payment_repo.update(db, uuid.uuid4(), PaymentUpdate(status="REFUNDED"))
         assert result is None
@@ -188,6 +208,12 @@ class TestPaymentRepositoryUpdateEdgeCases:
     def test_invalid_status_raises_validation_error(self):
         with pytest.raises(ValidationError):
             PaymentUpdate(status="BOGUS")
+
+    def test_status_voided_rejected_directly_on_update(self):
+        """VOIDED must only be reached via the correction endpoint, never
+        via a plain PATCH — see PaymentService.void_and_correct_payment."""
+        with pytest.raises(ValidationError):
+            PaymentUpdate(status="VOIDED")
 
 
 # ─── delete ───────────────────────────────────────────────────────────────────

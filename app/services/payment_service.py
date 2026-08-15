@@ -6,15 +6,19 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.contract import Contract
-from app.models.payment import Payment
+from app.models.payment import Payment, PaymentStatus
 from app.models.user import User
 from app.repositories.contract import ContractRepository
 from app.repositories.payment import PaymentRepository
 from app.repositories.property import PropertyRepository
 from app.schemas.base import PaginatedResponse
-from app.schemas.payment import PaymentCreate, PaymentUpdate
+from app.schemas.payment import PaymentCorrectionCreate, PaymentCreate, PaymentUpdate
 from app.services.base import ResourceAuthorizationMixin
-from app.services.exceptions import PaymentForbiddenError, RelatedResourceNotFoundError
+from app.services.exceptions import (
+    PaymentAlreadyVoidedError,
+    PaymentForbiddenError,
+    RelatedResourceNotFoundError,
+)
 
 
 @dataclass(frozen=True)
@@ -107,9 +111,48 @@ class PaymentService(ResourceAuthorizationMixin):
             contract_id=payment.contract_id,
         )
 
+        if payment.status == PaymentStatus.VOIDED:
+            raise PaymentAlreadyVoidedError(f"Payment {payment_id} is voided and can no longer be modified.")
+
         payment = await self.payment_repo.update(db, payment_id, payload)
         await db.commit()
         return payment
+
+    async def void_and_correct_payment(
+        self,
+        db: AsyncSession,
+        payment_id: UUID,
+        payload: PaymentCorrectionCreate,
+        current_user: User,
+    ) -> Payment:
+        """Correct a mis-entered payment without mutating its history.
+
+        Append-only: the original is marked VOIDED and a new payment row
+        is created referencing it via `corrects_payment_id`, so a receipt
+        already issued against the original never silently changes what
+        it was for.
+        """
+        original = await self._get_payment_or_404(db, payment_id)
+
+        # this is for authorization only. no need to use the returned context
+        await self._prepare_payment_context(
+            db,
+            current_user,
+            payment=original,
+            contract_id=original.contract_id,
+        )
+
+        if original.status == PaymentStatus.VOIDED:
+            raise PaymentAlreadyVoidedError(f"Payment {payment_id} is already voided and cannot be corrected again.")
+
+        correction_data = payload.model_dump()
+        correction_data["contract_id"] = original.contract_id
+        correction_data["corrects_payment_id"] = original.id
+
+        new_payment = await self.payment_repo.create(db, correction_data)
+        await self.payment_repo.update(db, original.id, {"status": PaymentStatus.VOIDED})
+        await db.commit()
+        return new_payment
 
     async def delete_payment(
         self,

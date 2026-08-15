@@ -6,7 +6,8 @@ from app.core.dependencies import get_payment_service, require_manager_or_above
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.base import PaginatedResponse
-from app.schemas.payment import PaymentCreate, PaymentUpdate, PaymentResponse
+from app.schemas.payment import PaymentCorrectionCreate, PaymentCreate, PaymentUpdate, PaymentResponse
+from app.services.exceptions import PaymentAlreadyVoidedError
 from app.services.payment_service import PaymentService
 
 router = APIRouter(prefix="/payments", tags=["Payments"])
@@ -67,10 +68,33 @@ async def update_payment(
     current_user: User = Depends(require_manager_or_above),
     payment_service: PaymentService = Depends(get_payment_service),
 ):
-    updated = await payment_service.update_payment(db, payment_id, payload, current_user)
+    try:
+        updated = await payment_service.update_payment(db, payment_id, payload, current_user)
+    except PaymentAlreadyVoidedError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Payment {payment_id} not found")
     return updated
+
+
+@router.post(
+    "/{payment_id}/corrections",
+    response_model=PaymentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def correct_payment(
+    payment_id: UUID,
+    payload: PaymentCorrectionCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_manager_or_above),
+    payment_service: PaymentService = Depends(get_payment_service),
+):
+    """Void `payment_id` and create a replacement payment in its place —
+    the append-only correction model (see PaymentService.void_and_correct_payment)."""
+    try:
+        return await payment_service.void_and_correct_payment(db, payment_id, payload, current_user)
+    except PaymentAlreadyVoidedError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
 @router.delete(

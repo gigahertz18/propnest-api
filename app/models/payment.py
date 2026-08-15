@@ -10,12 +10,13 @@ from app.db.session import Base
 from app.models.base import TimestampMixin
 
 # Listing platforms as a constant — easy to extend without a native enum migration
-PAYMENT_METHODS = ("cash", "bank transfer", "gcash", "maya")
+PAYMENT_METHODS = ("cash", "bank transfer", "gcash", "maya", "check")
 
 
 class PaymentStatus(str, enum.Enum):
     PAID = "PAID"
     PENDING = "PENDING"
+    VOIDED = "VOIDED"
     REFUNDED = "REFUNDED"
 
 
@@ -47,6 +48,16 @@ class Payment(Base, TimestampMixin):
         Enum(PaymentStatus, name="payment_status_enum"),
         nullable=False,
         default=PaymentStatus.PAID,
+    )
+
+    reference_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    # Append-only correction model: correcting a payment never mutates it in
+    # place (a receipt may already reference its id) — instead the original
+    # is marked VOIDED and a new row is created pointing back here.
+    corrects_payment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("payments.id"),
+        nullable=True,
     )
 
     __table_args__ = (
