@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.contract import Contract
 from app.models.property import Property
 from app.models.user import User, UserRole
+from app.repositories.collection import CollectionRepository
 from app.repositories.contract import ContractRepository
 from app.repositories.document import DocumentRepository
 from app.repositories.property import PropertyRepository
@@ -22,6 +23,7 @@ class ResourceAuthorizationMixin:
     contract_repo: ContractRepository | None = None
     tenant_repo: TenantRepository | None = None
     document_repo: DocumentRepository | None = None
+    collection_repo: CollectionRepository | None = None
     forbidden_error: type[Exception] = ResourceForbiddenError
 
     async def _get_property(self, db: AsyncSession, property_id: UUID) -> Property | None:
@@ -43,6 +45,11 @@ class ResourceAuthorizationMixin:
         if self.document_repo is None:
             raise RuntimeError(f"{type(self).__name__}._get_document requires document_repo to be injected.")
         return await self.document_repo.get_by_id(db, document_id)
+
+    async def _get_collection(self, db: AsyncSession, collection_id: UUID):
+        if self.collection_repo is None:
+            raise RuntimeError(f"{type(self).__name__}._get_collection requires collection_repo to be injected.")
+        return await self.collection_repo.get_by_id(db, collection_id)
 
     async def _resolve_property(
         self,
@@ -87,16 +94,17 @@ class ResourceAuthorizationMixin:
         property_id: UUID | None = None,
         contract_id: UUID | None = None,
         tenant_id: UUID | None = None,
+        collection_id: UUID | None = None,
     ) -> None:
         """
-        Validate that any provided property_id, contract_id, or
-        tenant_id actually exists. Existence-checking only, independent
+        Validate that any provided property_id, contract_id, tenant_id, or
+        collection_id actually exists. Existence-checking only, independent
         of authorization; a caller omits whichever ids don't apply.
 
         Raises:
             RelatedResourceNotFoundError: for the first provided id
-                (property, then contract, then tenant) that doesn't
-                resolve to an existing record.
+                (property, then contract, then tenant, then collection)
+                that doesn't resolve to an existing record.
         """
 
         if property_id is not None:
@@ -113,6 +121,11 @@ class ResourceAuthorizationMixin:
             tenant = await self._get_tenant(db, tenant_id)
             if tenant is None:
                 raise RelatedResourceNotFoundError(f"Tenant {tenant_id} not found.")
+
+        if collection_id is not None:
+            collection = await self._get_collection(db, collection_id)
+            if collection is None:
+                raise RelatedResourceNotFoundError(f"Collection {collection_id} not found.")
 
     async def _authorize_user_to_property(
         self,

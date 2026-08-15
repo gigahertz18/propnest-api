@@ -7,6 +7,7 @@ from app.main import app
 
 from app.models.user import UserRole
 from tests.factories import (
+    make_collection_model,
     make_document,
     make_document_model,
     make_property_model,
@@ -250,6 +251,43 @@ class TestCreateDocumentRoute:
         assert data["file_type"] == "application/pdf"
         assert data["file_url"]
         assert "/documents/" in data["file_url"]
+
+
+# ─── collection_id linking ────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+class TestCreateDocumentRouteCollectionLinking:
+    async def test_creates_document_linked_to_collection_on_same_property(self, client, db, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        collection = await make_collection_model(db, property_id=prop.id)
+
+        payload = make_document(property_id=str(prop.id), collection_id=str(collection.id))
+        response = await client.post("/api/v1/documents/", json=payload, headers=auth_ctx.headers)
+
+        assert response.status_code == 201
+        assert response.json()["collection_id"] == str(collection.id)
+
+    async def test_returns_404_when_collection_not_found(self, client, db, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+
+        payload = make_document(property_id=str(prop.id), collection_id=str(uuid.uuid4()))
+        response = await client.post("/api/v1/documents/", json=payload, headers=auth_ctx.headers)
+
+        assert response.status_code == 404
+
+    async def test_collection_id_is_optional(self, client, db, authenticate_admin):
+        """Regression: creating a document without collection_id still works."""
+        auth_ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+
+        payload = make_document(property_id=str(prop.id))
+        response = await client.post("/api/v1/documents/", json=payload, headers=auth_ctx.headers)
+
+        assert response.status_code == 201
+        assert response.json()["collection_id"] is None
 
 
 # ─── POST /documents/upload (multipart upload) ───────────────────────────────

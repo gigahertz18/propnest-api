@@ -25,5 +25,14 @@ class Document(Base, TimestampMixin):
 
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tenants.id"), nullable=True)
 
+    # Nullable: a document may exist outside of any collection. ondelete=SET NULL
+    # so a deleted Collection doesn't take its documents down with it.
+    collection_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("collections.id", ondelete="SET NULL"), nullable=True
+    )
+
     def __repr__(self) -> str:
-        return f"<Document id={self.id} file_name={self.file_name} contract_id={self.contract_id} property_id={self.property_id} tenant_id={self.tenant_id}>"
+        return (
+            f"<Document id={self.id} file_name={self.file_name} contract_id={self.contract_id} "
+            f"property_id={self.property_id} tenant_id={self.tenant_id} collection_id={self.collection_id}>"
+        )

@@ -17,6 +17,7 @@ from app.models.user import User, UserRole
 
 from app.repositories.ip_rate_limit import IpRateLimitRepository
 from app.repositories.login_attempt import LoginAttemptRepository
+from app.repositories.collection import collection_repo
 from app.repositories.contract import contract_repo
 from app.repositories.document import document_repo
 from app.repositories.property import property_repo
@@ -25,6 +26,7 @@ from app.repositories.tenant import tenant_repo
 from app.repositories.user import user_repo
 
 from app.services.auth_service import AuthService
+from app.services.collection_service import CollectionService
 from app.services.contract_service import ContractService
 from app.services.document_service import DocumentService
 from app.services.notification_service import NotificationService
@@ -211,6 +213,7 @@ def get_document_service() -> DocumentService:
         property_repo=property_repo,
         contract_repo=contract_repo,
         tenant_repo=tenant_repo,
+        collection_repo=collection_repo,
     )
 
 
@@ -219,6 +222,14 @@ def get_payment_service() -> PaymentService:
         payment_repo=payment_repo,
         contract_repo=contract_repo,
         property_repo=property_repo,
+    )
+
+
+def get_collection_service() -> CollectionService:
+    return CollectionService(
+        collection_repo=collection_repo,
+        property_repo=property_repo,
+        contract_repo=contract_repo,
     )
 
 
