@@ -24,14 +24,13 @@ Payment semantics are complete:
 - real payment status lifecycle: `PAID`, `PENDING`, `VOIDED`, `REFUNDED`
 - explicit correction strategy (append-only: void the original, create a new payment row referencing it) that preserves payment history
 
-### Notifications abstraction
+### Notifications abstraction — done
 
-Introduce:
+Introduced:
 
-- `NotificationChannel`
-- `NotificationService`
-- local no-op/logging implementation
-- extension points for future email/SMS/push/Messenger/WhatsApp providers
+- `NotificationChannel` — an ABC exposing `send(recipient, subject, body)`, the extension point for future email/SMS/push/Messenger/WhatsApp providers
+- `NotificationService` — dispatches `send(...)` to every configured channel; retains `notify_password_changed` as a thin wrapper so `UserService`'s existing call site is unchanged
+- `LoggingNotificationChannel` — local no-op/logging default, wired in via `get_notification_service()`
 
 ### Audit Logs — done
 
@@ -93,6 +92,6 @@ The UI should support:
 
 Phase 1 is complete when the backend modules are implemented, tested, and exposed through stable API contracts that can support Phase 2.
 
-Status: Collections, Payments completion, and Audit Logs are done. Notifications abstraction remains outstanding.
+Status: Collections, Payments completion, Audit Logs, and the Notifications abstraction are done.
 
 Frontend work in Phase 1 should remain minimal unless required to exercise or validate these capabilities.
