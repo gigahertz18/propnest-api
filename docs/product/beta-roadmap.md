@@ -11,7 +11,7 @@ The backend GitHub issue set is the source of truth for this repository's produc
 
 ## Phase 2
 
-- Lease
+- Lease — done
 - Recurring Billing
 - Payment ↔ Billing
 - immutable Receipts

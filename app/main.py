@@ -12,7 +12,18 @@ from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.redis_client import RedisClientManager
 from app.db.session import engine
-from app.api.v1.routes import properties, auth, users, contracts, tenants, documents, payments, collections, audit_logs
+from app.api.v1.routes import (
+    properties,
+    auth,
+    users,
+    contracts,
+    tenants,
+    documents,
+    payments,
+    collections,
+    audit_logs,
+    leases,
+)
 from app.services.exceptions import (
     RelatedResourceNotFoundError,
     ResourceForbiddenError,
@@ -185,6 +196,7 @@ app.include_router(documents.router, prefix=settings.API_V1_PREFIX)
 app.include_router(payments.router, prefix=settings.API_V1_PREFIX)
 app.include_router(collections.router, prefix=settings.API_V1_PREFIX)
 app.include_router(audit_logs.router, prefix=settings.API_V1_PREFIX)
+app.include_router(leases.router, prefix=settings.API_V1_PREFIX)
 
 
 # ─── Health Check ─────────────────────────────────────────

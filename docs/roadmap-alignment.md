@@ -17,7 +17,7 @@ Audit logging should be transactionally coupled to mutations, and Notifications 
 
 ## Phase 2
 
-### Lease
+### Lease — done
 
 Introduce long-term-specific billing terms without overloading neutral `Contract`.
 

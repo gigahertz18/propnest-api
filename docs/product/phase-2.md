@@ -27,7 +27,7 @@ Dashboard
 
 ## Backend scope
 
-### Lease
+### Lease — done
 
 A dedicated 1:1 `Lease` record attaches long-term-specific billing terms to a neutral `Contract`.
 
@@ -44,7 +44,7 @@ Important fields include:
 - lease status
 - start/end dates
 
-A Lease must only attach to a long-term Contract.
+A Lease must only attach to a long-term Contract, enforced by `LeaseService` (not a DB constraint).
 
 ### Recurring Billing
 
