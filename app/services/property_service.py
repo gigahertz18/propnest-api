@@ -95,7 +95,7 @@ class PropertyService(ResourceAuthorizationMixin):
         except IntegrityError as e:
             raise PropertyInUseError(
                 f"Property {prop_id} cannot be deleted because it is still referenced by an "
-                "existing contract or document."
+                "existing contract, document or collection."
             ) from e
 
     async def assign_manager(
