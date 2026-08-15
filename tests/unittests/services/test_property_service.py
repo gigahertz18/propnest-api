@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from sqlalchemy.exc import IntegrityError
 
+from app.models.audit_log import AuditAction, AuditLog
 from app.models.property import PropertyStatus
 from app.models.user import UserRole
 from app.services.property_service import PropertyService
@@ -175,11 +176,20 @@ class TestCreateProperty:
         svc = _make_service()
         payload = PropertyCreate(name="Unit A", address="123 Main St")
 
-        created = await svc.create_property(mock_db, payload, current_user=_admin())
+        admin = _admin()
+        created = await svc.create_property(mock_db, payload, current_user=admin)
 
         assert created.name == "Unit A"
         assert created.address == "123 Main St"
         assert mock_db.commit.called
+
+        mock_db.add.assert_called_once()
+        row = mock_db.add.call_args.args[0]
+        assert isinstance(row, AuditLog)
+        assert row.actor_id == admin.id
+        assert row.action == AuditAction.CREATE
+        assert row.entity_type == "Property"
+        assert row.entity_id == created.id
 
     async def test_translates_duplicate_name_and_address(self, mock_db):
         class FailingRepo(MockPropertyRepo):
@@ -195,6 +205,11 @@ class TestCreateProperty:
 
         with pytest.raises(PropertyAlreadyExistsError):
             await svc.create_property(mock_db, payload, current_user=_admin())
+
+        # Regression: the repo write failed before write_audit_log ran, so
+        # no audit row was ever added to the session — nothing to orphan.
+        assert not mock_db.add.called
+        assert not mock_db.commit.called
 
     async def test_reraises_unrelated_integrity_errors(self, mock_db):
         class FailingRepo(MockPropertyRepo):
@@ -238,10 +253,17 @@ class TestUpdateProperty:
         svc = _make_service(properties={prop.id: prop})
         payload = PropertyUpdate(name="New Name")
 
-        updated = await svc.update_property(mock_db, prop.id, payload, current_user=_admin())
+        admin = _admin()
+        updated = await svc.update_property(mock_db, prop.id, payload, current_user=admin)
 
         assert updated.name == "New Name"
         assert mock_db.commit.called
+
+        row = mock_db.add.call_args.args[0]
+        assert row.action == AuditAction.UPDATE
+        assert row.entity_type == "Property"
+        assert row.entity_id == prop.id
+        assert row.actor_id == admin.id
 
     async def test_raises_when_not_found(self, mock_db):
         svc = _make_service()
@@ -309,10 +331,16 @@ class TestDeleteProperty:
 
         svc = _make_service(properties={prop.id: prop})
 
-        deleted = await svc.delete_property(mock_db, prop.id, current_user=_admin())
+        admin = _admin()
+        deleted = await svc.delete_property(mock_db, prop.id, current_user=admin)
 
         assert deleted is prop
         assert mock_db.commit.called
+
+        row = mock_db.add.call_args.args[0]
+        assert row.action == AuditAction.DELETE
+        assert row.entity_type == "Property"
+        assert row.entity_id == prop.id
 
     async def test_raises_when_not_found(self, mock_db):
         svc = _make_service()

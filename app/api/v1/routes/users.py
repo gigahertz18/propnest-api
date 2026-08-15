@@ -55,16 +55,16 @@ async def get_user(
     "/",
     response_model=UserResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_admin)],
 )
 async def create_user(
     payload: UserCreate,
     db: AsyncSession = Depends(get_db),
     user_service: UserService = Depends(get_user_service),
+    current_user: User = Depends(require_admin),
 ):
     """Create a new user. Admin only."""
     try:
-        return await user_service.create_user(db, payload)
+        return await user_service.create_user(db, payload, current_user)
     except EmailAlreadyExistsError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

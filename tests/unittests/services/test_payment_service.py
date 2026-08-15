@@ -4,6 +4,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from uuid import uuid4
 
+from app.models.audit_log import AuditAction, AuditLog
 from app.models.payment import PaymentStatus
 from app.schemas.payment import PaymentCreate, PaymentCorrectionCreate, PaymentUpdate
 from app.services.payment_service import PaymentService
@@ -205,10 +206,19 @@ class TestCreatePayment:
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
         )
 
-        result = await svc.create_payment(mock_db, _payload(contract_id=contract_id), current_user=make_admin())
+        admin = make_admin()
+        result = await svc.create_payment(mock_db, _payload(contract_id=contract_id), current_user=admin)
 
         assert result.contract_id == contract_id
         assert mock_db.commit.called
+
+        mock_db.add.assert_called_once()
+        row = mock_db.add.call_args.args[0]
+        assert isinstance(row, AuditLog)
+        assert row.actor_id == admin.id
+        assert row.action == AuditAction.CREATE
+        assert row.entity_type == "Payment"
+        assert row.entity_id == result.id
 
     async def test_manager_can_create_for_owned_contract(self, mock_db):
         manager_id, contract_id, prop_id = uuid4(), uuid4(), uuid4()
@@ -288,11 +298,16 @@ class TestUpdatePayment:
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
         )
 
-        result = await svc.update_payment(
-            mock_db, payment_id, PaymentUpdate(status="REFUNDED"), current_user=make_admin()
-        )
+        admin = make_admin()
+        result = await svc.update_payment(mock_db, payment_id, PaymentUpdate(status="REFUNDED"), current_user=admin)
         assert result.status == "REFUNDED"
         assert mock_db.commit.called
+
+        row = mock_db.add.call_args.args[0]
+        assert row.action == AuditAction.UPDATE
+        assert row.entity_type == "Payment"
+        assert row.entity_id == payment_id
+        assert row.actor_id == admin.id
 
     async def test_manager_forbidden_for_unowned_payment(self, mock_db):
         payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4()
@@ -402,7 +417,8 @@ class TestVoidAndCorrectPayment:
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
         )
 
-        result = await svc.void_and_correct_payment(mock_db, payment_id, _correction_payload(), make_admin())
+        admin = make_admin()
+        result = await svc.void_and_correct_payment(mock_db, payment_id, _correction_payload(), admin)
 
         assert result.corrects_payment_id == payment_id
         assert result.contract_id == contract_id
@@ -410,6 +426,17 @@ class TestVoidAndCorrectPayment:
         assert result.status == PaymentStatus.PAID
         assert payment.status == PaymentStatus.VOIDED
         assert mock_db.commit.called
+
+        assert mock_db.add.call_count == 2
+        rows = [call.args[0] for call in mock_db.add.call_args_list]
+        create_row = next(r for r in rows if r.action == AuditAction.CREATE)
+        update_row = next(r for r in rows if r.action == AuditAction.UPDATE)
+        assert create_row.entity_type == "Payment"
+        assert create_row.entity_id == result.id
+        assert update_row.entity_type == "Payment"
+        assert update_row.entity_id == payment_id
+        assert create_row.actor_id == admin.id
+        assert update_row.actor_id == admin.id
 
     async def test_manager_can_correct_owned_payment(self, mock_db):
         manager_id, payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4(), uuid4()
@@ -503,9 +530,16 @@ class TestDeletePayment:
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
         )
 
-        result = await svc.delete_payment(mock_db, payment_id, current_user=make_admin())
+        admin = make_admin()
+        result = await svc.delete_payment(mock_db, payment_id, current_user=admin)
         assert result is payment
         assert mock_db.commit.called
+
+        row = mock_db.add.call_args.args[0]
+        assert row.action == AuditAction.DELETE
+        assert row.entity_type == "Payment"
+        assert row.entity_id == payment_id
+        assert row.actor_id == admin.id
 
     async def test_manager_can_delete_owned_payment(self, mock_db):
         manager_id, payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4(), uuid4()

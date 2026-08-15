@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.audit_log import AuditAction
 from app.models.contract import Contract, RentalType
 from app.models.user import User
 from app.repositories.contract import ContractRepository
@@ -13,6 +14,7 @@ from app.repositories.property import PropertyRepository
 from app.repositories.tenant import TenantRepository
 from app.schemas.base import PaginatedResponse
 from app.schemas.contract import ContractCreate, ContractUpdate
+from app.services.audit import write_audit_log
 from app.services.base import ResourceAuthorizationMixin
 from app.services.utils import integrity_error_message
 from app.services.exceptions import (
@@ -98,6 +100,7 @@ class ContractService(ResourceAuthorizationMixin):
 
         try:
             contract = await self.contract_repo.create(db, resolved_payload)
+            write_audit_log(db, current_user, AuditAction.CREATE, "Contract", contract.id)
             await db.commit()
             return contract
         except IntegrityError as e:
@@ -120,6 +123,7 @@ class ContractService(ResourceAuthorizationMixin):
         try:
 
             contract = await self.contract_repo.update(db, contract_id, payload)
+            write_audit_log(db, current_user, AuditAction.UPDATE, "Contract", contract_id)
             await db.commit()
             return contract
         except IntegrityError as e:
@@ -137,6 +141,7 @@ class ContractService(ResourceAuthorizationMixin):
 
         try:
             contract = await self.contract_repo.delete(db, contract_id)
+            write_audit_log(db, current_user, AuditAction.DELETE, "Contract", contract_id)
             await db.commit()
             return contract
         except IntegrityError as e:

@@ -11,6 +11,8 @@ from app.schemas.base import PaginatedResponse
 from app.schemas.property import PropertyCreate, PropertyUpdate
 from app.models.property import Property, PropertyStatus
 from app.models.user import User, UserRole
+from app.models.audit_log import AuditAction
+from app.services.audit import write_audit_log
 from app.services.base import ResourceAuthorizationMixin
 from app.services.utils import integrity_error_message
 from app.services.exceptions import (
@@ -66,6 +68,7 @@ class PropertyService(ResourceAuthorizationMixin):
             raise PropertyForbiddenError("Only admins may create properties.")
         try:
             prop = await self.property_repo.create(db, payload)
+            write_audit_log(db, current_user, AuditAction.CREATE, "Property", prop.id)
             await db.commit()
             return prop
         except IntegrityError as e:
@@ -81,6 +84,7 @@ class PropertyService(ResourceAuthorizationMixin):
         await self.get_property(db, prop_id, current_user=current_user)
         try:
             prop = await self.property_repo.update(db, prop_id, payload)
+            write_audit_log(db, current_user, AuditAction.UPDATE, "Property", prop_id)
             await db.commit()
             return prop
         except IntegrityError as e:
@@ -90,6 +94,7 @@ class PropertyService(ResourceAuthorizationMixin):
         await self.get_property(db, prop_id, current_user=current_user)
         try:
             prop = await self.property_repo.delete(db, prop_id)
+            write_audit_log(db, current_user, AuditAction.DELETE, "Property", prop_id)
             await db.commit()
             return prop
         except IntegrityError as e:
@@ -138,6 +143,7 @@ class PropertyService(ResourceAuthorizationMixin):
             raise PropertyManagerAssignmentError(f"User {manager_id} does not have the manager role.")
 
         prop = await self.property_repo.update(db, prop_id, {"manager_id": manager_id})
+        write_audit_log(db, current_user, AuditAction.UPDATE, "Property", prop_id)
         await db.commit()
         return prop
 

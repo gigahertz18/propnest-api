@@ -9,7 +9,7 @@ Foundation modules:
 - Collections — done
 - completed Payments — done
 - Notifications abstraction — outstanding
-- Audit Logs — outstanding
+- Audit Logs — done
 
 Important architectural consequence:
 

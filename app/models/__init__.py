@@ -5,6 +5,7 @@ from app.models.document import Document
 from app.models.payment import Payment
 from app.models.tenant import Tenant
 from app.models.collection import Collection
+from app.models.audit_log import AuditLog, AuditAction
 
 __all__ = [
     "Property",
@@ -17,4 +18,6 @@ __all__ = [
     "Payment",
     "Tenant",
     "Collection",
+    "AuditLog",
+    "AuditAction",
 ]

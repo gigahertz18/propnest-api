@@ -89,7 +89,7 @@ class TestCreateUser:
         payload = UserCreate(username="u", email="e@example.com", full_name="Name", password="pw")
 
         with pytest.raises(EmailAlreadyExistsError):
-            await svc.create_user(db=mock_db, payload=payload)
+            await svc.create_user(db=mock_db, payload=payload, current_user=_admin())
 
     async def test_concurrent_creates_one_fails_with_email_conflict(self) -> None:
         """Simulates a race where the second create hits a unique constraint
@@ -115,7 +115,7 @@ class TestCreateUser:
 
         async def worker():
             try:
-                return await svc.create_user(db=None, payload=payload)
+                return await svc.create_user(db=None, payload=payload, current_user=_admin())
             except Exception as e:
                 return e
 

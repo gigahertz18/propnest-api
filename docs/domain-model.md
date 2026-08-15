@@ -155,6 +155,27 @@ CRUD + manager-scoped listing exist at `/api/v1/collections`, following the same
 ---
 
 
+## 30. Audit Logs
+
+`AuditLog` records every mutation across the six existing services (Property, Contract, Tenant, Document, Payment, User) — one row per create/update/delete.
+
+```text
+id
+actor_id      (nullable FK -> users.id, ON DELETE SET NULL)
+action        (CREATE / UPDATE / DELETE)
+entity_type   (polymorphic — no FK, since one column can't reference every mutable table)
+entity_id
+diff          (nullable JSON)
+created_at    (immutable — no updated_at)
+```
+
+Audit rows are written via a shared `write_audit_log()` helper, called explicitly by each mutating service method immediately before its own `db.commit()` — a deliberate choice over SQLAlchemy `after_insert`/`after_update`/`after_delete` ORM event hooks, since hooks would be invisible at the call site and inconsistent with how authorization and existence-checking are already handled explicitly elsewhere in the service layer. Because the write shares the same session/transaction as the underlying change, a rolled-back mutation never leaves an orphaned audit row.
+
+`GET /api/v1/audit-logs` exposes read access: admin-only, filterable by `entity_type`/`entity_id`, paginated like every other list endpoint.
+
+---
+
+
 ## 12. Document Architecture
 
 Documents are both:

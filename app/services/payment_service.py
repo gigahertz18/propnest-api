@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.audit_log import AuditAction
 from app.models.contract import Contract
 from app.models.payment import Payment, PaymentStatus
 from app.models.user import User
@@ -13,6 +14,7 @@ from app.repositories.payment import PaymentRepository
 from app.repositories.property import PropertyRepository
 from app.schemas.base import PaginatedResponse
 from app.schemas.payment import PaymentCorrectionCreate, PaymentCreate, PaymentUpdate
+from app.services.audit import write_audit_log
 from app.services.base import ResourceAuthorizationMixin
 from app.services.exceptions import (
     PaymentAlreadyVoidedError,
@@ -91,6 +93,7 @@ class PaymentService(ResourceAuthorizationMixin):
         resolved_payload = payload.model_copy(update={"contract_id": ctx.contract_id})
 
         payment = await self.payment_repo.create(db, resolved_payload)
+        write_audit_log(db, current_user, AuditAction.CREATE, "Payment", payment.id)
         await db.commit()
         return payment
 
@@ -115,6 +118,7 @@ class PaymentService(ResourceAuthorizationMixin):
             raise PaymentAlreadyVoidedError(f"Payment {payment_id} is voided and can no longer be modified.")
 
         payment = await self.payment_repo.update(db, payment_id, payload)
+        write_audit_log(db, current_user, AuditAction.UPDATE, "Payment", payment_id)
         await db.commit()
         return payment
 
@@ -151,6 +155,8 @@ class PaymentService(ResourceAuthorizationMixin):
 
         new_payment = await self.payment_repo.create(db, correction_data)
         await self.payment_repo.update(db, original.id, {"status": PaymentStatus.VOIDED})
+        write_audit_log(db, current_user, AuditAction.CREATE, "Payment", new_payment.id)
+        write_audit_log(db, current_user, AuditAction.UPDATE, "Payment", original.id)
         await db.commit()
         return new_payment
 
@@ -170,6 +176,7 @@ class PaymentService(ResourceAuthorizationMixin):
         )
 
         payment = await self.payment_repo.delete(db, payment_id)
+        write_audit_log(db, current_user, AuditAction.DELETE, "Payment", payment_id)
         await db.commit()
         return payment
 
