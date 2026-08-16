@@ -7,6 +7,8 @@ from tests.factories import (
     make_property_model,
     make_tenant_model,
     make_payment_model,
+    make_lease_model,
+    make_billing_record_model,
 )
 
 
@@ -163,6 +165,110 @@ class TestCreatePaymentRoute:
 
         response = await client.post("/api/v1/payments/", json=payload, headers=auth_ctx.headers)
         assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+class TestCreatePaymentAgainstBillingRecordRoute:
+    async def _billing_record(self, db, amount_due=15000.00):
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, prop.id, tenant.id)
+        lease = await make_lease_model(db, contract.id, monthly_rent=amount_due)
+        record = await make_billing_record_model(db, lease.id, amount_due=amount_due)
+        return contract, record
+
+    async def test_partial_payment_updates_billing_record_to_partially_paid(self, client, db, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        contract, record = await self._billing_record(db)
+
+        payload = {
+            "contract_id": str(contract.id),
+            "billing_record_id": str(record.id),
+            "amount": 5000.0,
+            "payment_method": "cash",
+            "status": "PAID",
+        }
+
+        response = await client.post("/api/v1/payments/", json=payload, headers=auth_ctx.headers)
+        assert response.status_code == 201
+        assert response.json()["billing_record_id"] == str(record.id)
+
+        await db.refresh(record)
+        assert record.status == "partially_paid"
+
+    async def test_full_payment_updates_billing_record_to_paid(self, client, db, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        contract, record = await self._billing_record(db)
+
+        payload = {
+            "contract_id": str(contract.id),
+            "billing_record_id": str(record.id),
+            "amount": 15000.0,
+            "payment_method": "cash",
+            "status": "PAID",
+        }
+
+        response = await client.post("/api/v1/payments/", json=payload, headers=auth_ctx.headers)
+        assert response.status_code == 201
+
+        await db.refresh(record)
+        assert record.status == "paid"
+        assert record.overpaid_amount is None
+
+    async def test_overpayment_updates_billing_record_to_paid_with_excess_tracked(self, client, db, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        contract, record = await self._billing_record(db)
+
+        payload = {
+            "contract_id": str(contract.id),
+            "billing_record_id": str(record.id),
+            "amount": 15500.0,
+            "payment_method": "cash",
+            "status": "PAID",
+        }
+
+        response = await client.post("/api/v1/payments/", json=payload, headers=auth_ctx.headers)
+        assert response.status_code == 201
+
+        await db.refresh(record)
+        assert record.status == "paid"
+        assert float(record.overpaid_amount) == 500.0
+
+    async def test_returns_404_when_billing_record_belongs_to_different_contract(self, client, db, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        _, record = await self._billing_record(db)
+
+        other_prop = await make_property_model(db, name="Other Property")
+        other_tenant = await make_tenant_model(db, email="other-tenant@example.com")
+        other_contract = await make_contract_model(db, other_prop.id, other_tenant.id)
+
+        payload = {
+            "contract_id": str(other_contract.id),
+            "billing_record_id": str(record.id),
+            "amount": 5000.0,
+            "payment_method": "cash",
+            "status": "PAID",
+        }
+
+        response = await client.post("/api/v1/payments/", json=payload, headers=auth_ctx.headers)
+        assert response.status_code == 404
+
+    async def test_payment_without_billing_record_id_is_unaffected(self, client, db, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, prop.id, tenant.id)
+
+        payload = {
+            "contract_id": str(contract.id),
+            "amount": 5000.0,
+            "payment_method": "cash",
+            "status": "PAID",
+        }
+
+        response = await client.post("/api/v1/payments/", json=payload, headers=auth_ctx.headers)
+        assert response.status_code == 201
+        assert response.json()["billing_record_id"] is None
 
 
 @pytest.mark.asyncio

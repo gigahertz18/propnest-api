@@ -264,6 +264,7 @@ async def make_document_model(db, file_url: str = "http://example.com/test_docum
 
 def make_payment(
     contract_id: uuid.UUID | None = None,
+    billing_record_id: uuid.UUID | None = None,
     amount: float = 15000.00,
     paid_at: datetime | None = None,
     payment_method: str | None = "cash",
@@ -273,6 +274,7 @@ def make_payment(
     """Returns a dict matching PaymentCreate schema."""
     return {
         "contract_id": contract_id,
+        "billing_record_id": billing_record_id,
         "amount": amount,
         "paid_at": paid_at or datetime.now(timezone.utc),
         "payment_method": payment_method,

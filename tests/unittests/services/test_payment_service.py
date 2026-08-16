@@ -5,8 +5,10 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 from app.models.audit_log import AuditAction, AuditLog
+from app.models.billing_record import BillingRecordStatus
 from app.models.payment import PaymentStatus
 from app.schemas.payment import PaymentCreate, PaymentCorrectionCreate, PaymentUpdate
+from app.services.lease_billing_service import LeaseBillingService
 from app.services.payment_service import PaymentService
 from app.services.exceptions import (
     PaymentAlreadyVoidedError,
@@ -27,6 +29,9 @@ class MockPaymentRepo(MockCRUDRepo):
     async def get_by_status(self, db, status):
         return await self._filter_by(status=status)
 
+    async def get_by_billing_record(self, db, billing_record_id):
+        return await self._filter_by(billing_record_id=billing_record_id)
+
 
 class MockPaymentRepoWithScoping(MockPaymentRepo):
     """Adds a fake `get_all_for_manager`/`count_all_for_manager` that
@@ -40,7 +45,14 @@ class MockPaymentRepoWithScoping(MockPaymentRepo):
         return [p for p in self.records.values() if getattr(p, "manager_id", None) == manager_id]
 
 
-def _make_service(payments=None, properties=None, contracts=None) -> PaymentService:
+def _make_service(
+    payments=None,
+    properties=None,
+    contracts=None,
+    billing_records=None,
+    leases=None,
+    lease_billing_service=None,
+) -> PaymentService:
     if payments is None:
         payment_repo = MockPaymentRepo({})
     elif isinstance(payments, dict):
@@ -62,10 +74,21 @@ def _make_service(payments=None, properties=None, contracts=None) -> PaymentServ
     else:
         contracts_repo = contracts
 
+    billing_record_repo = (
+        billing_records
+        if not isinstance(billing_records, (dict, type(None)))
+        else MockReadOnlyRepo(billing_records or {})
+    )
+
+    lease_repo = leases if not isinstance(leases, (dict, type(None))) else MockReadOnlyRepo(leases or {})
+
     return PaymentService(
         payment_repo=payment_repo,
         property_repo=property_repo,
         contract_repo=contracts_repo,
+        billing_record_repo=billing_record_repo,
+        lease_repo=lease_repo,
+        lease_billing_service=lease_billing_service or LeaseBillingService(billing_record_repo=None, lease_repo=None),
     )
 
 
@@ -277,6 +300,180 @@ class TestCreatePayment:
             await svc.create_payment(mock_db, _payload(contract_id=contract_id), current_user=make_regular_user())
 
         assert repo.created_payloads == []
+
+
+# ─── create_payment (billing_record_id) ──────────────────────────────────────
+
+
+def _billing_record(**kwargs):
+    defaults = dict(
+        id=uuid4(),
+        lease_id=uuid4(),
+        amount_due=Decimal("15000.00"),
+        late_fee_applied=False,
+        late_fee_amount_charged=None,
+        overpaid_amount=None,
+        status=BillingRecordStatus.pending,
+    )
+    defaults.update(kwargs)
+    return SimpleNamespace(**defaults)
+
+
+@pytest.mark.asyncio
+class TestCreatePaymentAgainstBillingRecord:
+    async def test_partial_payment_transitions_billing_record_to_partially_paid(self, mock_db):
+        contract_id, prop_id = uuid4(), uuid4()
+        lease = SimpleNamespace(id=uuid4(), contract_id=contract_id)
+        record = _billing_record(lease_id=lease.id, amount_due=Decimal("15000.00"))
+        svc = _make_service(
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+            billing_records={record.id: record},
+            leases={lease.id: lease},
+        )
+
+        result = await svc.create_payment(
+            mock_db,
+            _payload(contract_id=contract_id, billing_record_id=record.id, amount=Decimal("5000.00")),
+            current_user=make_admin(),
+        )
+
+        assert result.billing_record_id == record.id
+        assert record.status == BillingRecordStatus.partially_paid
+        assert mock_db.commit.called
+
+    async def test_full_payment_transitions_billing_record_to_paid(self, mock_db):
+        contract_id, prop_id = uuid4(), uuid4()
+        lease = SimpleNamespace(id=uuid4(), contract_id=contract_id)
+        record = _billing_record(lease_id=lease.id, amount_due=Decimal("15000.00"))
+        svc = _make_service(
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+            billing_records={record.id: record},
+            leases={lease.id: lease},
+        )
+
+        await svc.create_payment(
+            mock_db,
+            _payload(contract_id=contract_id, billing_record_id=record.id, amount=Decimal("15000.00")),
+            current_user=make_admin(),
+        )
+
+        assert record.status == BillingRecordStatus.paid
+        assert record.overpaid_amount is None
+
+    async def test_overpayment_transitions_to_paid_and_records_excess(self, mock_db):
+        contract_id, prop_id = uuid4(), uuid4()
+        lease = SimpleNamespace(id=uuid4(), contract_id=contract_id)
+        record = _billing_record(lease_id=lease.id, amount_due=Decimal("15000.00"))
+        svc = _make_service(
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+            billing_records={record.id: record},
+            leases={lease.id: lease},
+        )
+
+        await svc.create_payment(
+            mock_db,
+            _payload(contract_id=contract_id, billing_record_id=record.id, amount=Decimal("15500.00")),
+            current_user=make_admin(),
+        )
+
+        assert record.status == BillingRecordStatus.paid
+        assert record.overpaid_amount == Decimal("500.00")
+
+    async def test_cumulative_across_multiple_payments(self, mock_db):
+        contract_id, prop_id = uuid4(), uuid4()
+        lease = SimpleNamespace(id=uuid4(), contract_id=contract_id)
+        record = _billing_record(lease_id=lease.id, amount_due=Decimal("15000.00"))
+        svc = _make_service(
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+            billing_records={record.id: record},
+            leases={lease.id: lease},
+        )
+
+        await svc.create_payment(
+            mock_db,
+            _payload(contract_id=contract_id, billing_record_id=record.id, amount=Decimal("5000.00")),
+            current_user=make_admin(),
+        )
+        assert record.status == BillingRecordStatus.partially_paid
+
+        await svc.create_payment(
+            mock_db,
+            _payload(contract_id=contract_id, billing_record_id=record.id, amount=Decimal("10000.00")),
+            current_user=make_admin(),
+        )
+        assert record.status == BillingRecordStatus.paid
+
+    async def test_voided_payments_excluded_from_cumulative(self, mock_db):
+        contract_id, prop_id = uuid4(), uuid4()
+        lease = SimpleNamespace(id=uuid4(), contract_id=contract_id)
+        record = _billing_record(lease_id=lease.id, amount_due=Decimal("15000.00"))
+        voided = SimpleNamespace(
+            id=uuid4(), contract_id=contract_id, billing_record_id=record.id, status=PaymentStatus.VOIDED
+        )
+        svc = _make_service(
+            payments={voided.id: voided},
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+            billing_records={record.id: record},
+            leases={lease.id: lease},
+        )
+
+        await svc.create_payment(
+            mock_db,
+            _payload(contract_id=contract_id, billing_record_id=record.id, amount=Decimal("5000.00")),
+            current_user=make_admin(),
+        )
+
+        assert record.status == BillingRecordStatus.partially_paid
+
+    async def test_raises_when_billing_record_does_not_exist(self, mock_db):
+        contract_id, prop_id = uuid4(), uuid4()
+        svc = _make_service(
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+
+        with pytest.raises(RelatedResourceNotFoundError):
+            await svc.create_payment(
+                mock_db,
+                _payload(contract_id=contract_id, billing_record_id=uuid4()),
+                current_user=make_admin(),
+            )
+
+    async def test_raises_when_billing_record_belongs_to_different_contract(self, mock_db):
+        contract_id, other_contract_id, prop_id = uuid4(), uuid4(), uuid4()
+        lease = SimpleNamespace(id=uuid4(), contract_id=other_contract_id)
+        record = _billing_record(lease_id=lease.id)
+        svc = _make_service(
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+            billing_records={record.id: record},
+            leases={lease.id: lease},
+        )
+
+        with pytest.raises(RelatedResourceNotFoundError):
+            await svc.create_payment(
+                mock_db,
+                _payload(contract_id=contract_id, billing_record_id=record.id),
+                current_user=make_admin(),
+            )
+
+    async def test_payment_without_billing_record_id_is_unaffected(self, mock_db):
+        """Regression: today's contract-only flow keeps working unchanged."""
+        contract_id, prop_id = uuid4(), uuid4()
+        svc = _make_service(
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+
+        result = await svc.create_payment(mock_db, _payload(contract_id=contract_id), current_user=make_admin())
+
+        assert result.billing_record_id is None
+        assert mock_db.commit.called
 
 
 # ─── update_payment ──────────────────────────────────────────────────────────

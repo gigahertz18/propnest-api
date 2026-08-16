@@ -51,6 +51,7 @@ class BillingRecordResponse(BillingRecordBase, BaseResponse):
     """Returned to the client — includes DB-generated fields."""
 
     id: uuid.UUID
+    overpaid_amount: Decimal | None = None
     created_at: datetime
     updated_at: datetime
 

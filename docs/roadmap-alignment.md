@@ -25,7 +25,7 @@ Introduce long-term-specific billing terms without overloading neutral `Contract
 
 Make recurring long-term billing explicit and idempotent.
 
-### Payment ↔ Billing
+### Payment ↔ Billing — done
 
 Reconcile payments against individual billing records and support partial/full/overpayment semantics.
 

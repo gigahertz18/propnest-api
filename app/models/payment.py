@@ -31,6 +31,12 @@ class Payment(Base, TimestampMixin):
 
     contract_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("contracts.id"), index=True)
 
+    # Additive to contract_id, not a replacement — see PaymentRepository's
+    # manager-scoping join, which still resolves through contract_id.
+    billing_record_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("billing_records.id"), nullable=True, index=True
+    )
+
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
 
     paid_at: Mapped[datetime] = mapped_column(

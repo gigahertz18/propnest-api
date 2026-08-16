@@ -57,14 +57,21 @@ Delivered:
 - late-fee handling on crossing into overdue, per the lease's grace period and late-fee terms
 - manual trigger only — both generation and overdue evaluation are explicit calls, no scheduling/cron
 
-Not yet delivered (deferred to `Payments ↔ Billing` below):
+### Payments ↔ Billing — done
 
-- explicit link between Payment and Billing Record
-- support for partial/full/overpayment cases
+Payment recording updates the associated billing record based on cumulative payment
+state:
 
-### Payments ↔ Billing
-
-Payment recording must update the associated billing record based on cumulative payment state.
+- `Payment.billing_record_id` — nullable, additive to `contract_id` (a payment can
+  optionally link to a specific `BillingRecord`; the contract-only flow still works
+  unchanged for payments that don't).
+- `PaymentService.create_payment` validates the referenced billing record belongs to
+  the same contract (via its Lease) before recording the payment.
+- `LeaseBillingService.apply_payment` recomputes the record's status from the sum of
+  its non-voided payments against `amount_due + late_fee_amount_charged`, transitioning
+  to `partially_paid`/`paid` per the existing state machine.
+- Overpayment isn't rejected: the record still resolves to `paid`, with the excess
+  tracked on `BillingRecord.overpaid_amount` for later Dashboard/Accounting use.
 
 ### Immutable Receipts
 

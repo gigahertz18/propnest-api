@@ -69,6 +69,12 @@ class BillingRecord(Base, TimestampMixin):
     late_fee_applied: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
     late_fee_amount_charged: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
 
+    # Set by `LeaseBillingService.apply_payment` when cumulative payments
+    # exceed `amount_due + late_fee_amount_charged` — the record still
+    # transitions to `paid` rather than rejecting the payment; this is
+    # where the excess is surfaced for later Dashboard/Accounting use.
+    overpaid_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+
     status: Mapped[BillingRecordStatus] = mapped_column(
         Enum(BillingRecordStatus, name="billing_record_status_enum"),
         nullable=False,
@@ -82,6 +88,10 @@ class BillingRecord(Base, TimestampMixin):
         CheckConstraint(
             "late_fee_amount_charged IS NULL OR late_fee_amount_charged > 0",
             name="ck_billing_record_late_fee_amount_positive",
+        ),
+        CheckConstraint(
+            "overpaid_amount IS NULL OR overpaid_amount > 0",
+            name="ck_billing_record_overpaid_amount_positive",
         ),
         CheckConstraint(
             "(late_fee_applied = false AND late_fee_amount_charged IS NULL) "

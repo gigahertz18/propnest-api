@@ -164,6 +164,37 @@ class LeaseBillingService(ResourceAuthorizationMixin):
         await db.commit()
         return record
 
+    def apply_payment(self, record: BillingRecord, cumulative_paid: Decimal) -> BillingRecord:
+        """
+        Recompute `record`'s status from the cumulative (non-voided) amount
+        paid against it so far, per the state machine above.
+
+        `record.late_fee_amount_charged`, once applied, counts toward the
+        total owed — a tenant who's only paid `amount_due` on a record with
+        an applied late fee is still `partially_paid`, not `paid`.
+
+        Overpayment doesn't get rejected: it still resolves to `paid`, with
+        the excess tracked on `overpaid_amount` for the Dashboard/Accounting
+        modules rather than silently absorbed. No-ops on terminal statuses
+        (`paid`, `written_off`) — a payment against an already-terminal
+        record still doesn't resurrect it, but a further overpayment on an
+        already-`paid` record still updates `overpaid_amount`.
+        """
+        total_due = record.amount_due + (record.late_fee_amount_charged or Decimal("0"))
+        excess = cumulative_paid - total_due
+
+        if record.status not in (BillingRecordStatus.paid, BillingRecordStatus.written_off):
+            target_status = (
+                BillingRecordStatus.paid if cumulative_paid >= total_due else BillingRecordStatus.partially_paid
+            )
+            if target_status != record.status:
+                self._transition(record, target_status)
+
+        if record.status == BillingRecordStatus.paid:
+            record.overpaid_amount = excess if excess > 0 else None
+
+        return record
+
     @staticmethod
     def _raise_if_already_generated_conflict(e: IntegrityError) -> None:
         """
