@@ -16,6 +16,8 @@ from tests.factories import (
     make_tenant_model,
     make_contract_model,
     make_manager_model,
+    make_lease_model,
+    make_billing_record_model,
 )
 
 # ─── Shared fixtures ──────────────────────────────────────────────────────────
@@ -49,6 +51,18 @@ async def contract(db, property_, tenant):
 async def payment(db, contract):
     """A single payment ready to use in tests."""
     return await make_payment_model(db, contract.id)
+
+
+@pytest_asyncio.fixture
+async def lease(db, contract):
+    """A persisted Lease for FK references."""
+    return await make_lease_model(db, contract.id)
+
+
+@pytest_asyncio.fixture
+async def billing_record(db, lease):
+    """A persisted BillingRecord for FK references."""
+    return await make_billing_record_model(db, lease.id)
 
 
 # ─── get_all ──────────────────────────────────────────────────────────────────
@@ -279,6 +293,29 @@ class TestPaymentRepositoryGetByStatus:
     async def test_returns_empty_list_when_no_matching_status(self, db, contract):
         await make_payment_model(db, contract.id, status="PAID")
         result = await payment_repo.get_by_status(db, "REFUNDED")
+        assert result == []
+
+
+# ─── get_by_billing_record ────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+class TestPaymentRepositoryGetByBillingRecord:
+    async def test_returns_payments_for_billing_record(self, db, contract, billing_record):
+        await make_payment_model(db, contract.id, billing_record_id=billing_record.id)
+        await make_payment_model(db, contract.id, billing_record_id=billing_record.id, status="PENDING")
+        await make_payment_model(db, contract.id)
+
+        result = await payment_repo.get_by_billing_record(db, billing_record.id)
+        assert len(result) == 2
+        assert all(p.billing_record_id == billing_record.id for p in result)
+
+    async def test_returns_empty_list_when_no_payments_for_billing_record(self, db, billing_record):
+        result = await payment_repo.get_by_billing_record(db, billing_record.id)
+        assert result == []
+
+    async def test_returns_empty_list_for_nonexistent_billing_record_id(self, db):
+        result = await payment_repo.get_by_billing_record(db, uuid.uuid4())
         assert result == []
 
 

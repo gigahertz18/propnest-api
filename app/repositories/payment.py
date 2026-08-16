@@ -33,6 +33,14 @@ class PaymentRepository(BaseRepository[Payment, PaymentCreate, PaymentUpdate]):
         """Return all payments with a given status (e.g. PAID, PENDING)."""
         return await self._all(db, self.model.status == status)
 
+    async def get_by_billing_record(
+        self,
+        db: AsyncSession,
+        billing_record_id: uuid.UUID,
+    ) -> Sequence[Payment]:
+        """Return all payments linked to a given billing record."""
+        return await self._all(db, self.model.billing_record_id == billing_record_id)
+
     async def get_all_for_manager(
         self,
         db: AsyncSession,

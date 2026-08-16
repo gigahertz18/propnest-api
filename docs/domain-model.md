@@ -114,6 +114,7 @@ The `Payment` model supports:
 - `reference_number` (nullable) — cross-references the transaction on the provider side (bank transfer/GCash/Maya/check)
 - `payment_method` including `check` alongside cash/bank transfer/gcash/maya
 - a real `PaymentStatus` lifecycle: `PAID`, `PENDING`, `VOIDED`, `REFUNDED`
+- `billing_record_id` (nullable) — additive to the required `contract_id`, not a replacement; a payment may optionally link to a specific `BillingRecord`. `PaymentService.create_payment` validates the billing record belongs to the same contract (via its Lease) before recording, then reconciles cumulative non-voided payments into the record's status via `LeaseBillingService.apply_payment` (see §31)
 
 Corrections use an append-only model rather than in-place mutation, since a receipt may already reference a payment's id:
 
@@ -194,10 +195,11 @@ The model tracks:
 - `period_start` / `period_end` / `due_date` — the latter clamped to the lease's `due_day`, or the last day of the period's month if `due_day` overflows it
 - `amount_due` — a snapshot of `Lease.monthly_rent` at generation time, so a later rent change doesn't rewrite billing history
 - `late_fee_applied` / `late_fee_amount_charged` — set once `LeaseBillingService.evaluate_overdue` determines the record has passed `due_date + Lease.grace_period_days`, computed from whichever of `Lease.late_fee_amount`/`late_fee_percent` is set
+- `overpaid_amount` (nullable) — set by `LeaseBillingService.apply_payment` when cumulative non-voided payments exceed `amount_due + late_fee_amount_charged`; the record still resolves to `paid` rather than rejecting the payment, with the excess surfaced here for later Dashboard/Accounting use
 
 Status is a native-enum state machine — a freshly generated record starts `pending`, then moves to `partially_paid`, `paid`, or `overdue`; `partially_paid`/`overdue` can each still reach `paid` or `written_off` — with transitions validated against an explicit table in the service; an invalid transition raises rather than silently succeeding.
 
-`BillingRecord` deliberately has no `payment_id`/`amount_paid` field — reconciling payments against a billing record's balance is `Payment ↔ Billing`'s job (see `roadmap-alignment.md`), not this entity's. This is long-term-lease-specific by design, mirroring `Lease` itself: a future short-term booking-billing model is expected to be its own entity, not a `rental_type` branch grafted onto this one.
+`BillingRecord` deliberately has no `payment_id`/`amount_paid` field — it doesn't track its own paid-to-date total. Instead, `Payment.billing_record_id` (nullable, see §26) links payments to it, and `PaymentService.create_payment` sums the linked non-voided payments and calls `LeaseBillingService.apply_payment` to reconcile that sum into this record's `status`/`overpaid_amount` — the `Payment ↔ Billing` roadmap item (see `roadmap-alignment.md`) is implemented. This is long-term-lease-specific by design, mirroring `Lease` itself: a future short-term booking-billing model is expected to be its own entity, not a `rental_type` branch grafted onto this one.
 
 `POST /api/v1/billing-records/generate` and `POST /api/v1/billing-records/{id}/evaluate-overdue` are both manager-or-above gated, following the same ownership-scoping pattern as Lease (authorized via the lease's contract's property).
 

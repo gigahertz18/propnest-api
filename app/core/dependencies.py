@@ -228,6 +228,9 @@ def get_payment_service() -> PaymentService:
         payment_repo=payment_repo,
         contract_repo=contract_repo,
         property_repo=property_repo,
+        billing_record_repo=billing_record_repo,
+        lease_repo=lease_repo,
+        lease_billing_service=get_lease_billing_service(),
     )
 
 

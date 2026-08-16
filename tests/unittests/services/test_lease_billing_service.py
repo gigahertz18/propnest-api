@@ -51,6 +51,7 @@ def _billing_record(**kwargs):
         amount_due=Decimal("15000.00"),
         late_fee_applied=False,
         late_fee_amount_charged=None,
+        overpaid_amount=None,
         status=BillingRecordStatus.pending,
     )
     defaults.update(kwargs)
@@ -457,3 +458,80 @@ class TestEvaluateOverdue:
 
         with pytest.raises(BillingRecordForbiddenError):
             await svc.evaluate_overdue(mock_db, record.id, current_user=make_manager())
+
+
+# ─── apply_payment ────────────────────────────────────────────────────────────
+
+
+class TestApplyPayment:
+    def test_partial_cumulative_transitions_pending_to_partially_paid(self):
+        svc = _make_service()
+        record = _billing_record(amount_due=Decimal("15000.00"), status=BillingRecordStatus.pending)
+
+        svc.apply_payment(record, Decimal("5000.00"))
+
+        assert record.status == BillingRecordStatus.partially_paid
+        assert record.overpaid_amount is None
+
+    def test_exact_cumulative_transitions_to_paid(self):
+        svc = _make_service()
+        record = _billing_record(amount_due=Decimal("15000.00"), status=BillingRecordStatus.pending)
+
+        svc.apply_payment(record, Decimal("15000.00"))
+
+        assert record.status == BillingRecordStatus.paid
+        assert record.overpaid_amount is None
+
+    def test_overpayment_transitions_to_paid_and_records_excess(self):
+        svc = _make_service()
+        record = _billing_record(amount_due=Decimal("15000.00"), status=BillingRecordStatus.pending)
+
+        svc.apply_payment(record, Decimal("15500.00"))
+
+        assert record.status == BillingRecordStatus.paid
+        assert record.overpaid_amount == Decimal("500.00")
+
+    def test_amount_due_includes_late_fee_when_present(self):
+        """A record with an applied late fee isn't 'paid' until amount_due
+        + late_fee_amount_charged is covered."""
+        svc = _make_service()
+        record = _billing_record(
+            amount_due=Decimal("15000.00"),
+            status=BillingRecordStatus.overdue,
+            late_fee_applied=True,
+            late_fee_amount_charged=Decimal("500.00"),
+        )
+
+        svc.apply_payment(record, Decimal("15000.00"))
+        assert record.status == BillingRecordStatus.partially_paid
+
+        svc.apply_payment(record, Decimal("15500.00"))
+        assert record.status == BillingRecordStatus.paid
+        assert record.overpaid_amount is None
+
+    def test_further_payment_after_paid_increases_overpaid_amount(self):
+        svc = _make_service()
+        record = _billing_record(amount_due=Decimal("15000.00"), status=BillingRecordStatus.paid)
+
+        svc.apply_payment(record, Decimal("15200.00"))
+
+        assert record.status == BillingRecordStatus.paid
+        assert record.overpaid_amount == Decimal("200.00")
+
+    def test_overdue_to_partially_paid_is_a_valid_transition(self):
+        svc = _make_service()
+        record = _billing_record(amount_due=Decimal("15000.00"), status=BillingRecordStatus.overdue)
+
+        svc.apply_payment(record, Decimal("5000.00"))
+
+        assert record.status == BillingRecordStatus.partially_paid
+
+    def test_written_off_does_not_transition(self):
+        """written_off is terminal — a stray payment against it shouldn't
+        resurrect the record into partially_paid/paid."""
+        svc = _make_service()
+        record = _billing_record(amount_due=Decimal("15000.00"), status=BillingRecordStatus.written_off)
+
+        svc.apply_payment(record, Decimal("15000.00"))
+
+        assert record.status == BillingRecordStatus.written_off

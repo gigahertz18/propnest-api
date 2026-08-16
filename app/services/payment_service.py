@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from decimal import Decimal
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,7 +10,9 @@ from app.models.audit_log import AuditAction
 from app.models.contract import Contract
 from app.models.payment import Payment, PaymentStatus
 from app.models.user import User
+from app.repositories.billing_record import BillingRecordRepository
 from app.repositories.contract import ContractRepository
+from app.repositories.lease import LeaseRepository
 from app.repositories.payment import PaymentRepository
 from app.repositories.property import PropertyRepository
 from app.schemas.base import PaginatedResponse
@@ -21,6 +24,7 @@ from app.services.exceptions import (
     PaymentForbiddenError,
     RelatedResourceNotFoundError,
 )
+from app.services.lease_billing_service import LeaseBillingService
 
 
 @dataclass(frozen=True)
@@ -46,10 +50,16 @@ class PaymentService(ResourceAuthorizationMixin):
         payment_repo: PaymentRepository,
         contract_repo: ContractRepository | None = None,
         property_repo: PropertyRepository | None = None,
+        billing_record_repo: BillingRecordRepository | None = None,
+        lease_repo: LeaseRepository | None = None,
+        lease_billing_service: LeaseBillingService | None = None,
     ) -> None:
         self.payment_repo = payment_repo
         self.contract_repo = contract_repo
         self.property_repo = property_repo
+        self.billing_record_repo = billing_record_repo
+        self.lease_repo = lease_repo
+        self.lease_billing_service = lease_billing_service
 
     async def list_payments(
         self,
@@ -90,12 +100,45 @@ class PaymentService(ResourceAuthorizationMixin):
             contract_id=payload.contract_id,
         )
 
+        billing_record = None
+        if payload.billing_record_id is not None:
+            billing_record = await self._get_billing_record_for_contract(db, payload.billing_record_id, ctx.contract_id)
+
         resolved_payload = payload.model_copy(update={"contract_id": ctx.contract_id})
 
         payment = await self.payment_repo.create(db, resolved_payload)
         write_audit_log(db, current_user, AuditAction.CREATE, "Payment", payment.id)
+
+        if billing_record is not None:
+            await self._apply_payment_to_billing_record(db, billing_record)
+
         await db.commit()
         return payment
+
+    async def _get_billing_record_for_contract(self, db: AsyncSession, billing_record_id: UUID, contract_id: UUID):
+        billing_record = await self.billing_record_repo.get_by_id(db, billing_record_id)
+        if billing_record is None:
+            raise RelatedResourceNotFoundError(f"BillingRecord {billing_record_id} not found.")
+
+        lease = await self.lease_repo.get_by_id(db, billing_record.lease_id)
+        if lease is None:
+            raise RelatedResourceNotFoundError(f"Lease {billing_record.lease_id} not found.")
+
+        if lease.contract_id != contract_id:
+            raise RelatedResourceNotFoundError(
+                f"BillingRecord {billing_record_id} does not belong to contract {contract_id}."
+            )
+
+        return billing_record
+
+    async def _apply_payment_to_billing_record(self, db: AsyncSession, billing_record) -> None:
+        payments = await self.payment_repo.get_by_billing_record(db, billing_record.id)
+        cumulative_paid = sum(
+            (p.amount for p in payments if p.status != PaymentStatus.VOIDED),
+            start=Decimal("0"),
+        )
+        self.lease_billing_service.apply_payment(billing_record, cumulative_paid)
+        await db.flush()
 
     async def update_payment(
         self,
