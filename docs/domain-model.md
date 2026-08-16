@@ -176,6 +176,34 @@ Audit rows are written via a shared `write_audit_log()` helper, called explicitl
 ---
 
 
+## 31. Billing Records
+
+`BillingRecord` is the recurring-billing engine for long-term leases: one row per `Lease` per billing period, generated manually (no scheduling/cron) by `LeaseBillingService`.
+
+```text
+LeaseBillingService.generate_billing_record
+    |
+    +--> BillingRecord created and left in status = pending
+    |
+    +--> unique (lease_id, period_start) constraint makes re-generation for an
+         already-billed period a no-op-safe, catchable error rather than a duplicate
+```
+
+The model tracks:
+
+- `period_start` / `period_end` / `due_date` — the latter clamped to the lease's `due_day`, or the last day of the period's month if `due_day` overflows it
+- `amount_due` — a snapshot of `Lease.monthly_rent` at generation time, so a later rent change doesn't rewrite billing history
+- `late_fee_applied` / `late_fee_amount_charged` — set once `LeaseBillingService.evaluate_overdue` determines the record has passed `due_date + Lease.grace_period_days`, computed from whichever of `Lease.late_fee_amount`/`late_fee_percent` is set
+
+Status is a native-enum state machine — a freshly generated record starts `pending`, then moves to `partially_paid`, `paid`, or `overdue`; `partially_paid`/`overdue` can each still reach `paid` or `written_off` — with transitions validated against an explicit table in the service; an invalid transition raises rather than silently succeeding.
+
+`BillingRecord` deliberately has no `payment_id`/`amount_paid` field — reconciling payments against a billing record's balance is `Payment ↔ Billing`'s job (see `roadmap-alignment.md`), not this entity's. This is long-term-lease-specific by design, mirroring `Lease` itself: a future short-term booking-billing model is expected to be its own entity, not a `rental_type` branch grafted onto this one.
+
+`POST /api/v1/billing-records/generate` and `POST /api/v1/billing-records/{id}/evaluate-overdue` are both manager-or-above gated, following the same ownership-scoping pattern as Lease (authorized via the lease's contract's property).
+
+---
+
+
 ## 12. Document Architecture
 
 Documents are both:

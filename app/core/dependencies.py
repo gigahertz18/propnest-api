@@ -18,6 +18,7 @@ from app.models.user import User, UserRole
 from app.repositories.ip_rate_limit import IpRateLimitRepository
 from app.repositories.login_attempt import LoginAttemptRepository
 from app.repositories.audit_log import audit_log_repo
+from app.repositories.billing_record import billing_record_repo
 from app.repositories.collection import collection_repo
 from app.repositories.contract import contract_repo
 from app.repositories.document import document_repo
@@ -32,6 +33,7 @@ from app.services.auth_service import AuthService
 from app.services.collection_service import CollectionService
 from app.services.contract_service import ContractService
 from app.services.document_service import DocumentService
+from app.services.lease_billing_service import LeaseBillingService
 from app.services.lease_service import LeaseService
 from app.services.notification_service import LoggingNotificationChannel, NotificationService
 from app.services.payment_service import PaymentService
@@ -239,6 +241,15 @@ def get_collection_service() -> CollectionService:
 
 def get_lease_service() -> LeaseService:
     return LeaseService(
+        lease_repo=lease_repo,
+        contract_repo=contract_repo,
+        property_repo=property_repo,
+    )
+
+
+def get_lease_billing_service() -> LeaseBillingService:
+    return LeaseBillingService(
+        billing_record_repo=billing_record_repo,
         lease_repo=lease_repo,
         contract_repo=contract_repo,
         property_repo=property_repo,

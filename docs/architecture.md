@@ -86,6 +86,7 @@ TenantService
 ContractService
 DocumentService
 UserService
+LeaseBillingService
 ```
 
 Services should express **why** an operation is allowed and **what business sequence** must occur.
@@ -129,6 +130,7 @@ Document
 Collection
 Payment
 AuditLog
+BillingRecord
 ```
 
 Models should describe persistence concerns:

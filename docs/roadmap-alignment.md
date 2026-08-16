@@ -21,7 +21,7 @@ Audit logging should be transactionally coupled to mutations, and Notifications 
 
 Introduce long-term-specific billing terms without overloading neutral `Contract`.
 
-### Billing
+### Billing — done (generation + overdue evaluation; manual trigger only)
 
 Make recurring long-term billing explicit and idempotent.
 

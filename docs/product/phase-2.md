@@ -46,16 +46,19 @@ Important fields include:
 
 A Lease must only attach to a long-term Contract, enforced by `LeaseService` (not a DB constraint).
 
-### Recurring Billing
+### Recurring Billing — done (generation + overdue evaluation)
 
 Build the monthly billing engine around active long-term leases.
 
-Important requirements:
+Delivered:
 
-- billing state machine
-- idempotent generation
-- late-fee handling
-- manual trigger initially
+- billing state machine (`pending → generated → partially_paid/overdue → paid/written_off`), enforced via an explicit transition table
+- idempotent generation, guarded by a DB uniqueness constraint on lease + billing period
+- late-fee handling on crossing into overdue, per the lease's grace period and late-fee terms
+- manual trigger only — both generation and overdue evaluation are explicit calls, no scheduling/cron
+
+Not yet delivered (deferred to `Payments ↔ Billing` below):
+
 - explicit link between Payment and Billing Record
 - support for partial/full/overpayment cases
 

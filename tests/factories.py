@@ -1,9 +1,10 @@
 import uuid
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from app.core.security import hash_password
+from app.models.billing_record import BillingRecord, BillingRecordStatus
 from app.models.collection import Collection
 from app.models.contract import Contract, RentalType as ContractRentalType
 from app.models.document import Document
@@ -368,6 +369,52 @@ async def make_lease_model(db, contract_id: uuid.UUID, **kwargs) -> Lease:
     """
     data = make_lease(contract_id=contract_id, **kwargs)
     obj = Lease(id=uuid.uuid4(), **data)
+    db.add(obj)
+    await db.flush()
+    await db.refresh(obj)
+    return obj
+
+
+# ─── BillingRecord ────────────────────────────────────────────────────────────
+
+
+def make_billing_record(
+    lease_id: uuid.UUID | None = None,
+    period_start: date | None = None,
+    period_end: date | None = None,
+    due_date: date | None = None,
+    amount_due: float = 15000.00,
+    late_fee_applied: bool = False,
+    late_fee_amount_charged: float | None = None,
+    status: str = BillingRecordStatus.pending.value,
+) -> dict:
+    """Returns a dict matching BillingRecordCreate schema."""
+    _period_start = period_start or date.today().replace(day=1)
+    _period_end = period_end or (
+        date(_period_start.year, _period_start.month + 1, 1) - timedelta(days=1)
+        if _period_start.month < 12
+        else date(_period_start.year, 12, 31)
+    )
+    _due_date = due_date or _period_start.replace(day=min(5, _period_end.day))
+    return {
+        "lease_id": lease_id,
+        "period_start": _period_start,
+        "period_end": _period_end,
+        "due_date": _due_date,
+        "amount_due": amount_due,
+        "late_fee_applied": late_fee_applied,
+        "late_fee_amount_charged": late_fee_amount_charged,
+        "status": status,
+    }
+
+
+async def make_billing_record_model(db, lease_id: uuid.UUID, **kwargs) -> BillingRecord:
+    """
+    Creates and persists a BillingRecord directly in the test DB.
+    Requires a pre-existing lease id (FK constraint).
+    """
+    data = make_billing_record(lease_id=lease_id, **kwargs)
+    obj = BillingRecord(id=uuid.uuid4(), **data)
     db.add(obj)
     await db.flush()
     await db.refresh(obj)

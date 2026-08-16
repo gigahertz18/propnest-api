@@ -12,7 +12,7 @@ The backend GitHub issue set is the source of truth for this repository's produc
 ## Phase 2
 
 - Lease — done
-- Recurring Billing
+- Recurring Billing — done
 - Payment ↔ Billing
 - immutable Receipts
 - Landlord Dashboard

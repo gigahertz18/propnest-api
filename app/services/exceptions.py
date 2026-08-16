@@ -329,3 +329,28 @@ class ManagerAssignedToPropertyError(ServiceException):
     on one or more properties."""
 
     pass
+
+
+# ─── Billing ─────────────────────────────────────────────────────────────────
+class BillingRecordForbiddenError(ResourceForbiddenError):
+    """Raised when a billing-record operation is attempted by a manager who
+    doesn't own the property tied to the underlying lease's contract."""
+
+    pass
+
+
+class BillingRecordAlreadyGeneratedError(ServiceException):
+    """Raised when `generate_billing_record` is called for a lease_id +
+    period_start that already has a BillingRecord — translated from a
+    uq_billing_record_lease_id_period_start IntegrityError. Expected and
+    non-exceptional: callers (routes, or a future scheduling job) should
+    catch and log this rather than treat it as a bug."""
+
+    pass
+
+
+class InvalidBillingRecordTransitionError(ServiceException):
+    """Raised when a BillingRecord status transition isn't permitted by
+    LeaseBillingService._VALID_TRANSITIONS (e.g. paid -> generated)."""
+
+    pass
