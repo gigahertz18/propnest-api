@@ -208,6 +208,13 @@ class TenantForbiddenError(ResourceForbiddenError):
     pass
 
 
+class ActivityFeedForbiddenError(ResourceForbiddenError):
+    """Raised when a property's activity feed is requested by a manager who
+    doesn't own that property."""
+
+    pass
+
+
 class DocumentValidationError(ServiceException):
     """Raised when a document validation fails"""
 
