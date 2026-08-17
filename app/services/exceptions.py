@@ -354,3 +354,45 @@ class InvalidBillingRecordTransitionError(ServiceException):
     LeaseBillingService._VALID_TRANSITIONS (e.g. paid -> generated)."""
 
     pass
+
+
+# ─── Receipt ──────────────────────────────────────────────────────────────────
+class ReceiptForbiddenError(ResourceForbiddenError):
+    """Raised when a receipt operation is attempted by a manager who doesn't
+    own the property tied to the underlying payment's contract."""
+
+    pass
+
+
+class ReceiptCreationError(ServiceException):
+    """Raised when the Document backing a receipt was created and committed,
+    but writing the Receipt row that references it afterward failed. The
+    Document is left in place as an orphan (logged for manual reconciliation)
+    rather than retried automatically or deleted — mirrors
+    DocumentStorageInconsistentError's "log and allow manual cleanup"
+    precedent."""
+
+    pass
+
+
+# ─── Receipt Template ─────────────────────────────────────────────────────────
+class ReceiptTemplateForbiddenError(ResourceForbiddenError):
+    """Raised when a receipt-template operation is attempted by a manager who
+    doesn't own the template's property, or by anyone below ADMIN for the
+    global (property_id=None) template."""
+
+    pass
+
+
+class ReceiptTemplateUploadError(ServiceException):
+    """Raised when storing an uploaded receipt template fails due to
+    external storage errors."""
+
+    pass
+
+
+class ReceiptTemplateValidationError(ServiceException):
+    """Raised when an uploaded receipt template fails content validation
+    (not valid UTF-8 HTML, too large, etc.)."""
+
+    pass

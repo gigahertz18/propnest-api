@@ -8,6 +8,8 @@ from app.models.collection import Collection
 from app.models.audit_log import AuditLog, AuditAction
 from app.models.lease import Lease, BillingCycle, RenewalOption, LeaseStatus
 from app.models.billing_record import BillingRecord, BillingRecordStatus
+from app.models.receipt import Receipt
+from app.models.receipt_template import ReceiptTemplate
 
 __all__ = [
     "Property",
@@ -28,4 +30,6 @@ __all__ = [
     "LeaseStatus",
     "BillingRecord",
     "BillingRecordStatus",
+    "Receipt",
+    "ReceiptTemplate",
 ]

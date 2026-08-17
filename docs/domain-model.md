@@ -206,6 +206,69 @@ Status is a native-enum state machine — a freshly generated record starts `pen
 ---
 
 
+## 32. Receipts
+
+`Receipt` is the append-only issuance record for a payment's PDF receipt — the `receipt-engine-pdf-immutable` roadmap item (see `roadmap-alignment.md`) is implemented.
+
+```text
+POST /payments/{payment_id}/receipts
+    |
+    +--> ReceiptService.issue_receipt
+             |
+             +--> receipt_number allocated from a Postgres Identity sequence (nextval)
+             |
+             +--> template HTML resolved: property's active ReceiptTemplate, else the
+             |    active global ReceiptTemplate, else the built-in default (see below)
+             |
+             +--> PDF rendered via Jinja2 + WeasyPrint (app/services/receipt_pdf.py)
+             |
+             +--> DocumentService.create_document stores the PDF (reuses the existing
+             |    MinIO-backed Document pattern, linked via contract_id)
+             |
+             +--> Receipt row created: payment_id (FK, not unique) + document_id (FK, unique)
+```
+
+The model tracks:
+
+- `receipt_number` — a Postgres `Identity` column (unique, indexed), not an app-level `max()+1` — race-safe under concurrent payment recording since Postgres allocates sequence values atomically outside row locks. A global sequence, not per-property/per-year, matching the roadmap's beta-scale simplification.
+- `payment_id` (FK, **not** unique) — multiple `Receipt` rows may reference the same payment; that's the whole point of reprints.
+- `document_id` (FK, **unique**) — each `Receipt` owns exactly one generated PDF `Document`; a reprint always renders and stores a brand-new `Document`, never re-links an existing one.
+
+Reprinting a receipt is not a separate endpoint — calling `POST /payments/{payment_id}/receipts` again for the same payment is the reprint: it creates a new `Receipt` + new `Document` row, and never mutates or re-renders the original. `Receipt` has no update path (no `ReceiptUpdate` schema, no `PATCH` route) — it's immutable by construction, matching the append-only correction model already established for `Payment` (see §26).
+
+Receipt issuance is decoupled from `PaymentService.create_payment`'s own transaction: `POST /payments/` calls `payment_service.create_payment` (which commits), then separately calls `receipt_service.issue_receipt` in the same request. If receipt issuance fails after the payment already committed, the payment response still succeeds — the failure is logged, and a client can retry by calling `POST /payments/{payment_id}/receipts` again.
+
+### Receipt Templates
+
+`ReceiptTemplate` lets an admin or property manager customize the HTML/CSS behind a receipt's PDF, per property, with a global fallback — instead of every receipt using one hardcoded layout.
+
+```text
+POST /receipt-templates/            (multipart: name, property_id?, file)
+    |
+    +--> ReceiptTemplateService.upload_template
+             |
+             +--> HTML stored directly via the MinIO client (NOT through DocumentService/
+             |    the generic Document model — its MIME allowlist is sniffed from binary
+             |    magic bytes with no equivalent signature for arbitrary HTML, and mixing
+             |    print templates into the general Documents listing isn't desirable)
+             |
+             +--> ReceiptTemplate row created with is_active=false
+
+POST /receipt-templates/{id}/activate
+    |
+    +--> deactivates whichever template was previously active in the same scope
+    |    (that property, or the global default), then activates this one
+```
+
+- `property_id` (nullable FK) — `NULL` means the global default template; a specific property_id scopes it to that property only.
+- `is_active` — at most one active row per scope, enforced by a partial unique index (`uq_active_receipt_template_scope`) on `COALESCE(property_id, <sentinel-uuid>)` filtered to `is_active = true` — a plain unique index on `property_id` can't cover the global case, since Postgres treats multiple `NULL`s as distinct.
+- Managing a property-scoped template requires owning that property (or ADMIN); managing the global template is ADMIN-only.
+- `ReceiptService.issue_receipt` resolves which template to render with: the payment's property's active template, falling back to the active global template, falling back to the built-in file at `templates/receipt/default.html` (a repo-root-level directory, alongside `alembic/`/`scripts/`/`docs/` — organized for future default templates beyond receipts) if neither exists yet.
+- Templates use Jinja2 placeholders (`{{ receipt_number }}`, `{{ property_name }}`, `{{ tenant_name }}`, `{{ amount }}`, `{{ paid_at }}`, `{{ payment_method }}`, `{{ reference_number }}`), autoescaped. `render_receipt_pdf` renders through WeasyPrint with a locked-down `url_fetcher` that refuses any `http(s)`/`file`/`ftp` resource fetch — a manager-uploaded template can't be used for SSRF or local-file reads via an `<img src="...">`; only inline `data:` URIs (e.g. a base64 logo) work for embedded images.
+
+---
+
+
 ## 12. Document Architecture
 
 Documents are both:

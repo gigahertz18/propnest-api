@@ -25,6 +25,8 @@ from app.repositories.document import document_repo
 from app.repositories.lease import lease_repo
 from app.repositories.property import property_repo
 from app.repositories.payment import payment_repo
+from app.repositories.receipt import receipt_repo
+from app.repositories.receipt_template import receipt_template_repo
 from app.repositories.tenant import tenant_repo
 from app.repositories.user import user_repo
 
@@ -38,6 +40,8 @@ from app.services.lease_service import LeaseService
 from app.services.notification_service import LoggingNotificationChannel, NotificationService
 from app.services.payment_service import PaymentService
 from app.services.property_service import PropertyService
+from app.services.receipt_service import ReceiptService
+from app.services.receipt_template_service import ReceiptTemplateService
 from app.services.tenant_service import TenantService
 from app.services.user_service import UserService
 
@@ -231,6 +235,25 @@ def get_payment_service() -> PaymentService:
         billing_record_repo=billing_record_repo,
         lease_repo=lease_repo,
         lease_billing_service=get_lease_billing_service(),
+    )
+
+
+def get_receipt_template_service() -> ReceiptTemplateService:
+    return ReceiptTemplateService(
+        receipt_template_repo=receipt_template_repo,
+        property_repo=property_repo,
+    )
+
+
+def get_receipt_service() -> ReceiptService:
+    return ReceiptService(
+        receipt_repo=receipt_repo,
+        payment_repo=payment_repo,
+        document_service=get_document_service(),
+        contract_repo=contract_repo,
+        property_repo=property_repo,
+        tenant_repo=tenant_repo,
+        receipt_template_service=get_receipt_template_service(),
     )
 
 

@@ -1,0 +1,22 @@
+<html>
+<head>
+<style>
+  body { font-family: sans-serif; padding: 48px; color: #111; }
+  h1 { font-size: 20px; margin-bottom: 24px; }
+  table { border-collapse: collapse; width: 100%; }
+  td { padding: 6px 0; vertical-align: top; }
+  td.label { color: #555; width: 160px; }
+</style>
+</head>
+<body>
+  <h1>Receipt #{{ receipt_number }}</h1>
+  <table>
+    <tr><td class="label">Property</td><td>{{ property_name }}</td></tr>
+    <tr><td class="label">Tenant</td><td>{{ tenant_name }}</td></tr>
+    <tr><td class="label">Amount</td><td>{{ amount }}</td></tr>
+    <tr><td class="label">Paid at</td><td>{{ paid_at }}</td></tr>
+    <tr><td class="label">Payment method</td><td>{{ payment_method }}</td></tr>
+    <tr><td class="label">Reference #</td><td>{{ reference_number }}</td></tr>
+  </table>
+</body>
+</html>
