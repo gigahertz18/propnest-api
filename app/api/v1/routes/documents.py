@@ -31,6 +31,7 @@ async def list_documents(
     document_service: DocumentService = Depends(get_document_service),
     current_user: User = Depends(require_manager_or_above),
 ):
+    """List documents."""
     return await document_service.list_documents(db, current_user, skip=skip, limit=limit)
 
 
@@ -44,6 +45,7 @@ async def get_document(
     document_service: DocumentService = Depends(get_document_service),
     current_user: User = Depends(require_manager_or_above),
 ):
+    """Get a single document by ID."""
     return await document_service.get_document(db, document_id, current_user)
 
 
@@ -58,6 +60,7 @@ async def create_document(
     current_user: object = Depends(require_manager_or_above),
     document_service: DocumentService = Depends(get_document_service),
 ):
+    """Create a document metadata record without an attached file (see POST /documents/upload to attach one)."""
     try:
         return await document_service.create_document(db, payload, current_user=current_user)
     except DocumentValidationError as e:
@@ -167,6 +170,7 @@ async def update_document(
     current_user: object = Depends(require_manager_or_above),
     document_service: DocumentService = Depends(get_document_service),
 ):
+    """Relink a document's contract/property/tenant association. Cannot touch the stored file — see PUT /{document_id}/file for that."""
     try:
         return await document_service.update_document(db, document_id, payload, current_user=current_user)
     except DocumentValidationError as e:
@@ -184,6 +188,7 @@ async def delete_document(
     current_user: object = Depends(require_manager_or_above),
     document_service: DocumentService = Depends(get_document_service),
 ) -> None:
+    """Delete a document and remove its underlying file from storage."""
     await document_service.delete_document(
         db,
         document_id,

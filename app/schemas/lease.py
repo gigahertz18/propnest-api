@@ -19,16 +19,30 @@ def _validate_dates_and_late_fee(end_date, start_date, late_fee_amount, late_fee
 class LeaseBase(BaseModel):
     contract_id: uuid.UUID
     monthly_rent: Decimal = Field(gt=0, description="Must be greater than zero.")
-    due_day: int = Field(ge=1, le=31)
-    billing_cycle: BillingCycle = BillingCycle.monthly
+    due_day: int = Field(
+        ge=1,
+        le=31,
+        description="Day of the billing cycle each payment is due.",
+    )
+    billing_cycle: BillingCycle = Field(
+        default=BillingCycle.monthly,
+        description="How often billing records are generated for this lease.",
+    )
     security_deposit: Decimal | None = Field(default=None, gt=0, description="Must be greater than 0 if provided.")
     advance_payment: Decimal | None = Field(default=None, gt=0, description="Must be greater than 0 if provided.")
     late_fee_amount: Decimal | None = Field(default=None, gt=0, description="Must be greater than 0 if provided.")
     late_fee_percent: Decimal | None = Field(
         default=None, gt=0, le=100, description="Must be between 0 (exclusive) and 100 if provided."
     )
-    grace_period_days: int = Field(default=0, ge=0)
-    renewal_option: RenewalOption = RenewalOption.none
+    grace_period_days: int = Field(
+        default=0,
+        ge=0,
+        description="Days after due_day before a payment is overdue.",
+    )
+    renewal_option: RenewalOption = Field(
+        default=RenewalOption.none,
+        description="What happens to this lease when its end_date is reached.",
+    )
     status: LeaseStatus = LeaseStatus.ACTIVE
     start_date: date
     end_date: date | None = None
@@ -59,7 +73,10 @@ class LeaseUpdate(BaseModel):
     advance_payment: Decimal | None = Field(default=None, gt=0, description="Must be greater than 0 if provided.")
     late_fee_amount: Decimal | None = Field(default=None, gt=0, description="Must be greater than 0 if provided.")
     late_fee_percent: Decimal | None = Field(
-        default=None, gt=0, le=100, description="Must be between 0 (exclusive) and 100 if provided."
+        default=None,
+        gt=0,
+        le=100,
+        description="Must be between 0 (exclusive) and 100 if provided.",
     )
     grace_period_days: int | None = Field(default=None, ge=0)
     renewal_option: RenewalOption | None = None

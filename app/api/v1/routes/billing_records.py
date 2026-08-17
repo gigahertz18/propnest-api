@@ -25,6 +25,13 @@ async def generate_billing_record(
     current_user: User = Depends(require_manager_or_above),
     billing_service: LeaseBillingService = Depends(get_lease_billing_service),
 ):
+    """
+    Generate the billing record for a lease's next period.
+
+    period_end/due_date/amount_due are computed server-side from the lease's
+    terms — callers only supply lease_id and period_start. Fails with 409 if
+    a record for that period already exists.
+    """
     try:
         return await billing_service.generate_billing_record(db, payload.lease_id, payload.period_start, current_user)
     except BillingRecordAlreadyGeneratedError as e:
@@ -42,4 +49,5 @@ async def evaluate_overdue(
     current_user: User = Depends(require_manager_or_above),
     billing_service: LeaseBillingService = Depends(get_lease_billing_service),
 ):
+    """Re-evaluate a billing record's overdue status as of a given date (defaults to today)."""
     return await billing_service.evaluate_overdue(db, billing_record_id, current_user, as_of=as_of)

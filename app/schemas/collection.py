@@ -1,6 +1,6 @@
 import uuid
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 
 from app.schemas.base import BaseResponse
@@ -11,7 +11,10 @@ class CollectionBase(BaseModel):
     name: str
     description: str | None = None
     property_id: uuid.UUID
-    contract_id: uuid.UUID | None = None
+    contract_id: uuid.UUID | None = Field(
+        default=None,
+        description="Optional link to a contract on the same property.",
+    )
 
 
 # ─── Create ───────────────────────────────────────────────
@@ -33,7 +36,10 @@ class CollectionUpdate(BaseModel):
 
     name: str | None = None
     description: str | None = None
-    contract_id: uuid.UUID | None = None
+    contract_id: uuid.UUID | None = Field(
+        default=None,
+        description="Narrow, widen back to null, or reassign to a different contract on the same property.",
+    )
 
 
 # ─── Response ─────────────────────────────────────────────

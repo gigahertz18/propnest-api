@@ -97,9 +97,32 @@ async def _wait_for_db(max_retries: int, retry_interval: int) -> None:
 app = FastAPI(
     title=settings.APP_NAME,
     version="0.1.0",
+    description=(
+        "PropNest internal API for managing properties, contracts, leases, "
+        "tenants, billing, payments, and related documents. "
+        "Authentication is JWT bearer-token based (see /api/v1/auth/login)."
+    ),
     lifespan=lifespan,
     docs_url="/docs" if settings.is_dev else None,
     redoc_url="/redoc" if settings.is_dev else None,
+    openapi_tags=[
+        {"name": "Auth", "description": "Login and current-user session endpoints."},
+        {"name": "Users", "description": "Admin management of application user accounts."},
+        {"name": "Properties", "description": "Property records and manager assignment."},
+        {"name": "Contracts", "description": "Rental contracts linking a property and tenant."},
+        {"name": "Tenants", "description": "Tenant records."},
+        {"name": "Documents", "description": "Contract-related file uploads stored in MinIO."},
+        {"name": "Payments", "description": "Payments recorded against a contract/collection."},
+        {"name": "Collections", "description": "Grouped collection records for a property/contract."},
+        {"name": "Audit Logs", "description": "Read-only history of create/update/delete actions (admin only)."},
+        {"name": "Activity Feed", "description": "Recent-activity summary for dashboards."},
+        {"name": "Dashboard", "description": "Aggregate summary metrics."},
+        {"name": "Leases", "description": "Lease agreements driving recurring billing."},
+        {"name": "Billing Records", "description": "Generated billing periods and overdue evaluation for leases."},
+        {"name": "Receipts", "description": "Payment receipts (PDF generation via WeasyPrint)."},
+        {"name": "Receipt Templates", "description": "Customizable templates used to render receipts."},
+        {"name": "Health", "description": "Liveness check."},
+    ],
 )
 
 # ─── CORS ─────────────────────────────────────────────────

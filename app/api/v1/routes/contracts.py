@@ -28,6 +28,7 @@ async def list_contracts(
     contract_service: ContractService = Depends(get_contract_service),
     current_user: User = Depends(require_manager_or_above),
 ):
+    """List contracts. Managers only see contracts for properties they're assigned to; admins see all."""
     return await contract_service.list_contracts(db, current_user, skip=skip, limit=limit)
 
 
@@ -41,6 +42,7 @@ async def get_contract(
     contract_service: ContractService = Depends(get_contract_service),
     current_user: User = Depends(require_manager_or_above),
 ):
+    """Get a single contract by ID."""
     return await contract_service.get_contract(db, contract_id, current_user)
 
 
@@ -55,6 +57,13 @@ async def create_contract(
     current_user: User = Depends(require_manager_or_above),
     contract_service: ContractService = Depends(get_contract_service),
 ):
+    """
+    Create a new rental contract for a property/tenant pair.
+
+    Managers may only create contracts for properties they're assigned to;
+    admins can create for any property. Fails with 409 if the property
+    already has an active contract.
+    """
     try:
         # Resource-level auth: managers may only create contracts for properties
         # they are assigned to. Admins can create for any property.
@@ -74,6 +83,7 @@ async def update_contract(
     current_user: object = Depends(require_manager_or_above),
     contract_service: ContractService = Depends(get_contract_service),
 ):
+    """Update a contract. Fails with 409 if the property already has a different active contract."""
     try:
         return await contract_service.update_contract(db, contract_id, payload, current_user)
     except ContractActiveError:
@@ -90,6 +100,7 @@ async def delete_contract(
     current_user: object = Depends(require_manager_or_above),
     contract_service: ContractService = Depends(get_contract_service),
 ) -> None:
+    """Delete a contract. Fails with 409 if the contract is still referenced by a lease/collection."""
     try:
         await contract_service.delete_contract(db, contract_id, current_user)
     except ContractInUseError as e:

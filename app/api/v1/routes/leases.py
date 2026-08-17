@@ -24,6 +24,7 @@ async def list_leases(
     lease_service: LeaseService = Depends(get_lease_service),
     current_user: User = Depends(require_manager_or_above),
 ):
+    """List leases."""
     return await lease_service.list_leases(db, current_user, skip=skip, limit=limit)
 
 
@@ -37,6 +38,7 @@ async def get_lease(
     lease_service: LeaseService = Depends(get_lease_service),
     current_user: User = Depends(require_manager_or_above),
 ):
+    """Get a single lease by ID."""
     return await lease_service.get_lease(db, lease_id, current_user)
 
 
@@ -51,6 +53,12 @@ async def create_lease(
     current_user: User = Depends(require_manager_or_above),
     lease_service: LeaseService = Depends(get_lease_service),
 ):
+    """
+    Create a new lease for a contract.
+
+    Fails with 400 if the rental type doesn't match the contract's terms,
+    and with 409 if the contract already has a lease.
+    """
     try:
         return await lease_service.create_lease(db, payload, current_user)
     except LeaseRentalTypeError as e:
@@ -70,6 +78,7 @@ async def update_lease(
     current_user: User = Depends(require_manager_or_above),
     lease_service: LeaseService = Depends(get_lease_service),
 ):
+    """Update a lease."""
     return await lease_service.update_lease(db, lease_id, payload, current_user)
 
 
@@ -83,4 +92,5 @@ async def delete_lease(
     current_user: User = Depends(require_manager_or_above),
     lease_service: LeaseService = Depends(get_lease_service),
 ) -> None:
+    """Delete a lease."""
     await lease_service.delete_lease(db, lease_id, current_user)

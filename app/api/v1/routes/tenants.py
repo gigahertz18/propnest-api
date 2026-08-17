@@ -26,6 +26,7 @@ async def list_tenants(
     tenant_service: TenantService = Depends(get_tenant_service),
     current_user: User = Depends(require_manager_or_above),
 ):
+    """List tenants."""
     return await tenant_service.list_tenants(db, skip=skip, limit=limit, current_user=current_user)
 
 
@@ -36,6 +37,7 @@ async def get_tenant(
     tenant_service: TenantService = Depends(get_tenant_service),
     current_user: User = Depends(require_manager_or_above),
 ):
+    """Get a single tenant by ID."""
     return await tenant_service.get_tenant(db, tenant_id, current_user=current_user)
 
 
@@ -50,6 +52,7 @@ async def create_tenant(
     tenant_service: TenantService = Depends(get_tenant_service),
     current_user: User = Depends(require_manager_or_above),
 ):
+    """Create a new tenant record. Fails with 409 if a matching tenant already exists."""
     try:
         return await tenant_service.create_tenant(db, payload, current_user=current_user)
     except TenantAlreadyExistsError as e:
@@ -67,6 +70,7 @@ async def update_tenant(
     tenant_service: TenantService = Depends(get_tenant_service),
     current_user: User = Depends(require_manager_or_above),
 ):
+    """Update a tenant record. Fails with 409 if the update would collide with an existing tenant."""
     try:
         return await tenant_service.update_tenant(db, tenant_id, payload, current_user=current_user)
     except TenantAlreadyExistsError as e:
@@ -83,6 +87,7 @@ async def delete_tenant(
     tenant_service: TenantService = Depends(get_tenant_service),
     current_user: User = Depends(require_manager_or_above),
 ) -> None:
+    """Delete a tenant. Fails with 409 if the tenant is still referenced by a contract."""
     try:
         await tenant_service.delete_tenant(db, tenant_id, current_user=current_user)
     except TenantInUseError as e:
