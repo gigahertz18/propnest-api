@@ -1,11 +1,13 @@
 import uuid
 
+from datetime import date
+
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.base import BaseRepository
 from app.models.contract import Contract
-from app.models.lease import Lease
+from app.models.lease import Lease, LeaseStatus
 from app.models.property import Property
 from app.schemas.lease import LeaseCreate, LeaseUpdate
 
@@ -58,6 +60,31 @@ class LeaseRepository(BaseRepository[Lease, LeaseCreate, LeaseUpdate]):
         stmt = select(func.count()).select_from(Lease).where(Lease.contract_id.in_(owned_contract_ids))
         result = await db.execute(stmt)
         return int(result.scalar_one())
+
+    async def get_expiring(self, db: AsyncSession, start: date, end: date) -> list[Lease]:
+        """Active leases whose end_date falls within [start, end]."""
+        stmt = select(Lease).where(
+            Lease.status == LeaseStatus.ACTIVE,
+            Lease.end_date.is_not(None),
+            Lease.end_date.between(start, end),
+        )
+        result = await db.execute(stmt)
+        return list(result.scalars().all())
+
+    async def get_expiring_for_manager(
+        self, db: AsyncSession, manager_id: uuid.UUID, start: date, end: date
+    ) -> list[Lease]:
+        owned_property_ids = select(Property.id).where(Property.manager_id == manager_id)
+        owned_contract_ids = select(Contract.id).where(Contract.property_id.in_(owned_property_ids))
+
+        stmt = select(Lease).where(
+            Lease.contract_id.in_(owned_contract_ids),
+            Lease.status == LeaseStatus.ACTIVE,
+            Lease.end_date.is_not(None),
+            Lease.end_date.between(start, end),
+        )
+        result = await db.execute(stmt)
+        return list(result.scalars().all())
 
 
 # Instantiate once — import this instance everywhere

@@ -280,3 +280,63 @@ class TestLeaseRepositoryGetAllForManager:
 
         total = await lease_repo.count_all_for_manager(db, manager.id)
         assert total == 2
+
+
+# ─── get_expiring / get_expiring_for_manager ─────────────────────────────────
+
+
+@pytest.mark.asyncio
+class TestLeaseRepositoryGetExpiring:
+    async def test_returns_active_leases_ending_within_the_window(self, db, contract):
+        in_window = await make_lease_model(
+            db, contract_id=contract.id, start_date=date(2025, 1, 1), end_date=date(2026, 8, 20)
+        )
+
+        result = await lease_repo.get_expiring(db, date(2026, 8, 1), date(2026, 8, 31))
+
+        assert [lease.id for lease in result] == [in_window.id]
+
+    async def test_excludes_leases_ending_outside_the_window(self, db, contract):
+        await make_lease_model(db, contract_id=contract.id, start_date=date(2025, 1, 1), end_date=date(2026, 12, 31))
+
+        result = await lease_repo.get_expiring(db, date(2026, 8, 1), date(2026, 8, 31))
+
+        assert result == []
+
+    async def test_excludes_leases_with_no_end_date(self, db, contract):
+        await make_lease_model(db, contract_id=contract.id, end_date=None)
+
+        result = await lease_repo.get_expiring(db, date(2026, 8, 1), date(2026, 8, 31))
+
+        assert result == []
+
+    async def test_excludes_ended_leases(self, db, contract):
+        await make_lease_model(
+            db,
+            contract_id=contract.id,
+            start_date=date(2025, 1, 1),
+            end_date=date(2026, 8, 20),
+            status="ENDED",
+        )
+
+        result = await lease_repo.get_expiring(db, date(2026, 8, 1), date(2026, 8, 31))
+
+        assert result == []
+
+    async def test_get_expiring_for_manager_scopes_to_owned_properties(self, db, tenant, manager):
+        other_mgr = await make_manager_model(db, username="other_mgr_exp", email="other_mgr_exp@example.com")
+        owned_property = await make_property_model(db, manager_id=manager.id)
+        other_property = await make_property_model(db, name="Other Property", manager_id=other_mgr.id)
+        owned_contract = await make_contract_model(db, property_id=owned_property.id, tenant_id=tenant.id)
+        other_contract = await make_contract_model(db, property_id=other_property.id, tenant_id=tenant.id)
+
+        owned_lease = await make_lease_model(
+            db, contract_id=owned_contract.id, start_date=date(2025, 1, 1), end_date=date(2026, 8, 20)
+        )
+        await make_lease_model(
+            db, contract_id=other_contract.id, start_date=date(2025, 1, 1), end_date=date(2026, 8, 20)
+        )
+
+        result = await lease_repo.get_expiring_for_manager(db, manager.id, date(2026, 8, 1), date(2026, 8, 31))
+
+        assert [lease.id for lease in result] == [owned_lease.id]

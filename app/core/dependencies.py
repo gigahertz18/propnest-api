@@ -33,6 +33,7 @@ from app.repositories.user import user_repo
 
 from app.services.activity_feed_service import ActivityFeedService
 from app.services.audit_log_service import AuditLogService
+from app.services.dashboard_service import DashboardService
 from app.services.auth_service import AuthService
 from app.services.collection_service import CollectionService
 from app.services.contract_service import ContractService
@@ -290,6 +291,15 @@ def get_audit_log_service() -> AuditLogService:
 
 def get_activity_feed_service() -> ActivityFeedService:
     return ActivityFeedService(activity_feed_repo=activity_feed_repo, property_repo=property_repo)
+
+
+def get_dashboard_service() -> DashboardService:
+    return DashboardService(
+        property_repo=property_repo,
+        payment_repo=payment_repo,
+        billing_record_repo=billing_record_repo,
+        lease_repo=lease_repo,
+    )
 
 
 def get_storage_client() -> Minio:

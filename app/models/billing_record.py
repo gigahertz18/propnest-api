@@ -20,6 +20,12 @@ class BillingRecordStatus(str, enum.Enum):
     written_off = "written_off"
 
 
+# Non-terminal statuses per `LeaseBillingService._VALID_TRANSITIONS` — `paid`
+# and `written_off` are the only terminal ones. Shared by any query needing
+# "still owed" billing records (e.g. the Dashboard's outstanding/late figures).
+UNPAID_STATUSES = (BillingRecordStatus.pending, BillingRecordStatus.partially_paid, BillingRecordStatus.overdue)
+
+
 def last_day_of_month(any_day: date) -> date:
     """Return the last calendar day of `any_day`'s month — shared by
     `LeaseBillingService` for computing `period_end`/clamped `due_date`."""

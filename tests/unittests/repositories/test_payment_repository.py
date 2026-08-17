@@ -373,3 +373,92 @@ class TestPaymentRepositoryGetAllForManager:
         seen_ids = [p.id for p in page_1] + [p.id for p in page_2]
         assert sorted(seen_ids) == sorted(p.id for p in payments)
         assert len(seen_ids) == len(set(seen_ids))
+
+
+@pytest.mark.asyncio
+class TestPaymentRepositorySumCollected:
+    async def test_sums_paid_payments_within_the_window(self, db, contract):
+        start = datetime(2026, 8, 1, tzinfo=timezone.utc)
+        end = datetime(2026, 8, 31, 23, 59, 59, tzinfo=timezone.utc)
+        await make_payment_model(db, contract.id, amount=1000.00, paid_at=datetime(2026, 8, 15, tzinfo=timezone.utc))
+        await make_payment_model(db, contract.id, amount=500.00, paid_at=datetime(2026, 8, 20, tzinfo=timezone.utc))
+        await make_payment_model(db, contract.id, amount=999.00, paid_at=datetime(2026, 7, 31, tzinfo=timezone.utc))
+
+        result = await payment_repo.sum_collected(db, start, end)
+
+        assert result == Decimal("1500.00")
+
+    async def test_excludes_non_paid_statuses(self, db, contract):
+        start = datetime(2026, 8, 1, tzinfo=timezone.utc)
+        end = datetime(2026, 8, 31, 23, 59, 59, tzinfo=timezone.utc)
+        await make_payment_model(
+            db, contract.id, amount=1000.00, paid_at=datetime(2026, 8, 15, tzinfo=timezone.utc), status="PAID"
+        )
+        await make_payment_model(
+            db, contract.id, amount=2000.00, paid_at=datetime(2026, 8, 15, tzinfo=timezone.utc), status="VOIDED"
+        )
+
+        result = await payment_repo.sum_collected(db, start, end)
+
+        assert result == Decimal("1000.00")
+
+    async def test_returns_zero_when_no_matching_payments(self, db, contract):
+        start = datetime(2026, 8, 1, tzinfo=timezone.utc)
+        end = datetime(2026, 8, 31, 23, 59, 59, tzinfo=timezone.utc)
+
+        result = await payment_repo.sum_collected(db, start, end)
+
+        assert result == Decimal("0")
+
+    async def test_sum_collected_for_manager_scopes_to_owned_properties(self, db, tenant, manager):
+        other_mgr = await make_manager_model(db, username="other_mgr", email="other_mgr@example.com")
+        owned_property = await make_property_model(db, manager_id=manager.id)
+        other_property = await make_property_model(db, name="Other Property", manager_id=other_mgr.id)
+        owned_contract = await make_contract_model(db, property_id=owned_property.id, tenant_id=tenant.id)
+        other_contract = await make_contract_model(db, property_id=other_property.id, tenant_id=tenant.id)
+
+        start = datetime(2026, 8, 1, tzinfo=timezone.utc)
+        end = datetime(2026, 8, 31, 23, 59, 59, tzinfo=timezone.utc)
+        await make_payment_model(
+            db, owned_contract.id, amount=1000.00, paid_at=datetime(2026, 8, 15, tzinfo=timezone.utc)
+        )
+        await make_payment_model(
+            db, other_contract.id, amount=5000.00, paid_at=datetime(2026, 8, 15, tzinfo=timezone.utc)
+        )
+
+        result = await payment_repo.sum_collected_for_manager(db, manager.id, start, end)
+
+        assert result == Decimal("1000.00")
+
+
+@pytest.mark.asyncio
+class TestPaymentRepositoryGetRecent:
+    async def test_returns_payments_ordered_by_paid_at_descending(self, db, contract):
+        oldest = await make_payment_model(db, contract.id, paid_at=datetime(2026, 1, 1, tzinfo=timezone.utc))
+        newest = await make_payment_model(db, contract.id, paid_at=datetime(2026, 6, 1, tzinfo=timezone.utc))
+
+        result = await payment_repo.get_recent(db, limit=10)
+
+        assert [p.id for p in result] == [newest.id, oldest.id]
+
+    async def test_respects_limit(self, db, contract):
+        for i in range(3):
+            await make_payment_model(db, contract.id, paid_at=datetime(2026, 1, i + 1, tzinfo=timezone.utc))
+
+        result = await payment_repo.get_recent(db, limit=2)
+
+        assert len(result) == 2
+
+    async def test_get_recent_for_manager_scopes_to_owned_properties(self, db, tenant, manager):
+        other_mgr = await make_manager_model(db, username="other_mgr", email="other_mgr@example.com")
+        owned_property = await make_property_model(db, manager_id=manager.id)
+        other_property = await make_property_model(db, name="Other Property", manager_id=other_mgr.id)
+        owned_contract = await make_contract_model(db, property_id=owned_property.id, tenant_id=tenant.id)
+        other_contract = await make_contract_model(db, property_id=other_property.id, tenant_id=tenant.id)
+
+        owned_payment = await make_payment_model(db, owned_contract.id)
+        await make_payment_model(db, other_contract.id)
+
+        result = await payment_repo.get_recent_for_manager(db, manager.id, limit=10)
+
+        assert [p.id for p in result] == [owned_payment.id]

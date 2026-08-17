@@ -215,6 +215,14 @@ class ActivityFeedForbiddenError(ResourceForbiddenError):
     pass
 
 
+class DashboardForbiddenError(ResourceForbiddenError):
+    """Raised when dashboard figures are requested by a caller who isn't an
+    ADMIN or MANAGER. Defense-in-depth: the route layer's
+    `require_manager_or_above` already excludes everyone else first."""
+
+    pass
+
+
 class DocumentValidationError(ServiceException):
     """Raised when a document validation fails"""
 
