@@ -120,3 +120,27 @@ class TestPropertyRepositoryGetAllForManager:
 
         assert len(result) == 2
         assert all(prop.manager_id == manager.id for prop in result)
+
+
+@pytest.mark.asyncio
+class TestPropertyRepositoryCountVacant:
+    async def test_count_vacant_counts_only_vacant_properties(self, db):
+        await make_property_model(db, status=PropertyStatus.vacant)
+        await make_property_model(db, status=PropertyStatus.vacant)
+        await make_property_model(db, status=PropertyStatus.occupied)
+
+        result = await property_repo.count_vacant(db)
+
+        assert result == 2
+
+    async def test_count_vacant_for_manager_scopes_to_owned_vacant_properties(self, db):
+        manager = await make_manager_model(db)
+        other_mgr = await make_manager_model(db, username="other_mgr", email="other_mgr@example.com")
+
+        await make_property_model(db, manager_id=manager.id, status=PropertyStatus.vacant)
+        await make_property_model(db, manager_id=manager.id, status=PropertyStatus.occupied)
+        await make_property_model(db, manager_id=other_mgr.id, status=PropertyStatus.vacant)
+
+        result = await property_repo.count_vacant_for_manager(db, manager.id)
+
+        assert result == 1

@@ -1,11 +1,13 @@
 import uuid
 
 from collections.abc import Sequence
+from datetime import datetime
+from decimal import Decimal
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.base import BaseRepository
-from app.models.payment import Payment
+from app.models.payment import Payment, PaymentStatus
 from app.models.contract import Contract
 from app.models.property import Property
 from app.schemas.payment import PaymentCreate, PaymentUpdate
@@ -86,6 +88,55 @@ class PaymentRepository(BaseRepository[Payment, PaymentCreate, PaymentUpdate]):
         )
         result = await db.execute(stmt)
         return int(result.scalar_one())
+
+    async def sum_collected(self, db: AsyncSession, start: datetime, end: datetime) -> Decimal:
+        """Total of PAID payments received within [start, end]. Voided/refunded
+        payments don't count as "collected" — only PAID does."""
+        stmt = select(func.sum(Payment.amount)).where(
+            Payment.status == PaymentStatus.PAID,
+            Payment.paid_at.between(start, end),
+        )
+        result = await db.execute(stmt)
+        return result.scalar_one() or Decimal("0")
+
+    async def sum_collected_for_manager(
+        self, db: AsyncSession, manager_id: uuid.UUID, start: datetime, end: datetime
+    ) -> Decimal:
+        owned_property_ids = select(Property.id).where(Property.manager_id == manager_id)
+
+        stmt = (
+            select(func.sum(Payment.amount))
+            .join(Contract, Contract.id == Payment.contract_id)
+            .where(
+                Contract.property_id.in_(owned_property_ids),
+                Payment.status == PaymentStatus.PAID,
+                Payment.paid_at.between(start, end),
+            )
+        )
+        result = await db.execute(stmt)
+        return result.scalar_one() or Decimal("0")
+
+    async def get_recent(self, db: AsyncSession, limit: int = 10) -> Sequence[Payment]:
+        limit = min(max(0, limit), 100)
+        stmt = select(Payment).order_by(Payment.paid_at.desc(), Payment.id).limit(limit)
+        result = await db.execute(stmt)
+        return result.scalars().all()
+
+    async def get_recent_for_manager(
+        self, db: AsyncSession, manager_id: uuid.UUID, limit: int = 10
+    ) -> Sequence[Payment]:
+        limit = min(max(0, limit), 100)
+        owned_property_ids = select(Property.id).where(Property.manager_id == manager_id)
+
+        stmt = (
+            select(Payment)
+            .join(Contract, Contract.id == Payment.contract_id)
+            .where(Contract.property_id.in_(owned_property_ids))
+            .order_by(Payment.paid_at.desc(), Payment.id)
+            .limit(limit)
+        )
+        result = await db.execute(stmt)
+        return result.scalars().all()
 
 
 # Instantiate once — import this instance everywhere

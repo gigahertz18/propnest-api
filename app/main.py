@@ -23,6 +23,7 @@ from app.api.v1.routes import (
     collections,
     audit_logs,
     activity_feed,
+    dashboard,
     leases,
     billing_records,
     receipts,
@@ -201,6 +202,7 @@ app.include_router(payments.router, prefix=settings.API_V1_PREFIX)
 app.include_router(collections.router, prefix=settings.API_V1_PREFIX)
 app.include_router(audit_logs.router, prefix=settings.API_V1_PREFIX)
 app.include_router(activity_feed.router, prefix=settings.API_V1_PREFIX)
+app.include_router(dashboard.router, prefix=settings.API_V1_PREFIX)
 app.include_router(leases.router, prefix=settings.API_V1_PREFIX)
 app.include_router(billing_records.router, prefix=settings.API_V1_PREFIX)
 app.include_router(receipts.router, prefix=settings.API_V1_PREFIX)

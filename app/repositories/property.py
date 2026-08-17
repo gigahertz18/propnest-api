@@ -42,6 +42,12 @@ class PropertyRepository(BaseRepository[Property, PropertyCreate, PropertyUpdate
     async def count_all_for_manager(self, db: AsyncSession, manager_id: UUID) -> int:
         return await self._count(db, self.model.manager_id == manager_id)
 
+    async def count_vacant(self, db: AsyncSession) -> int:
+        return await self._count(db, self.model.status == PropertyStatus.vacant)
+
+    async def count_vacant_for_manager(self, db: AsyncSession, manager_id: UUID) -> int:
+        return await self._count(db, self.model.status == PropertyStatus.vacant, self.model.manager_id == manager_id)
+
 
 # Instantiate once — import this instance everywhere
 property_repo = PropertyRepository(Property)
