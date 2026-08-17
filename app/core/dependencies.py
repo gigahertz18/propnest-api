@@ -17,6 +17,7 @@ from app.models.user import User, UserRole
 
 from app.repositories.ip_rate_limit import IpRateLimitRepository
 from app.repositories.login_attempt import LoginAttemptRepository
+from app.repositories.activity_feed import activity_feed_repo
 from app.repositories.audit_log import audit_log_repo
 from app.repositories.billing_record import billing_record_repo
 from app.repositories.collection import collection_repo
@@ -30,6 +31,7 @@ from app.repositories.receipt_template import receipt_template_repo
 from app.repositories.tenant import tenant_repo
 from app.repositories.user import user_repo
 
+from app.services.activity_feed_service import ActivityFeedService
 from app.services.audit_log_service import AuditLogService
 from app.services.auth_service import AuthService
 from app.services.collection_service import CollectionService
@@ -284,6 +286,10 @@ def get_lease_billing_service() -> LeaseBillingService:
 
 def get_audit_log_service() -> AuditLogService:
     return AuditLogService(audit_log_repo=audit_log_repo)
+
+
+def get_activity_feed_service() -> ActivityFeedService:
+    return ActivityFeedService(activity_feed_repo=activity_feed_repo, property_repo=property_repo)
 
 
 def get_storage_client() -> Minio:

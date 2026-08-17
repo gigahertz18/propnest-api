@@ -3,7 +3,7 @@ import uuid
 
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, DateTime, Enum, ForeignKey, String, Uuid, func
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Index, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -52,6 +52,14 @@ class AuditLog(Base):
         default=lambda: datetime.now(timezone.utc),
         server_default=func.now(),
         nullable=False,
+    )
+
+    __table_args__ = (
+        # Every activity-feed branch query filters on both columns together
+        # (entity_type == X AND entity_id IN (...)) — the single-column
+        # indexes above don't cover that combination as efficiently as a
+        # composite one does.
+        Index("ix_audit_logs_entity_type_entity_id", "entity_type", "entity_id"),
     )
 
     def __repr__(self) -> str:
