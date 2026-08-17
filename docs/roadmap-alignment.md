@@ -33,7 +33,7 @@ Reconcile payments against individual billing records and support partial/full/o
 
 Introduce append-only receipt generation and immutable PDF storage.
 
-### Dashboard
+### Dashboard — done
 
 Expose independently testable read-only aggregation queries.
 

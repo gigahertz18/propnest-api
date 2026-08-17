@@ -195,7 +195,7 @@ The model tracks:
 - `period_start` / `period_end` / `due_date` — the latter clamped to the lease's `due_day`, or the last day of the period's month if `due_day` overflows it
 - `amount_due` — a snapshot of `Lease.monthly_rent` at generation time, so a later rent change doesn't rewrite billing history
 - `late_fee_applied` / `late_fee_amount_charged` — set once `LeaseBillingService.evaluate_overdue` determines the record has passed `due_date + Lease.grace_period_days`, computed from whichever of `Lease.late_fee_amount`/`late_fee_percent` is set
-- `overpaid_amount` (nullable) — set by `LeaseBillingService.apply_payment` when cumulative non-voided payments exceed `amount_due + late_fee_amount_charged`; the record still resolves to `paid` rather than rejecting the payment, with the excess surfaced here for later Dashboard/Accounting use
+- `overpaid_amount` (nullable) — set by `LeaseBillingService.apply_payment` when cumulative non-voided payments exceed `amount_due + late_fee_amount_charged`; the record still resolves to `paid` rather than rejecting the payment, with the excess surfaced here for Dashboard/Accounting use (not yet consumed by either — Dashboard's `outstanding` figure sums `amount_due + late_fee_amount_charged`, not `overpaid_amount`)
 
 Status is a native-enum state machine — a freshly generated record starts `pending`, then moves to `partially_paid`, `paid`, or `overdue`; `partially_paid`/`overdue` can each still reach `paid` or `written_off` — with transitions validated against an explicit table in the service; an invalid transition raises rather than silently succeeding.
 

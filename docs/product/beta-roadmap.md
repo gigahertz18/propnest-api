@@ -15,7 +15,7 @@ The backend GitHub issue set is the source of truth for this repository's produc
 - Recurring Billing — done
 - Payment ↔ Billing — done
 - immutable Receipts
-- Landlord Dashboard
+- Landlord Dashboard — done
 
 ## Internal Alpha
 
