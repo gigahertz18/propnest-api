@@ -85,7 +85,7 @@ Receipt requirements:
 - MinIO-backed document storage
 - reprint without overwriting the original receipt
 
-### Landlord Dashboard
+### Landlord Dashboard — done
 
 Expose read-only aggregation data:
 
