@@ -29,7 +29,7 @@ Make recurring long-term billing explicit and idempotent.
 
 Reconcile payments against individual billing records and support partial/full/overpayment semantics.
 
-### Receipts
+### Receipts — done
 
 Introduce append-only receipt generation and immutable PDF storage.
 

@@ -11,6 +11,7 @@ from app.models.document import Document
 from app.models.lease import BillingCycle, Lease, RenewalOption
 from app.models.payment import Payment
 from app.models.property import Property, PropertyStatus
+from app.models.receipt import Receipt
 from app.models.tenant import Tenant
 from app.models.user import User, UserRole
 
@@ -253,6 +254,23 @@ async def make_document_model(db, file_url: str = "http://example.com/test_docum
         file_url=file_url,
         **data,
     )
+    db.add(obj)
+    await db.flush()
+    await db.refresh(obj)
+    return obj
+
+
+# ─── Receipt ──────────────────────────────────────────────────────────────────
+
+
+async def make_receipt_model(db, payment_id: uuid.UUID, document_id: uuid.UUID, **kwargs) -> Receipt:
+    """Creates and persists a Receipt directly in the test DB.
+
+    `receipt_number` is never set here — it's a server-side Identity
+    column, and letting Postgres assign it is the entire point of the
+    race-safe numbering scheme under test.
+    """
+    obj = Receipt(id=uuid.uuid4(), payment_id=payment_id, document_id=document_id, **kwargs)
     db.add(obj)
     await db.flush()
     await db.refresh(obj)

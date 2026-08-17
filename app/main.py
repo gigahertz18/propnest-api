@@ -24,6 +24,8 @@ from app.api.v1.routes import (
     audit_logs,
     leases,
     billing_records,
+    receipts,
+    receipt_templates,
 )
 from app.services.exceptions import (
     RelatedResourceNotFoundError,
@@ -199,6 +201,8 @@ app.include_router(collections.router, prefix=settings.API_V1_PREFIX)
 app.include_router(audit_logs.router, prefix=settings.API_V1_PREFIX)
 app.include_router(leases.router, prefix=settings.API_V1_PREFIX)
 app.include_router(billing_records.router, prefix=settings.API_V1_PREFIX)
+app.include_router(receipts.router, prefix=settings.API_V1_PREFIX)
+app.include_router(receipt_templates.router, prefix=settings.API_V1_PREFIX)
 
 
 # ─── Health Check ─────────────────────────────────────────
