@@ -1,6 +1,6 @@
 import uuid
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 
 from app.models.property import PropertyStatus
@@ -11,8 +11,11 @@ from app.schemas.base import BaseResponse
 class PropertyBase(BaseModel):
     name: str
     address: str
-    description: str | None = None
-    status: PropertyStatus = PropertyStatus.vacant
+    description: str | None = Field(default=None, description="Free-text notes about the property.")
+    status: PropertyStatus = Field(
+        default=PropertyStatus.vacant,
+        description="Current occupancy status; set automatically by contract lifecycle events.",
+    )
 
 
 # ─── Create ───────────────────────────────────────────────
@@ -54,4 +57,4 @@ class PropertyAssignManager(BaseModel):
     contract goes active.
     """
 
-    manager_id: uuid.UUID
+    manager_id: uuid.UUID = Field(description="User ID of the manager to assign. Must have the manager role.")

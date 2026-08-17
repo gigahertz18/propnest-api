@@ -11,7 +11,10 @@ from app.schemas.base import BaseResponse
 # ─── Base ─────────────────────────────────────────────────
 class PaymentBase(BaseModel):
     contract_id: uuid.UUID
-    billing_record_id: uuid.UUID | None = None
+    billing_record_id: uuid.UUID | None = Field(
+        default=None,
+        description="Optional link to the billing record this payment settles.",
+    )
     amount: Decimal = Field(gt=0, description="Must be greater than zero.")
     paid_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     payment_method: str | None = None

@@ -65,6 +65,11 @@ seed:
 		backend \
 		python scripts/seed_admin.py
 
+# ─── OpenAPI Export ───────────────────────────────────────
+# Dumps the live OpenAPI schema to openapi.json (gitignored, generate-on-demand only).
+export-openapi:
+	$(COMPOSE) run --rm --no-deps backend python scripts/export_openapi.py
+
 # ─── Migrations ───────────────────────────────────────────
 migrate-new:
 	$(COMPOSE) exec backend alembic revision --autogenerate -m "$(msg)"
@@ -138,6 +143,7 @@ clean:
 .PHONY: up up-detached down restart restart-detached logs \
         logs-backend logs-db logs-minio \
         shell-db shell-be seed \
+        export-openapi \
         migrate-new migrate-up migrate-down migrate-history \
         test-be test-be-unit test-be-integration \
         test-be-file test-be-cov \

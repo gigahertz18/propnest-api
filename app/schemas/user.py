@@ -1,6 +1,6 @@
 import uuid
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 from app.models.user import UserRole
 from app.schemas.base import BaseResponse
@@ -11,7 +11,10 @@ class UserBase(BaseModel):
     username: str
     email: EmailStr
     full_name: str
-    role: UserRole = UserRole.USER
+    role: UserRole = Field(
+        default=UserRole.USER,
+        description="Determines permission level: admin, manager, or user.",
+    )
     is_active: bool = True
 
 

@@ -22,6 +22,7 @@ async def list_audit_logs(
     audit_log_service: AuditLogService = Depends(get_audit_log_service),
     current_user: User = Depends(require_admin),
 ):
+    """List audit log entries, optionally filtered by entity_type/entity_id. Admin only."""
     return await audit_log_service.list_audit_logs(
         db, entity_type=entity_type, entity_id=entity_id, skip=skip, limit=limit
     )

@@ -21,6 +21,7 @@ async def list_collections(
     collection_service: CollectionService = Depends(get_collection_service),
     current_user: User = Depends(require_manager_or_above),
 ):
+    """List collection records."""
     return await collection_service.list_collections(db, current_user=current_user, skip=skip, limit=limit)
 
 
@@ -31,6 +32,7 @@ async def get_collection(
     collection_service: CollectionService = Depends(get_collection_service),
     current_user: User = Depends(require_manager_or_above),
 ):
+    """Get a single collection record by ID."""
     return await collection_service.get_collection(db, collection_id, current_user=current_user)
 
 
@@ -45,6 +47,7 @@ async def create_collection(
     collection_service: CollectionService = Depends(get_collection_service),
     current_user: User = Depends(require_manager_or_above),
 ):
+    """Create a new collection record, optionally linked to a contract."""
     try:
         return await collection_service.create_collection(db, payload, current_user=current_user)
     except CollectionValidationError as e:
@@ -62,6 +65,7 @@ async def update_collection(
     collection_service: CollectionService = Depends(get_collection_service),
     current_user: User = Depends(require_manager_or_above),
 ):
+    """Update a collection record, including reassigning or clearing its linked contract."""
     try:
         return await collection_service.update_collection(db, collection_id, payload, current_user=current_user)
     except CollectionValidationError as e:
@@ -78,4 +82,5 @@ async def delete_collection(
     collection_service: CollectionService = Depends(get_collection_service),
     current_user: User = Depends(require_manager_or_above),
 ) -> None:
+    """Delete a collection record."""
     await collection_service.delete_collection(db, collection_id, current_user=current_user)

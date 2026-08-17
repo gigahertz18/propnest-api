@@ -34,6 +34,7 @@ async def list_payments(
     payment_service: PaymentService = Depends(get_payment_service),
     current_user: User = Depends(require_manager_or_above),
 ):
+    """List payments."""
     return await payment_service.list_payments(db, current_user, skip=skip, limit=limit)
 
 
@@ -47,6 +48,7 @@ async def get_payment(
     payment_service: PaymentService = Depends(get_payment_service),
     current_user: User = Depends(require_manager_or_above),
 ):
+    """Get a single payment by ID."""
     return await payment_service.get_payment(db, payment_id, current_user)
 
 
@@ -63,6 +65,14 @@ async def create_payment(
     receipt_service: ReceiptService = Depends(get_receipt_service),
     storage_client=Depends(get_storage_client),
 ):
+    """
+    Record a new payment against a contract and automatically issue a receipt.
+
+    Managers may only record payments for contracts on properties they're
+    assigned to; admins can record for any contract. Receipt issuance
+    failures are logged but do not fail this response — retry via
+    POST /payments/{id}/receipts.
+    """
     # Resource-level auth: managers may only record payments for
     # contracts on properties they are assigned to. Admins can record
     # payments for any contract.
@@ -92,6 +102,7 @@ async def update_payment(
     current_user: User = Depends(require_manager_or_above),
     payment_service: PaymentService = Depends(get_payment_service),
 ):
+    """Update a payment. Fails with 409 if the payment has already been voided."""
     try:
         updated = await payment_service.update_payment(db, payment_id, payload, current_user)
     except PaymentAlreadyVoidedError as e:
@@ -131,4 +142,5 @@ async def delete_payment(
     current_user: User = Depends(require_manager_or_above),
     payment_service: PaymentService = Depends(get_payment_service),
 ) -> None:
+    """Delete a payment."""
     await payment_service.delete_payment(db, payment_id, current_user)

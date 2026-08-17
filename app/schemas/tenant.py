@@ -1,6 +1,6 @@
 import uuid
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime, date
 
 from app.schemas.base import BaseResponse
@@ -40,7 +40,10 @@ class TenantResponse(TenantBase, BaseResponse):
     """Returned to the client — includes DB-generated fields."""
 
     id: uuid.UUID
-    user_id: uuid.UUID | None = None
+    user_id: uuid.UUID | None = Field(
+        default=None,
+        description="Linked portal-access User account, if any (see PUT /tenants/{id}/link-user).",
+    )
     created_at: datetime
     updated_at: datetime
 
