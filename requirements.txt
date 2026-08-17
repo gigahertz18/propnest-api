@@ -22,7 +22,7 @@ python-multipart==0.0.32
 minio==7.2.20
 
 # PDF receipt generation / templating
-weasyprint==63.1
+weasyprint==69.0
 jinja2==3.1.6
 
 # Testing
