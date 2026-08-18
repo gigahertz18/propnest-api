@@ -7,11 +7,42 @@ from uuid import UUID
 from app.core.dependencies import get_lease_billing_service, require_manager_or_above
 from app.db.session import get_db
 from app.models.user import User
+from app.schemas.base import PaginatedResponse
 from app.schemas.billing_record import BillingRecordGenerateRequest, BillingRecordResponse
 from app.services.lease_billing_service import LeaseBillingService
 from app.services.exceptions import BillingRecordAlreadyGeneratedError
 
 router = APIRouter(prefix="/billing-records", tags=["Billing Records"])
+
+
+@router.get(
+    "/",
+    response_model=PaginatedResponse[BillingRecordResponse],
+)
+async def list_billing_records(
+    lease_id: UUID,
+    skip: int = 0,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_manager_or_above),
+    billing_service: LeaseBillingService = Depends(get_lease_billing_service),
+):
+    """List billing records for a lease."""
+    return await billing_service.list_for_lease(db, lease_id, current_user, skip=skip, limit=limit)
+
+
+@router.get(
+    "/{billing_record_id}",
+    response_model=BillingRecordResponse,
+)
+async def get_billing_record(
+    billing_record_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_manager_or_above),
+    billing_service: LeaseBillingService = Depends(get_lease_billing_service),
+):
+    """Get a single billing record by ID."""
+    return await billing_service.get_billing_record(db, billing_record_id, current_user)
 
 
 @router.post(

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import date, timedelta
 from decimal import Decimal
 from uuid import UUID
@@ -10,6 +12,7 @@ from app.models.billing_record import BillingRecord, BillingRecordStatus, last_d
 from app.repositories.billing_record import BillingRecordRepository
 from app.repositories.contract import ContractRepository
 from app.repositories.lease import LeaseRepository
+from app.schemas.base import PaginatedResponse
 from app.schemas.billing_record import BillingRecordCreate
 from app.services.audit import write_audit_log
 from app.services.base import ResourceAuthorizationMixin
@@ -162,6 +165,52 @@ class LeaseBillingService(ResourceAuthorizationMixin):
         await db.refresh(record)
         write_audit_log(db, current_user, AuditAction.UPDATE, "BillingRecord", record.id)
         await db.commit()
+        return record
+
+    async def list_for_lease(
+        self,
+        db: AsyncSession,
+        lease_id: UUID,
+        current_user,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> PaginatedResponse[BillingRecord]:
+        lease = await self.lease_repo.get_by_id(db, lease_id)
+        if not lease:
+            raise RelatedResourceNotFoundError(f"Lease {lease_id} not found.")
+
+        await self._authorize_user_to_property(
+            db,
+            current_user,
+            property_id=None,
+            contract_id=lease.contract_id,
+        )
+
+        items = await self.billing_record_repo.get_all_for_lease(db, lease_id, skip=skip, limit=limit)
+        total = await self.billing_record_repo.count_for_lease(db, lease_id)
+        return PaginatedResponse(items=items, total=total)
+
+    async def get_billing_record(
+        self,
+        db: AsyncSession,
+        billing_record_id: UUID,
+        current_user,
+    ) -> BillingRecord:
+        record = await self.billing_record_repo.get_by_id(db, billing_record_id)
+        if not record:
+            raise RelatedResourceNotFoundError(f"BillingRecord {billing_record_id} not found.")
+
+        lease = await self.lease_repo.get_by_id(db, record.lease_id)
+        if not lease:
+            raise RelatedResourceNotFoundError(f"Lease {record.lease_id} not found.")
+
+        await self._authorize_user_to_property(
+            db,
+            current_user,
+            property_id=None,
+            contract_id=lease.contract_id,
+        )
+
         return record
 
     def apply_payment(self, record: BillingRecord, cumulative_paid: Decimal) -> BillingRecord:

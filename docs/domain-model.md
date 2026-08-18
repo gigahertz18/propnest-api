@@ -201,7 +201,7 @@ Status is a native-enum state machine — a freshly generated record starts `pen
 
 `BillingRecord` deliberately has no `payment_id`/`amount_paid` field — it doesn't track its own paid-to-date total. Instead, `Payment.billing_record_id` (nullable, see §26) links payments to it, and `PaymentService.create_payment` sums the linked non-voided payments and calls `LeaseBillingService.apply_payment` to reconcile that sum into this record's `status`/`overpaid_amount` — the `Payment ↔ Billing` roadmap item (see `roadmap-alignment.md`) is implemented. This is long-term-lease-specific by design, mirroring `Lease` itself: a future short-term booking-billing model is expected to be its own entity, not a `rental_type` branch grafted onto this one.
 
-`POST /api/v1/billing-records/generate` and `POST /api/v1/billing-records/{id}/evaluate-overdue` are both manager-or-above gated, following the same ownership-scoping pattern as Lease (authorized via the lease's contract's property).
+`POST /api/v1/billing-records/generate`, `POST /api/v1/billing-records/{id}/evaluate-overdue`, `GET /api/v1/billing-records/?lease_id=...`, and `GET /api/v1/billing-records/{id}` are all manager-or-above gated, following the same ownership-scoping pattern as Lease (authorized via the lease's contract's property).
 
 ---
 
