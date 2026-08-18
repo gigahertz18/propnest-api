@@ -26,6 +26,13 @@ class MockBillingRecordRepo(MockCRUDRepo):
         matches = await self._filter_by(lease_id=lease_id, period_start=period_start)
         return matches[0] if matches else None
 
+    async def get_all_for_lease(self, db, lease_id, skip=0, limit=100):
+        matches = await self._filter_by(lease_id=lease_id)
+        return matches[skip : skip + limit]
+
+    async def count_for_lease(self, db, lease_id):
+        return len(await self._filter_by(lease_id=lease_id))
+
 
 def _make_service(billing_records=None, leases=None, contracts=None, properties=None) -> LeaseBillingService:
     billing_record_repo = MockBillingRecordRepo(billing_records or {})
@@ -458,6 +465,117 @@ class TestEvaluateOverdue:
 
         with pytest.raises(BillingRecordForbiddenError):
             await svc.evaluate_overdue(mock_db, record.id, current_user=make_manager())
+
+
+# ─── list_for_lease ───────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+class TestListForLease:
+    async def test_admin_lists_records_for_lease(self, mock_db):
+        lease = _lease()
+        contract = SimpleNamespace(id=lease.contract_id, property_id=uuid4())
+        record = _billing_record(lease_id=lease.id)
+        svc = _make_service(
+            billing_records={record.id: record},
+            leases={lease.id: lease},
+            contracts={contract.id: contract},
+            properties={contract.property_id: SimpleNamespace(id=contract.property_id, manager_id=uuid4())},
+        )
+
+        result = await svc.list_for_lease(mock_db, lease.id, current_user=make_admin())
+
+        assert result.total == 1
+        assert result.items == [record]
+
+    async def test_manager_can_list_for_owned_property(self, mock_db):
+        manager_id = uuid4()
+        lease = _lease()
+        contract = SimpleNamespace(id=lease.contract_id, property_id=uuid4())
+        record = _billing_record(lease_id=lease.id)
+        svc = _make_service(
+            billing_records={record.id: record},
+            leases={lease.id: lease},
+            contracts={contract.id: contract},
+            properties={contract.property_id: SimpleNamespace(id=contract.property_id, manager_id=manager_id)},
+        )
+
+        result = await svc.list_for_lease(mock_db, lease.id, current_user=make_manager(manager_id))
+
+        assert result.total == 1
+
+    async def test_manager_forbidden_for_unowned_property(self, mock_db):
+        lease = _lease()
+        contract = SimpleNamespace(id=lease.contract_id, property_id=uuid4())
+        svc = _make_service(
+            leases={lease.id: lease},
+            contracts={contract.id: contract},
+            properties={contract.property_id: SimpleNamespace(id=contract.property_id, manager_id=uuid4())},
+        )
+
+        with pytest.raises(BillingRecordForbiddenError):
+            await svc.list_for_lease(mock_db, lease.id, current_user=make_manager())
+
+    async def test_raises_when_lease_not_found(self, mock_db):
+        svc = _make_service()
+        with pytest.raises(RelatedResourceNotFoundError):
+            await svc.list_for_lease(mock_db, uuid4(), current_user=make_admin())
+
+
+# ─── get_billing_record ───────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+class TestGetBillingRecord:
+    async def test_admin_can_get_billing_record(self, mock_db):
+        lease = _lease()
+        contract = SimpleNamespace(id=lease.contract_id, property_id=uuid4())
+        record = _billing_record(lease_id=lease.id)
+        svc = _make_service(
+            billing_records={record.id: record},
+            leases={lease.id: lease},
+            contracts={contract.id: contract},
+            properties={contract.property_id: SimpleNamespace(id=contract.property_id, manager_id=uuid4())},
+        )
+
+        result = await svc.get_billing_record(mock_db, record.id, current_user=make_admin())
+
+        assert result is record
+
+    async def test_manager_can_get_for_owned_property(self, mock_db):
+        manager_id = uuid4()
+        lease = _lease()
+        contract = SimpleNamespace(id=lease.contract_id, property_id=uuid4())
+        record = _billing_record(lease_id=lease.id)
+        svc = _make_service(
+            billing_records={record.id: record},
+            leases={lease.id: lease},
+            contracts={contract.id: contract},
+            properties={contract.property_id: SimpleNamespace(id=contract.property_id, manager_id=manager_id)},
+        )
+
+        result = await svc.get_billing_record(mock_db, record.id, current_user=make_manager(manager_id))
+
+        assert result is record
+
+    async def test_manager_forbidden_for_unowned_property(self, mock_db):
+        lease = _lease()
+        contract = SimpleNamespace(id=lease.contract_id, property_id=uuid4())
+        record = _billing_record(lease_id=lease.id)
+        svc = _make_service(
+            billing_records={record.id: record},
+            leases={lease.id: lease},
+            contracts={contract.id: contract},
+            properties={contract.property_id: SimpleNamespace(id=contract.property_id, manager_id=uuid4())},
+        )
+
+        with pytest.raises(BillingRecordForbiddenError):
+            await svc.get_billing_record(mock_db, record.id, current_user=make_manager())
+
+    async def test_raises_when_billing_record_not_found(self, mock_db):
+        svc = _make_service()
+        with pytest.raises(RelatedResourceNotFoundError):
+            await svc.get_billing_record(mock_db, uuid4(), current_user=make_admin())
 
 
 # ─── apply_payment ────────────────────────────────────────────────────────────

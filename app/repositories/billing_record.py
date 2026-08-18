@@ -41,6 +41,9 @@ class BillingRecordRepository(BaseRepository[BillingRecord, BillingRecordCreate,
     ) -> Sequence[BillingRecord]:
         return await self._all(db, self.model.lease_id == lease_id, offset=skip, limit=limit)
 
+    async def count_for_lease(self, db: AsyncSession, lease_id: uuid.UUID) -> int:
+        return await self._count(db, self.model.lease_id == lease_id)
+
     async def sum_outstanding(self, db: AsyncSession) -> Decimal:
         """Total still owed (amount_due + any charged late fee) across
         every non-terminal (not paid/written_off) billing record."""

@@ -113,6 +113,17 @@ class TestGetAllForLease:
         assert result == []
 
 
+@pytest.mark.asyncio
+class TestCountForLease:
+    async def test_counts_only_records_for_lease(self, db, lease, billing_record):
+        result = await billing_record_repo.count_for_lease(db, lease.id)
+        assert result == 1
+
+    async def test_returns_zero_for_lease_with_no_records(self, db, lease):
+        result = await billing_record_repo.count_for_lease(db, lease.id)
+        assert result == 0
+
+
 # ─── sum_outstanding / sum_outstanding_for_manager ───────────────────────────
 
 

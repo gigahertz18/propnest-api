@@ -75,6 +75,78 @@ class TestGenerateBillingRecordRoute:
 
 
 @pytest.mark.asyncio
+class TestListBillingRecordRoute:
+    async def test_manager_lists_records_for_owned_lease(self, client, db, authenticate_manager):
+        ctx = await authenticate_manager()
+        prop = await make_property_model(db, manager_id=ctx.user.id)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, property_id=prop.id, tenant_id=tenant.id)
+        lease = await make_lease_model(db, contract_id=contract.id)
+        record = await make_billing_record_model(db, lease_id=lease.id, period_start=date(2026, 8, 1))
+
+        other_prop = await make_property_model(db, name="Other Property", manager_id=ctx.user.id)
+        other_contract = await make_contract_model(db, property_id=other_prop.id, tenant_id=tenant.id)
+        other_lease = await make_lease_model(db, contract_id=other_contract.id)
+        await make_billing_record_model(db, lease_id=other_lease.id, period_start=date(2026, 8, 1))
+
+        response = await client.get("/api/v1/billing-records/", params={"lease_id": str(lease.id)}, headers=ctx.headers)
+        assert response.status_code == 200
+        body = response.json()
+        assert body["total"] == 1
+        assert body["items"][0]["id"] == str(record.id)
+
+    async def test_returns_404_when_lease_not_found(self, client, authenticate_admin):
+        ctx = await authenticate_admin()
+        response = await client.get(
+            "/api/v1/billing-records/", params={"lease_id": str(uuid.uuid4())}, headers=ctx.headers
+        )
+        assert response.status_code == 404
+
+    async def test_manager_forbidden_for_another_managers_property(self, client, db, authenticate_manager):
+        ctx = await authenticate_manager()
+        other_manager = await make_user_model(db, username="bmgr2", email="bmgr2@example.com", role=UserRole.MANAGER)
+        tenant = await make_tenant_model(db)
+        prop = await make_property_model(db, manager_id=other_manager.id)
+        contract = await make_contract_model(db, property_id=prop.id, tenant_id=tenant.id)
+        lease = await make_lease_model(db, contract_id=contract.id)
+
+        response = await client.get("/api/v1/billing-records/", params={"lease_id": str(lease.id)}, headers=ctx.headers)
+        assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+class TestGetBillingRecordRoute:
+    async def test_manager_gets_record_for_owned_property(self, client, db, authenticate_manager):
+        ctx = await authenticate_manager()
+        prop = await make_property_model(db, manager_id=ctx.user.id)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, property_id=prop.id, tenant_id=tenant.id)
+        lease = await make_lease_model(db, contract_id=contract.id)
+        record = await make_billing_record_model(db, lease_id=lease.id, period_start=date(2026, 8, 1))
+
+        response = await client.get(f"/api/v1/billing-records/{record.id}", headers=ctx.headers)
+        assert response.status_code == 200
+        assert response.json()["id"] == str(record.id)
+
+    async def test_returns_404_when_not_found(self, client, authenticate_admin):
+        ctx = await authenticate_admin()
+        response = await client.get(f"/api/v1/billing-records/{uuid.uuid4()}", headers=ctx.headers)
+        assert response.status_code == 404
+
+    async def test_manager_forbidden_for_another_managers_property(self, client, db, authenticate_manager):
+        ctx = await authenticate_manager()
+        other_manager = await make_user_model(db, username="bmgr3", email="bmgr3@example.com", role=UserRole.MANAGER)
+        tenant = await make_tenant_model(db)
+        prop = await make_property_model(db, manager_id=other_manager.id)
+        contract = await make_contract_model(db, property_id=prop.id, tenant_id=tenant.id)
+        lease = await make_lease_model(db, contract_id=contract.id)
+        record = await make_billing_record_model(db, lease_id=lease.id, period_start=date(2026, 8, 1))
+
+        response = await client.get(f"/api/v1/billing-records/{record.id}", headers=ctx.headers)
+        assert response.status_code == 403
+
+
+@pytest.mark.asyncio
 class TestEvaluateOverdueRoute:
     async def test_admin_can_evaluate_overdue_and_late_fee_is_applied(self, client, db, authenticate_admin):
         ctx = await authenticate_admin()
