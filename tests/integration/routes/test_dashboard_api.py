@@ -52,7 +52,7 @@ class TestGetDashboardSummaryRoute:
         overpaid_record = await make_billing_record_model(
             db,
             lease_id=lease.id,
-            period_start=date.today().replace(day=1) + timedelta(days=30),
+            period_start=(date.today().replace(day=1) + timedelta(days=32)).replace(day=1),
             amount_due=1000.00,
             status="paid",
         )
