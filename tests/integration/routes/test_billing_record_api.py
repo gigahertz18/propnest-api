@@ -255,3 +255,130 @@ class TestEvaluateOverdueRoute:
         ctx = await authenticate_admin()
         response = await client.post(f"/api/v1/billing-records/{uuid.uuid4()}/evaluate-overdue", headers=ctx.headers)
         assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+class TestWriteOffBillingRecordRoute:
+    async def test_admin_can_write_off_overdue_record(self, client, db, authenticate_admin):
+        ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, property_id=prop.id, tenant_id=tenant.id)
+        lease = await make_lease_model(db, contract_id=contract.id)
+        record = await make_billing_record_model(db, lease_id=lease.id, status="overdue")
+
+        response = await client.post(f"/api/v1/billing-records/{record.id}/write-off", headers=ctx.headers)
+        assert response.status_code == 200
+        assert response.json()["status"] == "written_off"
+
+    async def test_returns_409_when_transition_invalid(self, client, db, authenticate_admin):
+        ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, property_id=prop.id, tenant_id=tenant.id)
+        lease = await make_lease_model(db, contract_id=contract.id)
+        record = await make_billing_record_model(db, lease_id=lease.id, status="pending")
+
+        response = await client.post(f"/api/v1/billing-records/{record.id}/write-off", headers=ctx.headers)
+        assert response.status_code == 409
+
+    async def test_returns_404_when_not_found(self, client, authenticate_admin):
+        ctx = await authenticate_admin()
+        response = await client.post(f"/api/v1/billing-records/{uuid.uuid4()}/write-off", headers=ctx.headers)
+        assert response.status_code == 404
+
+    async def test_manager_forbidden_for_another_managers_property(self, client, db, authenticate_manager):
+        ctx = await authenticate_manager()
+        other_manager = await make_user_model(db, username="bmgr4", email="bmgr4@example.com", role=UserRole.MANAGER)
+        tenant = await make_tenant_model(db)
+        prop = await make_property_model(db, manager_id=other_manager.id)
+        contract = await make_contract_model(db, property_id=prop.id, tenant_id=tenant.id)
+        lease = await make_lease_model(db, contract_id=contract.id)
+        record = await make_billing_record_model(db, lease_id=lease.id, status="overdue")
+
+        response = await client.post(f"/api/v1/billing-records/{record.id}/write-off", headers=ctx.headers)
+        assert response.status_code == 403
+
+    async def test_regular_user_forbidden(self, client, db, authenticate_user):
+        ctx = await authenticate_user()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, property_id=prop.id, tenant_id=tenant.id)
+        lease = await make_lease_model(db, contract_id=contract.id)
+        record = await make_billing_record_model(db, lease_id=lease.id, status="overdue")
+
+        response = await client.post(f"/api/v1/billing-records/{record.id}/write-off", headers=ctx.headers)
+        assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+class TestCorrectLateFeeRoute:
+    async def test_admin_can_correct_late_fee_on_overdue_record(self, client, db, authenticate_admin):
+        ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, property_id=prop.id, tenant_id=tenant.id)
+        lease = await make_lease_model(db, contract_id=contract.id)
+        record = await make_billing_record_model(
+            db, lease_id=lease.id, status="overdue", late_fee_applied=True, late_fee_amount_charged=500.00
+        )
+
+        payload = {"late_fee_applied": False, "late_fee_amount_charged": None}
+        response = await client.patch(
+            f"/api/v1/billing-records/{record.id}/late-fee", json=payload, headers=ctx.headers
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["late_fee_applied"] is False
+        assert body["late_fee_amount_charged"] is None
+
+    async def test_returns_422_when_amount_missing_but_applied_true(self, client, db, authenticate_admin):
+        ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, property_id=prop.id, tenant_id=tenant.id)
+        lease = await make_lease_model(db, contract_id=contract.id)
+        record = await make_billing_record_model(db, lease_id=lease.id, status="overdue")
+
+        payload = {"late_fee_applied": True, "late_fee_amount_charged": None}
+        response = await client.patch(
+            f"/api/v1/billing-records/{record.id}/late-fee", json=payload, headers=ctx.headers
+        )
+        assert response.status_code == 422
+
+    async def test_returns_409_when_record_is_paid(self, client, db, authenticate_admin):
+        ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, property_id=prop.id, tenant_id=tenant.id)
+        lease = await make_lease_model(db, contract_id=contract.id)
+        record = await make_billing_record_model(db, lease_id=lease.id, status="paid")
+
+        payload = {"late_fee_applied": True, "late_fee_amount_charged": 100.00}
+        response = await client.patch(
+            f"/api/v1/billing-records/{record.id}/late-fee", json=payload, headers=ctx.headers
+        )
+        assert response.status_code == 409
+
+    async def test_returns_404_when_not_found(self, client, authenticate_admin):
+        ctx = await authenticate_admin()
+        payload = {"late_fee_applied": False, "late_fee_amount_charged": None}
+        response = await client.patch(
+            f"/api/v1/billing-records/{uuid.uuid4()}/late-fee", json=payload, headers=ctx.headers
+        )
+        assert response.status_code == 404
+
+    async def test_manager_forbidden_for_another_managers_property(self, client, db, authenticate_manager):
+        ctx = await authenticate_manager()
+        other_manager = await make_user_model(db, username="bmgr5", email="bmgr5@example.com", role=UserRole.MANAGER)
+        tenant = await make_tenant_model(db)
+        prop = await make_property_model(db, manager_id=other_manager.id)
+        contract = await make_contract_model(db, property_id=prop.id, tenant_id=tenant.id)
+        lease = await make_lease_model(db, contract_id=contract.id)
+        record = await make_billing_record_model(db, lease_id=lease.id, status="overdue")
+
+        payload = {"late_fee_applied": True, "late_fee_amount_charged": 100.00}
+        response = await client.patch(
+            f"/api/v1/billing-records/{record.id}/late-fee", json=payload, headers=ctx.headers
+        )
+        assert response.status_code == 403

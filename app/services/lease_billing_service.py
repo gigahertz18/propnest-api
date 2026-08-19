@@ -14,13 +14,14 @@ from app.repositories.billing_record import BillingRecordRepository
 from app.repositories.contract import ContractRepository
 from app.repositories.lease import LeaseRepository
 from app.schemas.base import PaginatedResponse
-from app.schemas.billing_record import BillingRecordCreate
+from app.schemas.billing_record import BillingRecordCreate, BillingRecordLateFeeCorrection
 from app.services.audit import write_audit_log
 from app.services.base import ResourceAuthorizationMixin
 from app.services.utils import integrity_error_message
 from app.services.exceptions import (
     BillingRecordAlreadyGeneratedError,
     BillingRecordForbiddenError,
+    BillingRecordCorrectionNotAllowedError,
     InvalidBillingRecordTransitionError,
     RelatedResourceNotFoundError,
 )
@@ -230,6 +231,86 @@ class LeaseBillingService(ResourceAuthorizationMixin):
             contract_id=lease.contract_id,
         )
 
+        return record
+
+    async def write_off_billing_record(
+        self,
+        db: AsyncSession,
+        billing_record_id: UUID,
+        current_user,
+    ) -> BillingRecord:
+        """
+        Transition a billing record to `written_off` — the only
+        state-machine-valid path to that status, and the only route-exposed
+        status mutation outside of `evaluate_overdue`/`apply_payment`.
+        Routed through `_transition` so `_VALID_TRANSITIONS` stays the
+        single source of truth for what's legal (only reachable from
+        `partially_paid`/`overdue` — not `pending`, `paid`, or itself).
+        """
+        record = await self.billing_record_repo.get_by_id(db, billing_record_id)
+        if not record:
+            raise RelatedResourceNotFoundError(f"BillingRecord {billing_record_id} not found.")
+
+        lease = await self.lease_repo.get_by_id(db, record.lease_id)
+        if not lease:
+            raise RelatedResourceNotFoundError(f"Lease {record.lease_id} not found.")
+
+        await self._authorize_user_to_property(
+            db,
+            current_user,
+            property_id=None,
+            contract_id=lease.contract_id,
+        )
+
+        self._transition(record, BillingRecordStatus.written_off)
+
+        await db.flush()
+        await db.refresh(record)
+        write_audit_log(db, current_user, AuditAction.UPDATE, "BillingRecord", record.id)
+        await db.commit()
+        return record
+
+    async def correct_late_fee(
+        self,
+        db: AsyncSession,
+        billing_record_id: UUID,
+        payload: BillingRecordLateFeeCorrection,
+        current_user,
+    ) -> BillingRecord:
+        """
+        Correct a billing record's late-fee fields — e.g. to reverse an
+        erroneous overdue evaluation. Only permitted while the record is
+        still non-terminal (pending/partially_paid/overdue); once `paid` or
+        `written_off` the outcome is settled and late-fee history
+        shouldn't be rewritten under it.
+        """
+        record = await self.billing_record_repo.get_by_id(db, billing_record_id)
+        if not record:
+            raise RelatedResourceNotFoundError(f"BillingRecord {billing_record_id} not found.")
+
+        lease = await self.lease_repo.get_by_id(db, record.lease_id)
+        if not lease:
+            raise RelatedResourceNotFoundError(f"Lease {record.lease_id} not found.")
+
+        await self._authorize_user_to_property(
+            db,
+            current_user,
+            property_id=None,
+            contract_id=lease.contract_id,
+        )
+
+        if record.status in (BillingRecordStatus.paid, BillingRecordStatus.written_off):
+            raise BillingRecordCorrectionNotAllowedError(
+                f"Cannot correct late fee on BillingRecord {record.id} in terminal status {record.status}."
+            )
+
+        record.late_fee_applied = payload.late_fee_applied
+        record.late_fee_amount_charged = payload.late_fee_amount_charged
+
+        await db.flush()
+        await db.refresh(record)
+        write_audit_log(db, current_user, AuditAction.UPDATE, "BillingRecord", record.id)
+        await db.commit()
         return record
 
     def apply_payment(self, record: BillingRecord, cumulative_paid: Decimal) -> BillingRecord:

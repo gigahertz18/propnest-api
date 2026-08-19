@@ -371,6 +371,14 @@ class InvalidBillingRecordTransitionError(ServiceException):
     pass
 
 
+class BillingRecordCorrectionNotAllowedError(ServiceException):
+    """Raised when a late-fee correction is attempted against a BillingRecord
+    that's already in a terminal status (paid/written off). Once a record is settled,
+    its late-fee fields shouldn't be rewritten out fom under whatever was actually collected/written off."""
+
+    pass
+
+
 # ─── Receipt ──────────────────────────────────────────────────────────────────
 class ReceiptForbiddenError(ResourceForbiddenError):
     """Raised when a receipt operation is attempted by a manager who doesn't
