@@ -19,10 +19,11 @@ async def get_dashboard_summary(
     current_user: User = Depends(require_manager_or_above),
 ):
     """Composed landlord dashboard: collected this month, outstanding,
-    late payments, vacant units, expiring leases, and recent payments."""
+    total credits, late payments, vacant units, expiring leases, and recent payments."""
     return DashboardSummaryResponse(
         collected_this_month=await dashboard_service.collected_this_month(db, current_user),
         outstanding=await dashboard_service.outstanding(db, current_user),
+        total_credits=await dashboard_service.total_credits(db, current_user),
         late_payments=await dashboard_service.late_payments(db, current_user),
         vacant_units=await dashboard_service.vacant_units(db, current_user),
         expiring_leases=await dashboard_service.expiring_leases(

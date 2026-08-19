@@ -52,10 +52,18 @@ class MockPaymentRepo:
 
 class MockBillingRecordRepo:
     def __init__(
-        self, outstanding=Decimal("0"), outstanding_for_manager=Decimal("0"), unpaid=None, unpaid_for_manager=None
+        self,
+        outstanding=Decimal("0"),
+        outstanding_for_manager=Decimal("0"),
+        credits=Decimal("0"),
+        credits_for_manager=Decimal("0"),
+        unpaid=None,
+        unpaid_for_manager=None,
     ):
         self.outstanding = outstanding
         self.outstanding_for_manager = outstanding_for_manager
+        self.credits = credits
+        self.credits_for_manager = credits_for_manager
         self.unpaid = unpaid or []
         self.unpaid_for_manager = unpaid_for_manager or []
 
@@ -64,6 +72,12 @@ class MockBillingRecordRepo:
 
     async def sum_outstanding_for_manager(self, db, manager_id):
         return self.outstanding_for_manager
+
+    async def sum_credits(self, db):
+        return self.credits
+
+    async def sum_credits_for_manager(self, db, manager_id):
+        return self.credits_for_manager
 
     async def get_unpaid_with_grace(self, db):
         return self.unpaid
@@ -171,6 +185,22 @@ class TestOutstanding:
         svc = _make_service()
         with pytest.raises(DashboardForbiddenError):
             await svc.outstanding(mock_db, current_user=_user())
+
+
+@pytest.mark.asyncio
+class TestTotalCredits:
+    async def test_admin_sees_unscoped_sum(self, mock_db):
+        svc = _make_service(billing_record_repo=MockBillingRecordRepo(credits=Decimal("250.00")))
+        assert await svc.total_credits(mock_db, current_user=_admin()) == Decimal("250.00")
+
+    async def test_manager_sees_scoped_sum(self, mock_db):
+        svc = _make_service(billing_record_repo=MockBillingRecordRepo(credits_for_manager=Decimal("100.00")))
+        assert await svc.total_credits(mock_db, current_user=_manager()) == Decimal("100.00")
+
+    async def test_other_role_is_forbidden(self, mock_db):
+        svc = _make_service()
+        with pytest.raises(DashboardForbiddenError):
+            await svc.total_credits(mock_db, current_user=_user())
 
 
 @pytest.mark.asyncio

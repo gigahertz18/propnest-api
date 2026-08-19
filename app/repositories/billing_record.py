@@ -79,6 +79,30 @@ class BillingRecordRepository(BaseRepository[BillingRecord, BillingRecordCreate,
         result = await db.execute(stmt)
         return result.scalar_one() or Decimal("0")
 
+    async def sum_credits(self, db: AsyncSession) -> Decimal:
+        """Total net overpayment credit — `overpaid_amount` is only ever set on
+        terminal `paid` records (see `LeaseBillingService.apply_payment`), which
+        `sum_outstanding` already excludes, so this is a disjoint figure rather
+        than something to net into `sum_outstanding`."""
+        stmt = select(func.sum(BillingRecord.overpaid_amount)).where(BillingRecord.overpaid_amount.isnot(None))
+        result = await db.execute(stmt)
+        return result.scalar_one() or Decimal("0")
+
+    async def sum_credits_for_manager(self, db: AsyncSession, manager_id: uuid.UUID) -> Decimal:
+        owned_property_ids = select(Property.id).where(Property.manager_id == manager_id)
+
+        stmt = (
+            select(func.sum(BillingRecord.overpaid_amount))
+            .join(Lease, Lease.id == BillingRecord.lease_id)
+            .join(Contract, Contract.id == Lease.contract_id)
+            .where(
+                BillingRecord.overpaid_amount.isnot(None),
+                Contract.property_id.in_(owned_property_ids),
+            )
+        )
+        result = await db.execute(stmt)
+        return result.scalar_one() or Decimal("0")
+
     async def get_unpaid_with_grace(self, db: AsyncSession) -> Sequence[Row]:
         """Every non-terminal billing record, paired with its lease's
         grace_period_days — lateness itself is computed in Python by the

@@ -1,6 +1,7 @@
 import pytest
 
 from datetime import date, timedelta
+from decimal import Decimal
 
 from app.models.property import PropertyStatus
 from tests.factories import (
@@ -15,7 +16,7 @@ from tests.factories import (
 
 @pytest.mark.asyncio
 class TestGetDashboardSummaryRoute:
-    async def test_response_contains_all_six_figures(self, client, db, authenticate_admin):
+    async def test_response_contains_all_seven_figures(self, client, authenticate_admin):
         ctx = await authenticate_admin()
 
         response = await client.get("/api/v1/dashboard/", headers=ctx.headers)
@@ -25,6 +26,7 @@ class TestGetDashboardSummaryRoute:
         assert set(data.keys()) == {
             "collected_this_month",
             "outstanding",
+            "total_credits",
             "late_payments",
             "vacant_units",
             "expiring_leases",
@@ -47,6 +49,16 @@ class TestGetDashboardSummaryRoute:
             amount_due=1000.00,
             status="pending",
         )
+        overpaid_record = await make_billing_record_model(
+            db,
+            lease_id=lease.id,
+            period_start=(date.today().replace(day=1) + timedelta(days=32)).replace(day=1),
+            amount_due=1000.00,
+            status="paid",
+        )
+        overpaid_record.overpaid_amount = Decimal("150.00")
+        db.add(overpaid_record)
+        await db.flush()
         await make_payment_model(db, contract.id, amount=500.00)
 
         response = await client.get("/api/v1/dashboard/", headers=ctx.headers)
@@ -55,6 +67,7 @@ class TestGetDashboardSummaryRoute:
         data = response.json()
         assert data["collected_this_month"] == "500.00"
         assert data["outstanding"] == "1000.00"
+        assert data["total_credits"] == "150.00"
         assert [r["id"] for r in data["late_payments"]] == [str(billing_record.id)]
         assert [item["id"] for item in data["expiring_leases"]] == [str(lease.id)]
         assert len(data["recent_payments"]) == 1

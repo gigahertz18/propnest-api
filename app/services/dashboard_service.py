@@ -16,7 +16,7 @@ from app.services.exceptions import DashboardForbiddenError
 
 class DashboardService:
     """
-    Read-only landlord dashboard: six independent aggregation figures over
+    Read-only landlord dashboard: seven independent aggregation figures over
     Property/Payment/BillingRecord/Lease. Each figure is its own query —
     deliberately not one mega-query joining every entity together.
     """
@@ -60,6 +60,16 @@ class DashboardService:
         if role == UserRole.ADMIN:
             return await self.billing_record_repo.sum_outstanding(db)
         return await self.billing_record_repo.sum_outstanding_for_manager(db, current_user.id)
+
+    async def total_credits(self, db: AsyncSession, current_user) -> Decimal:
+        """Net overpayment credit across `paid` billing records - additive to
+        `outstanding`, not netted into it (see `BillingRecordRepository.sum_credits`)."""
+        role = self._require_manager_or_admin(current_user)
+
+        if role == UserRole.ADMIN:
+            return await self.billing_record_repo.sum_credits(db)
+
+        return await self.billing_record_repo.sum_credits_for_manager(db, current_user.id)
 
     async def late_payments(self, db: AsyncSession, current_user) -> list[BillingRecord]:
         role = self._require_manager_or_admin(current_user)

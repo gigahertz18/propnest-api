@@ -190,6 +190,64 @@ class TestSumOutstanding:
         assert result == Decimal("1000.00")
 
 
+# ─── sum_credits / sum_credits_for_manager ────────────────────────────────────
+
+
+@pytest.mark.asyncio
+class TestSumCredits:
+    async def test_sums_overpaid_amount_on_paid_records(self, db, lease):
+        await make_billing_record_model(
+            db, lease_id=lease.id, period_start=date(2026, 8, 1), amount_due=1000.00, status="paid"
+        )
+        record = await make_billing_record_model(
+            db, lease_id=lease.id, period_start=date(2026, 9, 1), amount_due=1000.00, status="paid"
+        )
+        record.overpaid_amount = Decimal("250.00")
+        db.add(record)
+        await db.flush()
+
+        result = await billing_record_repo.sum_credits(db)
+
+        assert result == Decimal("250.00")
+
+    async def test_excludes_records_with_no_overpaid_amount(self, db, lease):
+        await make_billing_record_model(
+            db, lease_id=lease.id, period_start=date(2026, 8, 1), amount_due=1000.00, status="pending"
+        )
+        await make_billing_record_model(
+            db, lease_id=lease.id, period_start=date(2026, 9, 1), amount_due=1000.00, status="paid"
+        )
+
+        result = await billing_record_repo.sum_credits(db)
+
+        assert result == Decimal("0")
+
+    async def test_sum_credits_for_manager_scopes_to_owned_properties(self, db, tenant):
+        manager = await make_manager_model(db)
+        other_mgr = await make_manager_model(db, username="other_mgr_cr", email="other_mgr_cr@example.com")
+        owned_property = await make_property_model(db, manager_id=manager.id)
+        other_property = await make_property_model(db, name="Other Property", manager_id=other_mgr.id)
+        owned_contract = await make_contract_model(db, property_id=owned_property.id, tenant_id=tenant.id)
+        other_contract = await make_contract_model(db, property_id=other_property.id, tenant_id=tenant.id)
+        owned_lease = await make_lease_model(db, contract_id=owned_contract.id)
+        other_lease = await make_lease_model(db, contract_id=other_contract.id)
+
+        owned_record = await make_billing_record_model(
+            db, lease_id=owned_lease.id, period_start=date(2026, 8, 1), amount_due=1000.00, status="paid"
+        )
+        owned_record.overpaid_amount = Decimal("100.00")
+        other_record = await make_billing_record_model(
+            db, lease_id=other_lease.id, period_start=date(2026, 8, 1), amount_due=1000.00, status="paid"
+        )
+        other_record.overpaid_amount = Decimal("900.00")
+        db.add_all([owned_record, other_record])
+        await db.flush()
+
+        result = await billing_record_repo.sum_credits_for_manager(db, manager.id)
+
+        assert result == Decimal("100.00")
+
+
 # ─── get_unpaid_with_grace / get_unpaid_with_grace_for_manager ───────────────
 
 
