@@ -67,12 +67,13 @@ async def generate_billing_record(
     """
     Generate the billing record for a lease's next period.
 
-    period_end/due_date/amount_due are computed server-side from the lease's
-    terms — callers only supply lease_id and period_start. Fails with 409 if
-    a record for that period already exists.
+    period_start/period_end/due_date/amount_due are all computed server-side
+    from the lease's terms — the caller only supplies lease_id. Fails with
+    409 if a record for the resulting period already exists (a concurrent
+    duplicate request).
     """
     try:
-        return await billing_service.generate_billing_record(db, payload.lease_id, payload.period_start, current_user)
+        return await billing_service.generate_billing_record(db, payload.lease_id, current_user)
     except BillingRecordAlreadyGeneratedError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 

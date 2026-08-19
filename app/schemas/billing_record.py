@@ -59,10 +59,12 @@ class BillingRecordResponse(BillingRecordBase, BaseResponse):
 # ─── Route-only request bodies ───────────────────────────
 class BillingRecordGenerateRequest(BaseModel):
     """
-    Request body for `POST /billing-records/generate`. Deliberately narrower
-    than `BillingRecordCreate` — a caller supplies only `lease_id` and
-    `period_start`; the service computes `period_end`/`due_date`/
-    `amount_due`/`status` itself so a client can't spoof them.
+    Request body for `POST /billing-records/generate`. A caller supplies
+    only `lease_id` — `period_start` is derived server-side from
+    `lease.start_date` (or the prior generated period's `period_end`) so
+    periods are always contiguous and never precede the lease's actual
+    start date; `period_end`/`due_date`/`amount_due`/`status` are then
+    computed from that, same as before.
     """
 
     lease_id: uuid.UUID
