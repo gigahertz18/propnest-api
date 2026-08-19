@@ -41,6 +41,17 @@ class BillingRecordRepository(BaseRepository[BillingRecord, BillingRecordCreate,
     ) -> Sequence[BillingRecord]:
         return await self._all(db, self.model.lease_id == lease_id, offset=skip, limit=limit)
 
+    async def get_latest_for_lease(self, db: AsyncSession, lease_id: uuid.UUID) -> BillingRecord | None:
+        """Most recent billing period generated for this lease so far
+        (highest `period_end`), used by `LeaseBillingService` to anchor the
+        next period to lease.start_date + N contiguous cycles rather than
+        letting a caller pick an arbitrary period_start."""
+        return await self._first(
+            db,
+            self.model.lease_id == lease_id,
+            order_by=self.model.period_end.desc(),
+        )
+
     async def count_for_lease(self, db: AsyncSession, lease_id: uuid.UUID) -> int:
         return await self._count(db, self.model.lease_id == lease_id)
 

@@ -52,8 +52,9 @@ Build the monthly billing engine around active long-term leases.
 
 Delivered:
 
-- billing state machine (`pending → generated → partially_paid/overdue → paid/written_off`), enforced via an explicit transition table
-- idempotent generation, guarded by a DB uniqueness constraint on lease + billing period
+- billing state machine — a record starts `pending` (set at generation), and from there can move to `overdue` (grace period elapsed unpaid), `partially_paid`, or `paid`; `overdue`/`partially_paid` can each transition to the other, to `paid`, or to `written_off`; `paid`/`written_off` are terminal — enforced via an explicit transition table (there is no separate `generated` status; `pending` *is* the freshly-generated state)
+- periods are server-computed and always contiguous — `period_start` is `lease.start_date` for a lease's first record, otherwise the previous record's `period_end + 1 day`; a caller only supplies `lease_id`, never a period, so a lease can never be billed for days before it started or left with an unbilled gap between periods
+- idempotent generation, guarded by a DB uniqueness constraint on lease + billing period, covering the case of two concurrent requests computing the same next period before either commits
 - late-fee handling on crossing into overdue, per the lease's grace period and late-fee terms
 - manual trigger only — both generation and overdue evaluation are explicit calls, no scheduling/cron
 
@@ -134,14 +135,20 @@ Creation should clearly identify that a Lease is available only for long-term Co
 
 ### Billing
 
-Planned UI:
+Done (see `propnest-web/docs/product/phase-2.md` for the frontend-side detail):
 
-- billing records for a lease
+- generate the next billing record(s) for a lease — a "periods to generate" count, not a
+  caller-picked period/date, since `propnest-api` now computes `period_start` itself
+- re-evaluate/refresh a billing record's overdue status and balance on demand
+- billing records for a lease (persisted list/history, via `GET /billing-records/?lease_id=`)
 - current-period balance
 - payment state
 - overdue state
 - partial-payment state
-- payment history
+
+Planned:
+
+- payment history (per billing record, surfaced alongside the lease's billing history)
 
 The frontend should display the billing state machine rather than inventing its own status semantics.
 

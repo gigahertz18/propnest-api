@@ -1,6 +1,6 @@
 import pytest
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from uuid import uuid4
@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.models.audit_log import AuditAction, AuditLog
 from app.models.billing_record import BillingRecordStatus
+from app.models.lease import BillingCycle
 from app.services.exceptions import (
     BillingRecordAlreadyGeneratedError,
     BillingRecordForbiddenError,
@@ -32,6 +33,12 @@ class MockBillingRecordRepo(MockCRUDRepo):
 
     async def count_for_lease(self, db, lease_id):
         return len(await self._filter_by(lease_id=lease_id))
+
+    async def get_latest_for_lease(self, db, lease_id):
+        matches = await self._filter_by(lease_id=lease_id)
+        if not matches:
+            return None
+        return max(matches, key=lambda record: record.period_end)
 
 
 def _make_service(billing_records=None, leases=None, contracts=None, properties=None) -> LeaseBillingService:
@@ -71,6 +78,8 @@ def _lease(**kwargs):
         contract_id=uuid4(),
         monthly_rent=Decimal("15000.00"),
         due_day=5,
+        billing_cycle=BillingCycle.monthly,
+        start_date=date(2026, 8, 1),
         grace_period_days=3,
         late_fee_amount=Decimal("500.00"),
         late_fee_percent=None,
@@ -184,12 +193,12 @@ class TestGenerateBillingRecord:
         )
 
         admin = make_admin()
-        result = await svc.generate_billing_record(mock_db, lease.id, date(2026, 8, 1), current_user=admin)
+        result = await svc.generate_billing_record(mock_db, lease.id, current_user=admin)
 
         assert result.lease_id == lease.id
-        assert result.period_start == date(2026, 8, 1)
-        assert result.period_end == date(2026, 8, 31)
-        assert result.due_date == date(2026, 8, 5)
+        assert result.period_start == lease.start_date
+        assert result.period_end == lease.start_date + timedelta(days=30)
+        assert result.due_date == lease.start_date + timedelta(days=lease.due_day)
         assert result.amount_due == lease.monthly_rent
         assert result.status == BillingRecordStatus.pending
         assert mock_db.commit.called
@@ -202,8 +211,45 @@ class TestGenerateBillingRecord:
         assert row.entity_type == "BillingRecord"
         assert row.entity_id == result.id
 
-    async def test_clamps_due_day_to_end_of_month(self, mock_db):
-        """due_day=31 in a 30-day month clamps to the last day of that month."""
+    async def test_first_period_starts_on_lease_start_date_not_calendar_month(self, mock_db):
+        """A lease starting mid-month (e.g. Aug 18) must never be billed for
+        days before it started — the first period starts exactly on
+        start_date, not the 1st of that calendar month."""
+        lease = _lease(start_date=date(2026, 8, 18))
+        contract = SimpleNamespace(id=lease.contract_id, property_id=uuid4())
+        svc = _make_service(
+            leases={lease.id: lease},
+            contracts={contract.id: contract},
+            properties={contract.property_id: SimpleNamespace(id=contract.property_id, manager_id=uuid4())},
+        )
+
+        result = await svc.generate_billing_record(mock_db, lease.id, current_user=make_admin())
+
+        assert result.period_start == date(2026, 8, 18)
+        assert result.period_end == date(2026, 9, 17)
+        assert result.due_date >= result.period_start
+
+    async def test_second_call_generates_the_next_contiguous_period(self, mock_db):
+        """No gap between periods: the second call's period_start picks up
+        exactly where the first left off, so no day of the lease's term is
+        ever left unbilled."""
+        lease = _lease(start_date=date(2026, 8, 18))
+        contract = SimpleNamespace(id=lease.contract_id, property_id=uuid4())
+        svc = _make_service(
+            leases={lease.id: lease},
+            contracts={contract.id: contract},
+            properties={contract.property_id: SimpleNamespace(id=contract.property_id, manager_id=uuid4())},
+        )
+
+        first = await svc.generate_billing_record(mock_db, lease.id, current_user=make_admin())
+        second = await svc.generate_billing_record(mock_db, lease.id, current_user=make_admin())
+
+        assert second.period_start == first.period_end + timedelta(days=1)
+        assert second.period_end == second.period_start + timedelta(days=30)
+
+    async def test_due_day_is_a_plain_offset_not_a_calendar_day(self, mock_db):
+        """due_day is now "days after period_start", not a calendar
+        day-of-month — nothing clamps it to end-of-period anymore."""
         lease = _lease(due_day=31)
         contract = SimpleNamespace(id=lease.contract_id, property_id=uuid4())
         svc = _make_service(
@@ -212,9 +258,9 @@ class TestGenerateBillingRecord:
             properties={contract.property_id: SimpleNamespace(id=contract.property_id, manager_id=uuid4())},
         )
 
-        result = await svc.generate_billing_record(mock_db, lease.id, date(2026, 9, 1), current_user=make_admin())
+        result = await svc.generate_billing_record(mock_db, lease.id, current_user=make_admin())
 
-        assert result.due_date == date(2026, 9, 30)
+        assert result.due_date == lease.start_date + timedelta(days=31)
 
     async def test_manager_can_generate_for_owned_property(self, mock_db):
         manager_id = uuid4()
@@ -226,9 +272,7 @@ class TestGenerateBillingRecord:
             properties={contract.property_id: SimpleNamespace(id=contract.property_id, manager_id=manager_id)},
         )
 
-        result = await svc.generate_billing_record(
-            mock_db, lease.id, date(2026, 8, 1), current_user=make_manager(manager_id)
-        )
+        result = await svc.generate_billing_record(mock_db, lease.id, current_user=make_manager(manager_id))
         assert result.lease_id == lease.id
 
     async def test_manager_forbidden_for_unowned_property(self, mock_db):
@@ -242,7 +286,7 @@ class TestGenerateBillingRecord:
         repo = svc.billing_record_repo
 
         with pytest.raises(BillingRecordForbiddenError):
-            await svc.generate_billing_record(mock_db, lease.id, date(2026, 8, 1), current_user=make_manager())
+            await svc.generate_billing_record(mock_db, lease.id, current_user=make_manager())
 
         assert repo.created_payloads == []
         assert not mock_db.commit.called
@@ -257,18 +301,18 @@ class TestGenerateBillingRecord:
         )
 
         with pytest.raises(BillingRecordForbiddenError):
-            await svc.generate_billing_record(mock_db, lease.id, date(2026, 8, 1), current_user=make_regular_user())
+            await svc.generate_billing_record(mock_db, lease.id, current_user=make_regular_user())
 
     async def test_raises_when_lease_not_found(self, mock_db):
         svc = _make_service()
         with pytest.raises(RelatedResourceNotFoundError):
-            await svc.generate_billing_record(mock_db, uuid4(), date(2026, 8, 1), current_user=make_admin())
+            await svc.generate_billing_record(mock_db, uuid4(), current_user=make_admin())
 
     async def test_current_user_is_required(self, mock_db):
         lease = _lease()
         svc = _make_service(leases={lease.id: lease})
         with pytest.raises(TypeError):
-            await svc.generate_billing_record(mock_db, lease.id, date(2026, 8, 1))
+            await svc.generate_billing_record(mock_db, lease.id)
 
     async def test_translates_integrity_error_into_already_generated(self, mock_db):
         lease = _lease()
@@ -294,21 +338,31 @@ class TestGenerateBillingRecord:
         )
 
         with pytest.raises(BillingRecordAlreadyGeneratedError):
-            await svc.generate_billing_record(mock_db, lease.id, date(2026, 8, 1), current_user=make_admin())
+            await svc.generate_billing_record(mock_db, lease.id, current_user=make_admin())
 
         assert not mock_db.add.called
         assert not mock_db.commit.called
 
-    async def test_second_call_for_same_lease_and_period_does_not_create_a_duplicate(self, mock_db):
-        """Idempotency: calling generate twice for the same lease+period
-        results in exactly one record, and the second call raises a
+    async def test_concurrent_calls_computing_the_same_period_do_not_create_a_duplicate(self, mock_db):
+        """Idempotency under a race: if two requests both read "no records
+        yet" before either commits (get_latest_for_lease returns None for
+        both), they'd both compute the same period_start — the second
+        create() then hits the DB's uniqueness constraint and raises a
         specific, catchable error rather than silently duplicating."""
         lease = _lease()
         contract = SimpleNamespace(id=lease.contract_id, property_id=uuid4())
-        svc = _make_service(
-            leases={lease.id: lease},
-            contracts={contract.id: contract},
-            properties={contract.property_id: SimpleNamespace(id=contract.property_id, manager_id=uuid4())},
+
+        class RacingRepo(MockBillingRecordRepo):
+            async def get_latest_for_lease(self, db, lease_id):
+                return None
+
+        svc = LeaseBillingService(
+            billing_record_repo=RacingRepo(),
+            lease_repo=MockReadOnlyRepo({lease.id: lease}),
+            contract_repo=MockReadOnlyRepo({contract.id: contract}),
+            property_repo=MockReadOnlyRepo(
+                {contract.property_id: SimpleNamespace(id=contract.property_id, manager_id=uuid4())}
+            ),
         )
         repo = svc.billing_record_repo
 
@@ -328,10 +382,10 @@ class TestGenerateBillingRecord:
 
         repo.create = create_with_constraint
 
-        await svc.generate_billing_record(mock_db, lease.id, date(2026, 8, 1), current_user=make_admin())
+        await svc.generate_billing_record(mock_db, lease.id, current_user=make_admin())
 
         with pytest.raises(BillingRecordAlreadyGeneratedError):
-            await svc.generate_billing_record(mock_db, lease.id, date(2026, 8, 1), current_user=make_admin())
+            await svc.generate_billing_record(mock_db, lease.id, current_user=make_admin())
 
         assert len(repo.records) == 1
 
@@ -353,7 +407,7 @@ class TestGenerateBillingRecord:
         )
 
         with pytest.raises(IntegrityError):
-            await svc.generate_billing_record(mock_db, lease.id, date(2026, 8, 1), current_user=make_admin())
+            await svc.generate_billing_record(mock_db, lease.id, current_user=make_admin())
 
 
 # ─── evaluate_overdue ─────────────────────────────────────────────────────────

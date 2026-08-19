@@ -8,7 +8,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.audit_log import AuditAction
-from app.models.billing_record import BillingRecord, BillingRecordStatus, last_day_of_month
+from app.models.billing_record import BillingRecord, BillingRecordStatus
+from app.models.lease import BillingCycle
 from app.repositories.billing_record import BillingRecordRepository
 from app.repositories.contract import ContractRepository
 from app.repositories.lease import LeaseRepository
@@ -34,6 +35,14 @@ class LeaseBillingService(ResourceAuthorizationMixin):
     """
 
     forbidden_error = BillingRecordForbiddenError
+
+    # Period length in days for each BillingCycle, anchored to lease.start_date
+    # rather than calendar-month boundaries — a lease starting mid-month
+    # (e.g. Aug 18) bills Aug 18 -> Sep 17, not Aug 1 -> Aug 31, so no part of
+    # the lease's actual term ever falls outside a billing period.
+    _CYCLE_LENGTH_DAYS: dict[BillingCycle, int] = {
+        BillingCycle.monthly: 30,
+    }
 
     _VALID_TRANSITIONS: dict[BillingRecordStatus, set[BillingRecordStatus]] = {
         BillingRecordStatus.pending: {
@@ -79,10 +88,16 @@ class LeaseBillingService(ResourceAuthorizationMixin):
         self,
         db: AsyncSession,
         lease_id: UUID,
-        period_start: date,
         current_user,
     ) -> BillingRecord:
         """
+        `period_start` is never taken from the caller — it's always either
+        `lease.start_date` (this lease's first record) or the day right
+        after the most recently generated record's `period_end`, so periods
+        are contiguous and can't precede the lease's actual start (which
+        would charge rent for days before the tenant moved in) or leave a
+        gap between two records (which would silently go unbilled).
+
         Relies on a DB constraint (not a pre-check) to prevent two concurrent
         requests both generating a BillingRecord for the same lease+period;
         a resulting IntegrityError is translated into
@@ -99,8 +114,12 @@ class LeaseBillingService(ResourceAuthorizationMixin):
             contract_id=lease.contract_id,
         )
 
-        period_end = last_day_of_month(period_start)
-        due_date = date(period_start.year, period_start.month, min(lease.due_day, period_end.day))
+        latest = await self.billing_record_repo.get_latest_for_lease(db, lease_id)
+        period_start = latest.period_end + timedelta(days=1) if latest else lease.start_date
+
+        cycle_days = self._CYCLE_LENGTH_DAYS[lease.billing_cycle]
+        period_end = period_start + timedelta(days=cycle_days)
+        due_date = period_start + timedelta(days=lease.due_day)
 
         payload = BillingRecordCreate(
             lease_id=lease_id,
