@@ -68,7 +68,6 @@ class BillingRecordGenerateRequest(BaseModel):
     """
 
     lease_id: uuid.UUID
-    period_start: date
 
 
 class BillingRecordLateFeeCorrection(BaseModel):
