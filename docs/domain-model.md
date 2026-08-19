@@ -184,15 +184,23 @@ Audit rows are written via a shared `write_audit_log()` helper, called explicitl
 ```text
 LeaseBillingService.generate_billing_record
     |
+    +--> period_start computed server-side: lease.start_date for the lease's
+    |    first record, otherwise (previous record's period_end + 1 day) —
+    |    never taken from the caller, so periods are always contiguous and
+    |    can never precede the lease's actual start
+    |
     +--> BillingRecord created and left in status = pending
     |
-    +--> unique (lease_id, period_start) constraint makes re-generation for an
-         already-billed period a no-op-safe, catchable error rather than a duplicate
+    +--> unique (lease_id, period_start) constraint catches the case where two
+         concurrent requests both computed the same next period before either
+         committed — a normal repeated call just advances to the next period
 ```
 
 The model tracks:
 
-- `period_start` / `period_end` / `due_date` — the latter clamped to the lease's `due_day`, or the last day of the period's month if `due_day` overflows it
+- `period_start` — server-computed (see above), not caller-supplied
+- `period_end` — `period_start + 30 days` for the (only) `monthly` billing cycle, not calendar-month-aligned
+- `due_date` — `period_start + Lease.due_day days`; `due_day` is a day-offset from `period_start`, not a calendar day-of-month, and nothing is clamped
 - `amount_due` — a snapshot of `Lease.monthly_rent` at generation time, so a later rent change doesn't rewrite billing history
 - `late_fee_applied` / `late_fee_amount_charged` — set once `LeaseBillingService.evaluate_overdue` determines the record has passed `due_date + Lease.grace_period_days`, computed from whichever of `Lease.late_fee_amount`/`late_fee_percent` is set
 - `overpaid_amount` (nullable) — set by `LeaseBillingService.apply_payment` when cumulative non-voided payments exceed `amount_due + late_fee_amount_charged`; the record still resolves to `paid` rather than rejecting the payment, with the excess surfaced here for Dashboard/Accounting use (not yet consumed by either — Dashboard's `outstanding` figure sums `amount_due + late_fee_amount_charged`, not `overpaid_amount`)

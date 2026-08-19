@@ -34,9 +34,11 @@ class Lease(Base, TimestampMixin):
     this in application code, since a cross-table rental-type check can't be
     expressed as a DB constraint here.
 
-    `due_day` (1-31): when a month has fewer days than `due_day` (e.g. 31 in
-    February), the billing engine that consumes this field is expected to
-    clamp to the last day of that month rather than skip a cycle.
+    `due_day` (1-31): number of days after a billing period's `period_start`
+    that rent is due for that period — not a calendar day-of-month. Periods
+    themselves are anchored to `start_date` (see
+    `LeaseBillingService.generate_billing_record`), not calendar months, so
+    a lease starting mid-month is never billed for days before it started.
 
     Late fee is modeled as two mutually-exclusive optional fields —
     `late_fee_amount` (flat) xor `late_fee_percent` — rather than picking one
