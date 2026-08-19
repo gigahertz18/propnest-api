@@ -201,7 +201,9 @@ Status is a native-enum state machine — a freshly generated record starts `pen
 
 `BillingRecord` deliberately has no `payment_id`/`amount_paid` field — it doesn't track its own paid-to-date total. Instead, `Payment.billing_record_id` (nullable, see §26) links payments to it, and `PaymentService.create_payment` sums the linked non-voided payments and calls `LeaseBillingService.apply_payment` to reconcile that sum into this record's `status`/`overpaid_amount` — the `Payment ↔ Billing` roadmap item (see `roadmap-alignment.md`) is implemented. This is long-term-lease-specific by design, mirroring `Lease` itself: a future short-term booking-billing model is expected to be its own entity, not a `rental_type` branch grafted onto this one.
 
-`POST /api/v1/billing-records/generate`, `POST /api/v1/billing-records/{id}/evaluate-overdue`, `GET /api/v1/billing-records/?lease_id=...`, and `GET /api/v1/billing-records/{id}` are all manager-or-above gated, following the same ownership-scoping pattern as Lease (authorized via the lease's contract's property).
+`POST /api/v1/billing-records/generate`, `POST /api/v1/billing-records/{id}/evaluate-overdue`, `POST /api/v1/billing-records/{id}/write-off`, `PATCH /api/v1/billing-records/{id}/late-fee`, `GET /api/v1/billing-records/?lease_id=...`, and `GET /api/v1/billing-records/{id}` are all manager-or-above gated, following the same ownership-scoping pattern as Lease (authorized via the lease's contract's property).
+
+`write_off_billing_record` is the only route-exposed path to `written_off` (only reachable from `partially_paid`/`overdue`, per the transition table). `correct_late_fee` lets a manager-or-above correct `late_fee_applied`/`late_fee_amount_charged` — e.g. to reverse an erroneous overdue evaluation — but only while the record is still non-terminal; it's rejected once the record is `paid`/`written_off`.
 
 ---
 
@@ -289,4 +291,3 @@ A document record contains metadata such as:
 The actual file content is stored in MinIO.
 
 ---
-

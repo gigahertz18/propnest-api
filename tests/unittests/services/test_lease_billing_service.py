@@ -9,10 +9,12 @@ from sqlalchemy.exc import IntegrityError
 
 from app.models.audit_log import AuditAction, AuditLog
 from app.models.billing_record import BillingRecordStatus
+from app.schemas.billing_record import BillingRecordLateFeeCorrection
 from app.services.exceptions import (
     BillingRecordAlreadyGeneratedError,
     BillingRecordForbiddenError,
     InvalidBillingRecordTransitionError,
+    BillingRecordCorrectionNotAllowedError,
     RelatedResourceNotFoundError,
     ResourceForbiddenError,
 )
@@ -653,3 +655,163 @@ class TestApplyPayment:
         svc.apply_payment(record, Decimal("15000.00"))
 
         assert record.status == BillingRecordStatus.written_off
+
+
+# ─── write_off_billing_record ────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+class TestWriteOffBillingRecord:
+    async def _setup(self, status, manager_id=None):
+        lease = _lease()
+        contract = SimpleNamespace(id=lease.contract_id, property_id=uuid4())
+        record = _billing_record(lease_id=lease.id, status=status)
+        svc = _make_service(
+            billing_records={record.id: record},
+            leases={lease.id: lease},
+            contracts={contract.id: contract},
+            properties={
+                contract.property_id: SimpleNamespace(id=contract.property_id, manager_id=manager_id or uuid4())
+            },
+        )
+        return svc, record
+
+    async def test_write_off_from_partially_paid_succeeds(self, mock_db):
+        svc, record = await self._setup(BillingRecordStatus.partially_paid)
+        result = await svc.write_off_billing_record(mock_db, record.id, current_user=make_admin())
+        assert result.status == BillingRecordStatus.written_off
+        assert mock_db.commit.called
+
+    async def test_write_off_from_overdue_succeeds(self, mock_db):
+        svc, record = await self._setup(BillingRecordStatus.overdue)
+        result = await svc.write_off_billing_record(mock_db, record.id, current_user=make_admin())
+        assert result.status == BillingRecordStatus.written_off
+
+    async def test_write_off_from_pending_raises(self, mock_db):
+        svc, record = await self._setup(BillingRecordStatus.pending)
+        with pytest.raises(InvalidBillingRecordTransitionError):
+            await svc.write_off_billing_record(mock_db, record.id, current_user=make_admin())
+
+    async def test_write_off_from_paid_raises(self, mock_db):
+        svc, record = await self._setup(BillingRecordStatus.paid)
+        with pytest.raises(InvalidBillingRecordTransitionError):
+            await svc.write_off_billing_record(mock_db, record.id, current_user=make_admin())
+
+    async def test_write_off_already_written_off_raises(self, mock_db):
+        svc, record = await self._setup(BillingRecordStatus.written_off)
+        with pytest.raises(InvalidBillingRecordTransitionError):
+            await svc.write_off_billing_record(mock_db, record.id, current_user=make_admin())
+
+    async def test_missing_billing_record_raises_not_found(self, mock_db):
+        svc = _make_service()
+        with pytest.raises(RelatedResourceNotFoundError):
+            await svc.write_off_billing_record(mock_db, uuid4(), current_user=make_admin())
+
+    async def test_manager_can_write_off_owned_property(self, mock_db):
+        manager = make_manager()
+        svc, record = await self._setup(BillingRecordStatus.overdue, manager_id=manager.id)
+        result = await svc.write_off_billing_record(mock_db, record.id, current_user=manager)
+        assert result.status == BillingRecordStatus.written_off
+
+    async def test_manager_forbidden_for_unowned_property(self, mock_db):
+        svc, record = await self._setup(BillingRecordStatus.overdue, manager_id=uuid4())
+        with pytest.raises(BillingRecordForbiddenError):
+            await svc.write_off_billing_record(mock_db, record.id, current_user=make_manager())
+
+    async def test_writes_audit_log(self, mock_db):
+        svc, record = await self._setup(BillingRecordStatus.overdue)
+        admin = make_admin()
+        await svc.write_off_billing_record(mock_db, record.id, current_user=admin)
+        mock_db.add.assert_called_once()
+        row = mock_db.add.call_args.args[0]
+        assert isinstance(row, AuditLog)
+        assert row.action == AuditAction.UPDATE
+        assert row.entity_type == "BillingRecord"
+        assert row.entity_id == record.id
+
+
+# ─── correct_late_fee ─────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+class TestCorrectLateFee:
+    async def _setup(self, status, manager_id=None):
+        lease = _lease()
+        contract = SimpleNamespace(id=lease.contract_id, property_id=uuid4())
+        record = _billing_record(lease_id=lease.id, status=status)
+        svc = _make_service(
+            billing_records={record.id: record},
+            leases={lease.id: lease},
+            contracts={contract.id: contract},
+            properties={
+                contract.property_id: SimpleNamespace(id=contract.property_id, manager_id=manager_id or uuid4())
+            },
+        )
+        return svc, record
+
+    @pytest.mark.parametrize(
+        "status",
+        [BillingRecordStatus.pending, BillingRecordStatus.partially_paid, BillingRecordStatus.overdue],
+    )
+    async def test_updates_fields_on_non_terminal_status(self, mock_db, status):
+        svc, record = await self._setup(status)
+        payload = BillingRecordLateFeeCorrection(late_fee_applied=True, late_fee_amount_charged=Decimal("250.00"))
+        result = await svc.correct_late_fee(mock_db, record.id, payload, current_user=make_admin())
+        assert result.late_fee_applied is True
+        assert result.late_fee_amount_charged == Decimal("250.00")
+
+    async def test_can_clear_an_erroneous_late_fee(self, mock_db):
+        svc, record = await self._setup(
+            BillingRecordStatus.overdue,
+        )
+        record.late_fee_applied = True
+        record.late_fee_amount_charged = Decimal("500.00")
+        payload = BillingRecordLateFeeCorrection(late_fee_applied=False, late_fee_amount_charged=None)
+        result = await svc.correct_late_fee(mock_db, record.id, payload, current_user=make_admin())
+        assert result.late_fee_applied is False
+        assert result.late_fee_amount_charged is None
+
+    @pytest.mark.parametrize("status", [BillingRecordStatus.paid, BillingRecordStatus.written_off])
+    async def test_raises_on_terminal_status(self, mock_db, status):
+        svc, record = await self._setup(status)
+        payload = BillingRecordLateFeeCorrection(late_fee_applied=True, late_fee_amount_charged=Decimal("100.00"))
+        with pytest.raises(BillingRecordCorrectionNotAllowedError):
+            await svc.correct_late_fee(mock_db, record.id, payload, current_user=make_admin())
+
+    async def test_missing_billing_record_raises_not_found(self, mock_db):
+        svc = _make_service()
+        payload = BillingRecordLateFeeCorrection(late_fee_applied=False, late_fee_amount_charged=None)
+        with pytest.raises(RelatedResourceNotFoundError):
+            await svc.correct_late_fee(mock_db, uuid4(), payload, current_user=make_admin())
+
+    async def test_manager_can_correct_owned_property(self, mock_db):
+        manager = make_manager()
+        svc, record = await self._setup(BillingRecordStatus.overdue, manager_id=manager.id)
+        payload = BillingRecordLateFeeCorrection(late_fee_applied=True, late_fee_amount_charged=Decimal("300.00"))
+        result = await svc.correct_late_fee(mock_db, record.id, payload, current_user=manager)
+        assert result.late_fee_amount_charged == Decimal("300.00")
+
+    async def test_manager_forbidden_for_unowned_property(self, mock_db):
+        svc, record = await self._setup(BillingRecordStatus.overdue, manager_id=uuid4())
+        payload = BillingRecordLateFeeCorrection(late_fee_applied=True, late_fee_amount_charged=Decimal("100.00"))
+        with pytest.raises(BillingRecordForbiddenError):
+            await svc.correct_late_fee(mock_db, record.id, payload, current_user=make_manager())
+
+    async def test_writes_audit_log(self, mock_db):
+        svc, record = await self._setup(BillingRecordStatus.overdue)
+        admin = make_admin()
+        payload = BillingRecordLateFeeCorrection(late_fee_applied=True, late_fee_amount_charged=Decimal("100.00"))
+        await svc.correct_late_fee(mock_db, record.id, payload, current_user=admin)
+        row = mock_db.add.call_args.args[0]
+        assert row.action == AuditAction.UPDATE
+        assert row.entity_type == "BillingRecord"
+
+
+class TestBillingRecordLateFeeCorrectionSchema:
+    def test_requires_amount_when_applied_true(self):
+        with pytest.raises(ValueError):
+            BillingRecordLateFeeCorrection(late_fee_applied=True, late_fee_amount_charged=None)
+
+    def test_rejects_amount_when_applied_false(self):
+        with pytest.raises(ValueError):
+            BillingRecordLateFeeCorrection(late_fee_applied=False, late_fee_amount_charged=Decimal("10.00"))

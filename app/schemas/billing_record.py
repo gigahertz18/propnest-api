@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.base import BaseResponse
 from app.models.billing_record import BillingRecordStatus
@@ -67,3 +67,33 @@ class BillingRecordGenerateRequest(BaseModel):
 
     lease_id: uuid.UUID
     period_start: date
+
+
+class BillingRecordLateFeeCorrection(BaseModel):
+    """
+    Request body for `PATCH /billing-records/{id}/late-fee`. Deliberately narrower
+    than `BillingRecordUpdate` - `status` isn't correctable here (see `write_off_billing_record`
+    for the one status transition exposed to the API). Both fields are required together so
+    the payload always states a comlete, self-consistent late-fee position rather than
+    patching one field and leaving the other stale.
+    """
+
+    late_fee_applied: bool
+    late_fee_amount_charged: Decimal | None = Field(
+        default=None,
+        gt=0,
+        description="Must be greater than 0 if provided.",
+    )
+
+    @model_validator(mode="after")
+    def validate_consistency(self) -> "BillingRecordLateFeeCorrection":
+        """Mirrors `ck_billing_record_late_fee_consistency` at the schema
+        layer so a bad combination fails fast with a 422, instead of surfacing
+        as an opaque 409 from the DB constraint."""
+
+        if self.late_fee_applied and self.late_fee_amount_charged is None:
+            raise ValueError("late_fee_amount_charged is required when late_fee_applied is True")
+        if not self.late_fee_applied and self.late_fee_amount_charged is not None:
+            raise ValueError("late_fee_amount_charged must be omitted when late_fee_applied is False")
+
+        return self
