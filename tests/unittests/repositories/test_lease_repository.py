@@ -340,3 +340,40 @@ class TestLeaseRepositoryGetExpiring:
         result = await lease_repo.get_expiring_for_manager(db, manager.id, date(2026, 8, 1), date(2026, 8, 31))
 
         assert [lease.id for lease in result] == [owned_lease.id]
+
+
+# ─── get_active ───────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+class TestLeaseRepositoryGetActive:
+    async def test_returns_only_active_leases(self, db, contract, tenant):
+        active = await make_lease_model(db, contract_id=contract.id)
+        # A separate property — a property can only have one ACTIVE contract
+        # at a time (uq_active_contract_property), so this can't reuse `property_`.
+        other_property = await make_property_model(db)
+        ended_contract = await make_contract_model(db, property_id=other_property.id, tenant_id=tenant.id)
+        await make_lease_model(db, contract_id=ended_contract.id, status="ENDED")
+
+        result = await lease_repo.get_active(db)
+
+        assert [lease.id for lease in result] == [active.id]
+
+    async def test_returns_empty_list_when_no_active_leases(self, db, contract):
+        await make_lease_model(db, contract_id=contract.id, status="ENDED")
+        result = await lease_repo.get_active(db)
+        assert result == []
+
+    async def test_is_not_capped_at_the_default_pagination_limit(self, db, tenant):
+        """get_active is used by the billing job to iterate every active
+        lease — unlike get_all, it must never silently truncate at 100."""
+        for i in range(105):
+            # Each contract needs its own property — a property can only have
+            # one ACTIVE contract at a time (uq_active_contract_property).
+            p = await make_property_model(db)
+            c = await make_contract_model(db, property_id=p.id, tenant_id=tenant.id)
+            await make_lease_model(db, contract_id=c.id)
+
+        result = await lease_repo.get_active(db)
+
+        assert len(result) == 105

@@ -39,12 +39,36 @@ class BaseConfig:
     REDIS_DB: int = 0
     REDIS_PASSWORD: str | None = None
 
+    # Redis - background job queue (ARQ). Same REdis instance/credentials as
+    # above; only the logicla DB index differs. Indeces 0-9 are reserved for
+    # core app concenrs (rate limiting/lockout, and per environment variants
+    # of that - see UnittestConfig/TestConfig below); 10+ is reserved for
+    # background jobs, so the same integer was never asked to mean two different
+    # things at once for a given environment.
+    REDIS_JOBS_DB: int = 10
+
     # Redis connection tuning - mirrors the pool_size/pool_pre_pign tuning
     # already done for the SQLAlchemy engine below.
     REDIS_MAX_CONNECTIONS: int = 20
     REDIS_SOCKET_TIMEOUT: float = 2.0  # seconds a command can block before giving up
     REDIS_SOCKET_CONNECT_TIMEOUT: float = 2.0
     REDIS_HEALTH_CHECK_INTERVAL: int = 30  # seconds between pings on idle connections
+
+    # Dedicated system identity the billing scheduling job authenticates as
+    # (see app/jobs/billing_jobs.py, scripts/seed_system_user.py). Not a secret -
+    # just stable, well-known primary key so the job can fetch it directly rather
+    # than the username. AuthService.login refuses to authenticate this identity outright
+    # (see auth_service.py) - it's never meant to hold a session.
+    SYSTEM_SCHEDULER_USER_ID: str = "00000000-0000-0000-0000-000000000001"
+    SYSTEM_SCHEDULER_USERNAME: str = "system.scheduler"
+    SYSTEM_SCHEDULER_EMAIL: str = "system-scheduler@propnest.internal"
+
+    # Cadence for the automated billing jobs (app/jobs/billing_jobs.py). Both jobs run
+    # once daily at this hour:minute - deliberately explicit, separate settings (not a cron string)
+    # so the cadence can be retuned via env var alone, no code change needed.
+    # Default 01:00 - after midnight, ahead of typical morning dashboard checks.
+    BILLING_JOB_CRON_HOUR: int = 1
+    BILLING_JOB_CRON_MINUTE: int = 0
 
     # Auth / JWT
     SECRET_KEY: str = "dev-secret-key-to-the-universe-pwease-override"
@@ -72,6 +96,11 @@ class BaseConfig:
     def REDIS_URL(self) -> str:
         auth = f":{self.REDIS_PASSWORD}@" if self.REDIS_PASSWORD else ""
         return f"redis://{auth}{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+
+    @property
+    def REDIS_JOBS_URL(self) -> str:
+        auth = f":{self.REDIS_PASSWORD}@" if self.REDIS_PASSWORD else ""
+        return f"redis://{auth}{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_JOBS_DB}"
 
     @property
     def is_dev(self) -> bool:
@@ -129,6 +158,8 @@ class UnittestConfig(BaseConfig):
 
     # Separate Redis DB index so test runs never share keyspace with dev.
     REDIS_DB: int = 1
+    # Same reasoning, reserved range: dev jobs=10, unittest jobs=11
+    REDIS_JOBS_DB: int = 11
 
     # Small, fast values so lockout/rate-limit tests don't need long sleeps.
     LOGIN_RATE_LIMIT_MAX_REQUESTS: int = 5
@@ -151,6 +182,7 @@ class TestConfig(BaseConfig):
     DB_RETRY_INTERVAL: int = 1
 
     REDIS_DB: int = 2
+    REDIS_JOBS_DB: int = 12
 
 
 # ─── Staging ──────────────────────────────────────────────────────────────────
@@ -192,6 +224,17 @@ class ProductionConfig(BaseConfig):
             origin.strip() for origin in os.environ.get("CORS_ORIGINS", "").split(",") if origin.strip()
         ]
     )
+
+    # Redis Scheduler
+    REDIS_JOBS_DB: int = field(default_factory=lambda: int(os.environ.get("REDIS_JOBS_DB", "10")))
+    SYSTEM_SCHEDULER_USER_ID: str = field(
+        default_factory=lambda: os.environ.get("SYSTEM_SCHEDULER_USER_ID", "00000000-0000-0000-0000-000000000001")
+    )
+    SYSTEM_SCHEDULER_USERNAME: str = field(
+        default_factory=lambda: os.environ.get("SYSTEM_SCHEDULER_USERNAME", "system.scheduler")
+    )
+    BILLING_JOB_CRON_HOUR: int = field(default_factory=lambda: int(os.environ.get("BILLING_JOB_CRON_HOUR", "1")))
+    BILLING_JOB_CRON_MINUTE: int = field(default_factory=lambda: int(os.environ.get("BILLING_JOB_CRON_MINUTE", "0")))
 
     def validate(self) -> None:
         errors = []
@@ -251,7 +294,20 @@ def get_config() -> BaseConfig:
     config_class = _CONFIG_MAP.get(env)
     if not config_class:
         raise ValueError(f"Unknown environment '{env}'. " f"Valid options: {list(_CONFIG_MAP.keys())}")
-    return config_class()
+    config = config_class()
+
+    # Fail loudly rather than silently sharing keyspace: REDIS_DB and REDIS_JOBS_DB
+    # are two different concerns on the same Redis instance - if they're ever
+    # equal (a copy-paste mistake in a future env subclass), a FLUSHDB in tests/conftest.py's
+    # _flush_redis would wipe both, and rate-limit state would leak into job-queue keyspace
+    # or vice-versa.
+    if config.REDIS_DB == config.REDIS_JOBS_DB:
+        raise RuntimeError(
+            f"REDIS_DB and REDIS_JOBS_DB are both {config.REDIS_DB} for ENV={env} - "
+            "they must use different logical Redis DB indices."
+        )
+
+    return config
 
 
 # Singleton — import this everywhere instead of instantiating directly

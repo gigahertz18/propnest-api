@@ -1,8 +1,8 @@
 services:
   backend:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     container_name: propnest_backend
     # Match whichever host UID/GID owns the bind-mounted repo below —
     # the image's own non-root `appuser` (baked in for the no-bind-mount,
@@ -16,15 +16,67 @@ services:
     environment:
       - ENV=${ENV:-dev}
     volumes:
-      - .:/app
+      - ..:/app
     depends_on:
-      - db
-      - minio
-      - redis
+      migrate:
+        condition: service_completed_successfully
+      db:
+        condition: service_started
+      minio:
+        condition: service_started
+      redis:
+        condition: service_started
     networks:
       propnest_network:
         aliases:
           - propnest.backend.api
+
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: propnest_worker
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    command: ["arq", "app.jobs.billing_jobs.WorkerSettings"]
+    environment:
+      - ENV=${ENV:-dev}
+    volumes:
+      - ..:/app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      db:
+        condition: service_started
+      redis:
+        condition: service_started
+    networks:
+      propnest_network:
+        aliases:
+          - propnest.backend.worker
+
+  # One-off migration runner: ensures the target database exists, then applies
+  # every Alembic migration up to head, and exits. Runs for every environment,
+  # including ENV=unittest — see app/db/provisioning.py for why unittest isn't
+  # special-cased. backend/worker depend on this completing successfully
+  # instead of each racing to run migrations themselves (that race previously
+  # deadlocked Postgres on the CREATE INDEX CONCURRENTLY migration — see
+  # alembic/versions/967935f1428a).
+  migrate:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: propnest_migrate
+    command: ["python", "scripts/run_migrations.py"]
+    environment:
+      - ENV=${ENV:-dev}
+    volumes:
+      - ..:/app
+    depends_on:
+      - db
+    networks:
+      propnest_network:
+        aliases:
+          - propnest.backend.migrate
 
   db:
     image: postgres:16-alpine

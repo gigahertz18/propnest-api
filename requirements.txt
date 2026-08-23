@@ -36,4 +36,7 @@ black==26.5.1
 ruff==0.15.22
 
 # Rate limiting / login lockout state
-redis==8.1.0
+redis==5.3.1
+
+# Background job scheduling (billing generation / overdue evaluation)
+arq==0.28.0

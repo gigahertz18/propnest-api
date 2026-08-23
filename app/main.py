@@ -1,17 +1,15 @@
-import asyncio
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from redis.exceptions import RedisError
 
 from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.redis_client import RedisClientManager
-from app.db.session import engine
+from app.db.session import engine, wait_for_db
 from app.api.v1.routes import (
     properties,
     auth,
@@ -46,10 +44,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings.validate()  # fail fast if config is unsafe for the current environment
-    await _wait_for_db(
-        max_retries=settings.DB_MAX_RETRIES,
-        retry_interval=settings.DB_RETRY_INTERVAL,
-    )
+    await wait_for_db()
     app.state.redis = RedisClientManager(
         url=settings.REDIS_URL,
         max_connections=settings.REDIS_MAX_CONNECTIONS,
@@ -62,35 +57,6 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
     await app.state.redis.close()
     logger.info("Database connections closed")
-
-
-async def _wait_for_db(max_retries: int, retry_interval: int) -> None:
-    """
-    Retries the DB connection until PostgreSQL is ready or max retries exceeded.
-    Values come from the active config class — tunable per environment.
-    """
-    for attempt in range(1, max_retries + 1):
-        try:
-            async with engine.connect() as conn:
-                await conn.execute(text("SELECT 1"))
-            logger.info("Database is ready")
-            return
-        except Exception as e:
-            if attempt == max_retries:
-                logger.error(
-                    "Database not available after %d attempts. Last error: %s",
-                    max_retries,
-                    e,
-                )
-                raise RuntimeError(f"Could not connect to the database after {max_retries} attempts.") from e
-
-            logger.warning(
-                "Database not ready (attempt %d/%d) — retrying in %ds...",
-                attempt,
-                max_retries,
-                retry_interval,
-            )
-            await asyncio.sleep(retry_interval)
 
 
 # ─── App ──────────────────────────────────────────────────────────────────────

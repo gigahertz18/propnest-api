@@ -83,12 +83,12 @@ make seed password=yourpassword
 
 ## Deploying
 
-`docker-compose.yml` (the file `make up` uses) is dev-postured on purpose: it bind-mounts
+`docker/docker-compose.yml` (the file `make up` uses) is dev-postured on purpose: it bind-mounts
 the source tree, and publishes Postgres/MinIO/Redis directly to the host so they're easy
 to inspect locally. **Don't reuse it against a reachable server** — none of its
 credentials are meant to survive outside a laptop.
 
-`docker-compose.prod.yml` is the deployable counterpart: it runs the built image only (no
+`docker/docker-compose.prod.yml` is the deployable counterpart: it runs the built image only (no
 bind mount), starts the app with `ENV=prod`, publishes only the API's port (8000), and
 keeps Postgres/MinIO/Redis reachable only on the internal `propnest_network` — the same
 way `backend` already reaches them. Redis is also started with `--requirepass`, since the
@@ -100,8 +100,8 @@ To deploy:
 cp .env.prod.example .env.prod
 # fill in .env.prod with real secrets - see the comments in the file
 
-docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
-docker compose --env-file .env.prod -f docker-compose.prod.yml exec backend alembic upgrade head
+docker compose --env-file .env.prod -f docker/docker-compose.prod.yml up -d --build
+docker compose --env-file .env.prod -f docker/docker-compose.prod.yml exec backend alembic upgrade head
 ```
 
 `ProductionConfig.validate()` (`app/core/config.py`) runs once at startup and refuses to
@@ -113,7 +113,7 @@ env vars below are what it checks:
 | `SECRET_KEY` | Required. Must be ≥32 characters and not a known-insecure default. |
 | `DB_PASSWORD` | Required. Must not be a known-insecure default. |
 | `MINIO_ROOT_PASSWORD` | Required. Must not be a known-insecure default. |
-| `REDIS_PASSWORD` | Required. The Redis instance backing rate limiting/lockout must be configured with a matching `requirepass` (`docker-compose.prod.yml` does this). |
+| `REDIS_PASSWORD` | Required. The Redis instance backing rate limiting/lockout must be configured with a matching `requirepass` (`docker/docker-compose.prod.yml` does this). |
 | `CORS_ORIGINS` | Optional, comma-separated frontend origins. Defaults to none if unset. |
 
 This setup doesn't include a reverse proxy or TLS termination — that's out of scope for a

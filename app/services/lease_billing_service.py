@@ -30,9 +30,11 @@ from app.services.exceptions import (
 class LeaseBillingService(ResourceAuthorizationMixin):
     """
     Business logic for `BillingRecord` generation and status lifecycle —
-    long-term-lease-specific, mirroring `LeaseService`. No cron/scheduling:
-    generation and overdue-evaluation are both explicit, manually-triggered
-    operations (see recurring-billing-engine's scope).
+    long-term-lease-specific, mirroring `LeaseService`. Both methods here are
+    called from two places: the manual endpoints in api/v1/routes/billing_records.py
+    (on-demand/backfill), and the scheduled ARQ jobs in app/jobs/billing_jobs.py (automatic, daily).
+    Idempotency (BillingRecordAlreadyGeneratedError / no-op terminal transitions)
+    is what makes both callers safe to run concurrently without coordination.
     """
 
     forbidden_error = BillingRecordForbiddenError

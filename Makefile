@@ -1,6 +1,6 @@
 ENV ?= dev
 
-COMPOSE_FILE = docker-compose.yml
+COMPOSE_FILE = docker/docker-compose.yml
 # HOST_UID/HOST_GID (not UID/GID - those are readonly shell variables and
 # can't be reassigned) are exported so docker-compose.yml's backend `user:`
 # override can match whichever host user owns the bind-mounted repo.
@@ -9,6 +9,11 @@ COMPOSE      = HOST_UID=$$(id -u) HOST_GID=$$(id -g) ENV=$(ENV) docker compose -
 # Test commands always inject ENV=unittest into the exec'd process
 # so UnittestConfig is used regardless of what ENV the container was started with
 TEST_EXEC = $(COMPOSE) run --rm -e ENV=unittest
+
+# ruff/black are pure static analysis - they never touch the database. Skip
+# the migrate/db/minio/redis dependecy chain entirely with --no-deps rather than
+# paying for it (or depending on it succeeding) for a check that has no use for it.
+STATIC_EXEC = $(COMPOSE) run --rm --no-deps --entrypoint ""
 
 # ─── Main Commands ────────────────────────────────────────
 up:
@@ -26,11 +31,8 @@ restart:
 restart-detached:
 	$(COMPOSE) down && $(COMPOSE) up -d --build
 
-logs:
-	$(COMPOSE) logs -f
-
 # ─── Individual Service Logs ──────────────────────────────
-logs-backend:
+logs-be:
 	$(COMPOSE) logs -f backend
 
 logs-db:
@@ -65,6 +67,12 @@ seed:
 		backend \
 		python scripts/seed_admin.py
 
+seed-system:
+	$(COMPOSE) exec backend python scripts/seed_system_user.py
+
+logs-worker:
+	$(COMPOSE) logs -f worker
+
 # ─── OpenAPI Export ───────────────────────────────────────
 # Dumps the live OpenAPI schema to openapi.json (gitignored, generate-on-demand only).
 export-openapi:
@@ -84,7 +92,7 @@ migrate-history:
 	$(COMPOSE) exec backend alembic history
 
 # ─── Backend Tests ────────────────────────────────────────
-# All test commands use TEST_EXEC which injects ENV=unittest
+# All test commands use STATIC which injects ENV=unittest
 test-be:
 	$(TEST_EXEC) backend pytest $(debug)
 
@@ -105,14 +113,14 @@ test-be-cov:
 
 # ─── Backend Lint & Format ───────────────────────────────
 lint-be:
-	$(TEST_EXEC) backend ruff check  \
+	$(STATIC_EXEC) backend ruff check  \
 						app \
 						tests \
 						scripts \
 						alembic
 
 lint-be-fix:
-	$(TEST_EXEC) backend ruff check \
+	$(STATIC_EXEC) backend ruff check \
 						app \
 						tests \
 						scripts \
@@ -120,14 +128,14 @@ lint-be-fix:
 						--fix
 
 format-be:
-	$(TEST_EXEC) backend black --check \
+	$(STATIC_EXEC) backend black --check \
 						app \
 						tests \
 						scripts \
 						alembic
 
 format-be-fix:
-	$(TEST_EXEC) backend black -l 120 \
+	$(STATIC_EXEC) backend black -l 120 \
 						app \
 						tests \
 						scripts \
@@ -140,9 +148,9 @@ ps:
 clean:
 	$(COMPOSE) down -v --remove-orphans
 
-.PHONY: up up-detached down restart restart-detached logs \
-        logs-backend logs-db logs-minio \
-        shell-db shell-be seed \
+.PHONY: up up-detached down restart restart-detached \
+        logs-be logs-db logs-minio \
+        shell-db shell-be seed seed-system logs-worker \
         export-openapi \
         migrate-new migrate-up migrate-down migrate-history \
         test-be test-be-unit test-be-integration \

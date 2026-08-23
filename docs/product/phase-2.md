@@ -56,7 +56,18 @@ Delivered:
 - periods are server-computed and always contiguous — `period_start` is `lease.start_date` for a lease's first record, otherwise the previous record's `period_end + 1 day`; a caller only supplies `lease_id`, never a period, so a lease can never be billed for days before it started or left with an unbilled gap between periods
 - idempotent generation, guarded by a DB uniqueness constraint on lease + billing period, covering the case of two concurrent requests computing the same next period before either commits
 - late-fee handling on crossing into overdue, per the lease's grace period and late-fee terms
-- manual trigger only — both generation and overdue evaluation are explicit calls, no scheduling/cron
+- generation and overdue evaluation now also run automatically via daily `arq` cron jobs (`app/jobs/billing_jobs.py`) against a `system.scheduler` identity, on top of the existing manual `POST /billing-records/generate` / `/evaluate-overdue` endpoints kept for on-demand/backfill use — both paths call the same idempotent `LeaseBillingService` methods
+
+#### Verifying the scheduler manually
+
+There's no live-Redis integration test exercising the cron schedule end-to-end — the unit tests
+in `tests/unittests/jobs/test_billing_jobs.py` cover the job functions' logic directly, and this
+manual check is the accepted fallback for confirming the schedule itself fires:
+
+- Start the stack with `make up-detached`; the `worker` service (arq, `app.jobs.billing_jobs.WorkerSettings`) starts alongside `backend`, sharing the same Postgres/Redis.
+- Tail its logs with `make logs-worker` — each run logs `billing_jobs.generate_due_billing_records: generated=%d skipped=%d` and `billing_jobs.evaluate_overdue_billing_records: evaluated=%d`.
+- To see a run sooner than the default 01:00 schedule, set `BILLING_JOB_CRON_HOUR`/`BILLING_JOB_CRON_MINUTE` to a time a few minutes out and restart the `worker` service, or exec into it (`make shell-be`-style `docker compose -f docker/docker-compose.yml exec worker sh`) and invoke `generate_due_billing_records`/`evaluate_overdue_billing_records` directly for a one-off check.
+- Confirm the effect via existing tooling — `GET /billing-records/?lease_id=` for a known lease should show a newly generated record, or `make shell-db` to inspect `billing_records` directly.
 
 ### Payments ↔ Billing — done
 
