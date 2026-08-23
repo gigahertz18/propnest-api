@@ -93,16 +93,16 @@ async def wait_for_db(max_retries: int | None = None, retry_interval: int | None
 
 async def wait_for_postgres_server(max_retries: int | None = None, retry_interval: int | None = None) -> None:
     """
-    Used by scripts/wait_for_db.py via docker/entrypoint.sh, before Alembic
-    runs migrations (Alembic has no retry logic of its own — a not-yet-ready
-    Postgres kills the container outright). Deliberately connects to
-    Postgres's always-present `postgres` maintenance database rather than
-    settings.DATABASE_URL's target: for ENV=unittest, that target database
-    (propnest_unittest_db) doesn't exist yet at this point — it's created by
-    tests/conftest.py's own fixture, later, after entrypoint.sh has already
-    handed off to pytest. entrypoint.sh only needs to know the Postgres
-    server itself is reachable; the target database's existence is the
-    caller's concern (the app, for real environments; conftest.py, for tests).
+    Used by scripts/wait_for_db.py via docker/entrypoint.sh, before the
+    `migrate` service's command runs (see docker/docker-compose.yml). Neither
+    Alembic nor app.db.provisioning.ensure_database_exists has retry logic of
+    its own — a not-yet-ready Postgres server would otherwise kill the
+    container outright. Deliberately connects to Postgres's always-present
+    `postgres` maintenance database rather than settings.DATABASE_URL's
+    target: the target database (settings.DB_NAME) may not exist yet at this
+    point for any environment — creating it is app.db.provisioning's job, not
+    this function's. This only needs to confirm the Postgres *server* itself
+    is reachable.
     """
     max_retries = max_retries if max_retries is not None else settings.DB_MAX_RETRIES
     retry_interval = retry_interval if retry_interval is not None else settings.DB_RETRY_INTERVAL

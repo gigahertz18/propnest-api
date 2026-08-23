@@ -10,6 +10,11 @@ COMPOSE      = HOST_UID=$$(id -u) HOST_GID=$$(id -g) ENV=$(ENV) docker compose -
 # so UnittestConfig is used regardless of what ENV the container was started with
 TEST_EXEC = $(COMPOSE) run --rm -e ENV=unittest
 
+# ruff/black are pure static analysis - they never touch the database. Skip
+# the migrate/db/minio/redis dependecy chain entirely with --no-deps rather than
+# paying for it (or depending on it succeeding) for a check that has no use for it.
+STATIC_EXEC = $(COMPOSE) run --rm --no-deps
+
 # ─── Main Commands ────────────────────────────────────────
 up:
 	$(COMPOSE) up --build
@@ -87,7 +92,7 @@ migrate-history:
 	$(COMPOSE) exec backend alembic history
 
 # ─── Backend Tests ────────────────────────────────────────
-# All test commands use TEST_EXEC which injects ENV=unittest
+# All test commands use STATIC which injects ENV=unittest
 test-be:
 	$(TEST_EXEC) backend pytest $(debug)
 
@@ -108,14 +113,14 @@ test-be-cov:
 
 # ─── Backend Lint & Format ───────────────────────────────
 lint-be:
-	$(TEST_EXEC) backend ruff check  \
+	$(STATIC_EXEC) backend ruff check  \
 						app \
 						tests \
 						scripts \
 						alembic
 
 lint-be-fix:
-	$(TEST_EXEC) backend ruff check \
+	$(STATIC_EXEC) backend ruff check \
 						app \
 						tests \
 						scripts \
@@ -123,14 +128,14 @@ lint-be-fix:
 						--fix
 
 format-be:
-	$(TEST_EXEC) backend black --check \
+	$(STATIC_EXEC) backend black --check \
 						app \
 						tests \
 						scripts \
 						alembic
 
 format-be-fix:
-	$(TEST_EXEC) backend black -l 120 \
+	$(STATIC_EXEC) backend black -l 120 \
 						app \
 						tests \
 						scripts \

@@ -11,9 +11,10 @@ from unittest.mock import AsyncMock
 
 from app.core.redis_client import RedisClientManager
 from app.db.session import engine as app_engine
+from app.db.provisioning import ensure_database_exists, run_migrations
 
 from app.main import app
-from app.db.session import Base, get_db
+from app.db.session import get_db
 from app.core.config import settings
 
 pytest_plugins = [
@@ -69,42 +70,42 @@ async def _flush_redis():
 
 
 # ─── Test DB Setup ────────────────────────────────────────────────────────────
-def _ensure_test_db_exists() -> None:
+def _reset_schema() -> None:
     """
-    Creates the test database if it doesn't exist.
-    Connects to the postgres maintenance database to issue CREATE DATABASE.
+    Drops and recreates the `public` schema — the fast, reliable way to
+    wipe every table regardless of what migrations have added (indexes,
+    views, custom types, etc. that Base.metadata wouldn't know about).
+    Drops and recreates the `public` schema — the fast, reliable way to
+    wipe every table regardless of what migrations have added (indexes,
+    views, custom types, etc. that Base.metadata wouldn't know about).
     """
-    admin_url = (
-        f"postgresql+psycopg2://{settings.DB_USER}:{settings.DB_PASSWORD}"
-        f"@{settings.DB_HOST}:{settings.DB_PORT}/postgres"
-    )
-    admin_engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
-    with admin_engine.connect() as conn:
-        exists = conn.execute(
-            text("SELECT 1 FROM pg_database WHERE datname = :name"),
-            {"name": settings.DB_NAME},
-        ).fetchone()
-        if not exists:
-            conn.execute(text(f'CREATE DATABASE "{settings.DB_NAME}"'))
-    admin_engine.dispose()
+    with sync_engine.connect() as conn:
+        conn.execute(text("DROP SCHEMA public CASCADE"))
+        conn.execute(text("CREATE SCHEMA public"))
+        conn.commit()
 
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_database():
     """
-    Runs once per test session.
+    - Ensures propnest_unittest_db exists (idempotent — `migrate` has
+      normally already done this, since `backend` depends on `migrate`
+      completing successfully; this is just a defensive fallback for
+      running pytest outside that dependency chain)
+    - Resets to a clean, empty `public` schema
+    - Applies every Alembic migration up to head, via the same
+      app.db.provisioning helpers the `migrate` service uses — so tests
+      run against exactly the schema real migrations produce, not a
+      model-derived approximation
+    - Resets the schema again after tests complete
 
-    - Creates propnest_test database if it doesn't exist
-    - Drops and recreates all tables for a clean slate
-    - Drops all tables after tests complete
-
-    Safe to do because this only touches propnest_test, never propnest_db.
+    Safe to do because this only touches propnest_unittest_db, never propnest_db.
     """
-    _ensure_test_db_exists()
-    Base.metadata.drop_all(bind=sync_engine)
-    Base.metadata.create_all(bind=sync_engine)
+    ensure_database_exists()
+    _reset_schema()
+    run_migrations()
     yield
-    Base.metadata.drop_all(bind=sync_engine)
+    _reset_schema()
 
 
 # ─── DB Fixture ───────────────────────────────────────────────────────────────

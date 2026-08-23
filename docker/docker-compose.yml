@@ -54,16 +54,19 @@ services:
         aliases:
           - propnest.backend.worker
 
-  # One-off migration runner: applies `alembic upgrade head` exactly once and exits.
-  # backend/worker depend on this completing successfully instead of each racing to
-  # run migrations themselves (that race previously deadlocked Postgres on the
-  # CREATE INDEX CONCURRENTLY migration — see alembic/versions/967935f1428a).
+  # One-off migration runner: ensures the target database exists, then applies
+  # every Alembic migration up to head, and exits. Runs for every environment,
+  # including ENV=unittest — see app/db/provisioning.py for why unittest isn't
+  # special-cased. backend/worker depend on this completing successfully
+  # instead of each racing to run migrations themselves (that race previously
+  # deadlocked Postgres on the CREATE INDEX CONCURRENTLY migration — see
+  # alembic/versions/967935f1428a).
   migrate:
     build:
       context: ..
       dockerfile: docker/Dockerfile
     container_name: propnest_migrate
-    command: ["alembic", "upgrade", "head"]
+    command: ["python", "scripts/run_migrations.py"]
     environment:
       - ENV=${ENV:-dev}
     volumes:
