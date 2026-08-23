@@ -3,6 +3,7 @@ import logging
 from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.security import verify_password, create_access_token
 from app.repositories.user import UserRepository
 from app.repositories.login_attempt import LoginAttemptRepository, LockoutStatus
@@ -77,6 +78,19 @@ class AuthService:
         Returns:
             TokenResponse with a signed JWT access token.
         """
+        # The system-scheduler identity authenticates only via a direct
+        # repo lookup by id from the ARQ job — never through this
+        # endpoint. Checked first, before either Redis-backed throttle,
+        # so attempts against this identifier don't spend rate-limit/
+        # lockout budget on an account that can never log in. Same
+        # InvalidCredentialsError as any other failure — doesn't reveal
+        # that this identifier is special. Email compared case-insensitively
+        # to match how every other email lookup in this codebase treats it.
+        if identifier == settings.SYSTEM_SCHEDULER_USERNAME or (
+            identifier.casefold() == settings.SYSTEM_SCHEDULER_EMAIL.casefold()
+        ):
+            raise InvalidCredentialsError("The identifier or password you entered is incorrect.")
+
         if client_ip:
             await self._check_ip_rate_limit(client_ip)
 

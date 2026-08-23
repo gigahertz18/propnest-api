@@ -32,8 +32,10 @@ WORKDIR /app
 COPY --from=builder /install /usr/local
 COPY . .
 RUN chown -R appuser:appuser /app
+RUN chmod +x docker/entrypoint.sh
 
 USER appuser
 
-# Default command (overridden in docker-compose.dev.yml for --reload)
+ENTRYPOINT ["sh", "docker/entrypoint.sh"]
+# Default command - docker-compose.yml's `worker` service overrides this with arq instead
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -86,6 +86,18 @@ class LeaseRepository(BaseRepository[Lease, LeaseCreate, LeaseUpdate]):
         result = await db.execute(stmt)
         return list(result.scalars().all())
 
+    async def get_active(self, db: AsyncSession) -> list[Lease]:
+        """
+        Every ACTIVE lease, portfolio-wide, unpaginated.
+
+        Deliberately bypass get_all()'s 100-row pagination cap - this backs
+        the billing scheduler job , which must consider every active lease each run,
+        not just the first page. Not manager-scoped: the job runs as the system
+        identity, which is authorized portfolio-wide.
+        """
+
+        return list(await self._all(db, self.model.status == LeaseStatus.ACTIVE))
+
 
 # Instantiate once — import this instance everywhere
 lease_repo = LeaseRepository(Lease)

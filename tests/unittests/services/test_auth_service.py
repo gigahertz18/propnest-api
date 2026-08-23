@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
 
+from app.core.config import settings
 from app.models.user import UserRole
 from app.repositories.login_attempt import LockoutStatus
 from app.repositories.ip_rate_limit import RateLimitStatus
@@ -131,6 +132,26 @@ class TestLoginLockout:
 
         login_attempt_repo.record_success.assert_awaited_once_with("john")
 
+    async def test_system_scheduler_username_is_rejected_before_any_lookup(
+        self, service, user_repo, login_attempt_repo, ip_rate_limit_repo
+    ):
+        """The system-scheduler identity (see scripts/seed_system_user.py)
+        must never authenticate through this endpoint, regardless of
+        password. Checked before Redis/DB so a flood of attempts against
+        this identifier can't spend rate-limit/lockout budget on an
+        account that can never succeed anyway."""
+        with pytest.raises(InvalidCredentialsError):
+            await service.login(
+                db=AsyncMock(),
+                identifier=settings.SYSTEM_SCHEDULER_USERNAME,
+                password="irrelevant",
+                client_ip="1.2.3.4",
+            )
+
+        ip_rate_limit_repo.check.assert_not_called()
+        login_attempt_repo.get_lock_status.assert_not_called()
+        user_repo.get_by_identifier.assert_not_called()
+
 
 @pytest.mark.asyncio
 class TestIpRateLimit:
@@ -196,3 +217,22 @@ class TestFailsClosedOnRedisOutage:
         with patch("app.services.auth_service.verify_password", return_value=True):
             with pytest.raises(LoginThrottleUnavailableError):
                 await service.login(db=AsyncMock(), identifier="john", password="x")
+
+
+class TestLoginBlocksSystemSchedulerIdentity:
+    async def test_system_username_is_rejected_before_touching_user_repo(self, service, user_repo, login_attempt_repo):
+        with pytest.raises(InvalidCredentialsError):
+            await service.login(db=AsyncMock(), identifier=settings.SYSTEM_SCHEDULER_USERNAME, password="anything")
+
+        user_repo.get_by_identifier.assert_not_called()
+        login_attempt_repo.record_failure.assert_not_called()
+
+    async def test_system_email_is_rejected_case_insensitively(self, service, user_repo, login_attempt_repo):
+        with pytest.raises(InvalidCredentialsError):
+            await service.login(
+                db=AsyncMock(),
+                identifier=settings.SYSTEM_SCHEDULER_EMAIL.upper(),
+                password="anything",
+            )
+
+        user_repo.get_by_identifier.assert_not_called()

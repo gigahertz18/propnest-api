@@ -1,6 +1,6 @@
 ENV ?= dev
 
-COMPOSE_FILE = docker-compose.yml
+COMPOSE_FILE = docker/docker-compose.yml
 # HOST_UID/HOST_GID (not UID/GID - those are readonly shell variables and
 # can't be reassigned) are exported so docker-compose.yml's backend `user:`
 # override can match whichever host user owns the bind-mounted repo.
@@ -26,11 +26,8 @@ restart:
 restart-detached:
 	$(COMPOSE) down && $(COMPOSE) up -d --build
 
-logs:
-	$(COMPOSE) logs -f
-
 # ─── Individual Service Logs ──────────────────────────────
-logs-backend:
+logs-be:
 	$(COMPOSE) logs -f backend
 
 logs-db:
@@ -64,6 +61,12 @@ seed:
 		-e SEED_FULL_NAME="$(or $(fullname),PropNest Admin)" \
 		backend \
 		python scripts/seed_admin.py
+
+seed-system:
+	$(COMPOSE) exec backend python scripts/seed_system_user.py
+
+logs-worker:
+	$(COMPOSE) logs -f worker
 
 # ─── OpenAPI Export ───────────────────────────────────────
 # Dumps the live OpenAPI schema to openapi.json (gitignored, generate-on-demand only).
@@ -140,9 +143,9 @@ ps:
 clean:
 	$(COMPOSE) down -v --remove-orphans
 
-.PHONY: up up-detached down restart restart-detached logs \
-        logs-backend logs-db logs-minio \
-        shell-db shell-be seed \
+.PHONY: up up-detached down restart restart-detached \
+        logs-be logs-db logs-minio \
+        shell-db shell-be seed seed-system logs-worker \
         export-openapi \
         migrate-new migrate-up migrate-down migrate-history \
         test-be test-be-unit test-be-integration \
