@@ -13,7 +13,7 @@ TEST_EXEC = $(COMPOSE) run --rm -e ENV=unittest
 # ruff/black are pure static analysis - they never touch the database. Skip
 # the migrate/db/minio/redis dependecy chain entirely with --no-deps rather than
 # paying for it (or depending on it succeeding) for a check that has no use for it.
-STATIC_EXEC = $(COMPOSE) run --rm --no-deps
+STATIC_EXEC = $(COMPOSE) run --rm --no-deps --entrypoint ""
 
 # ─── Main Commands ────────────────────────────────────────
 up:
