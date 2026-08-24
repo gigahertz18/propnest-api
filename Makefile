@@ -76,7 +76,7 @@ logs-worker:
 # ─── OpenAPI Export ───────────────────────────────────────
 # Dumps the live OpenAPI schema to openapi.json (gitignored, generate-on-demand only).
 export-openapi:
-	$(COMPOSE) run --rm --no-deps backend python scripts/export_openapi.py
+	$(STATIC_EXEC) backend python scripts/export_openapi.py
 
 # ─── Migrations ───────────────────────────────────────────
 migrate-new:
