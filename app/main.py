@@ -9,6 +9,7 @@ from redis.exceptions import RedisError
 from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.redis_client import RedisClientManager
+from app.core.storage_provisioning import ensure_bucket_exists
 from app.db.session import engine, wait_for_db
 from app.api.v1.routes import (
     properties,
@@ -45,6 +46,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     settings.validate()  # fail fast if config is unsafe for the current environment
     await wait_for_db()
+    await ensure_bucket_exists()
     app.state.redis = RedisClientManager(
         url=settings.REDIS_URL,
         max_connections=settings.REDIS_MAX_CONNECTIONS,

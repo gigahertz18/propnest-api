@@ -94,6 +94,13 @@ services:
         aliases:
           - propnest.backend.postgres
 
+  # Bucket provisioning: handled at app startup by
+  # app.core.storage_provisioning.ensure_bucket_exists() (called from
+  # app.main's lifespan()), not here. Deliberately not adding an `mc`
+  # init container as a complement — docker-compose.prod.yml has no
+  # equivalent step, so the app-startup path already has to cover every
+  # environment on its own; a compose-only init container would just be
+  # dev-only redundant coverage.
   minio:
     image: minio/minio:RELEASE.2024-11-07T00-52-20Z
     container_name: propnest_minio

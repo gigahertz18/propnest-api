@@ -31,7 +31,12 @@ class BaseConfig:
     MINIO_ENDPOINT: str = "http://minio:9000"
     MINIO_ROOT_USER: str = "propnest_minio"
     MINIO_ROOT_PASSWORD: str = "propnest_secret"
-    MINIO_BUCKET_NAME: str = "propnest-contracts"
+
+    MINIO_BUCKET_NAME: str = "propnest-documents"
+    # MinIO retry - how long app.core.storage_provisioning.ensure_bucket_exists
+    # waits for MinIO on startup, mirriring DB_MAX_RETRIES/DB_RETRY_INTERVAL above
+    MINIO_MAX_RETRIES: int = 10
+    MINIO_RETRY_INTERVAL: int = 3  # seconds
 
     # Redis — rate limiting (per-IP) and login-lockout state (per-identifier)
     REDIS_HOST: str = "redis"
