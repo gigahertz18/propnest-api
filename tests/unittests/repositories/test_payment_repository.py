@@ -187,6 +187,10 @@ class TestPaymentRepositoryCreateEdgeCases:
         payload = PaymentCreate(**make_payment(contract_id=contract.id, payment_method="CaSh"))
         assert payload.payment_method == "cash"
 
+    def test_empty_string_payment_method_raises_validation_error(self, db, contract):
+        with pytest.raises(ValidationError):
+            PaymentCreate(**make_payment(contract_id=contract.id, payment_method=""))
+
 
 # ─── update ───────────────────────────────────────────────────────────────────
 

@@ -13,10 +13,10 @@ def _normalize_payment_method(value: str | None) -> str | None:
     """Validates payment_method case-insensitively and return its canonical
     lowercase form, so no variant casing can reach the DB's case-sensitive ck_payment_method
     CHECK constraint (see payment-method-casing-mismatch)"""
-    if not value:
+    if value is None:
         return None
     if value.lower() not in PAYMENT_METHODS:
-        raise ValueError(f"Invalid payment_method '{value}'. Must be on of {PAYMENT_METHODS}.")
+        raise ValueError(f"Invalid payment_method '{value}'. Must be one of {PAYMENT_METHODS}.")
     return value.lower()
 
 
