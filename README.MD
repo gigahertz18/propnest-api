@@ -69,6 +69,7 @@ make up
 
 This starts the API, PostgreSQL, and MinIO and Redis. The API will be available at `http://localhost:8000`, with interactive docs at `http://localhost:8000/docs`.
 
+The MinIO bucket used for document/receipt storage is created automatically on backend startup (`app.core.storage_provisioning.ensure_bucket_exists`) — no manual `mc mb` step needed.
 Run database migrations:
 ```bash
 make migrate-up
