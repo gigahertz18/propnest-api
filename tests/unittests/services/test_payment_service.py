@@ -1,6 +1,8 @@
 import pytest
 
+
 from decimal import Decimal
+from pydantic import ValidationError
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -596,6 +598,16 @@ def _correction_payload(**kwargs):
     defaults = dict(amount=Decimal("12000.00"), payment_method="bank transfer")
     defaults.update(kwargs)
     return PaymentCorrectionCreate(**defaults)
+
+
+class TestPaymentCorrectionCreateEdgeCases:
+    def test_mixed_case_payment_method_is_normalized_to_lowercase(self):
+        payload = _correction_payload(payment_method="Bank Transfer")
+        assert payload.payment_method == "bank transfer"
+
+    def test_invalid_payment_method_still_raises_validation_error(self):
+        with pytest.raises(ValidationError):
+            _correction_payload(payment_method="bitcoin")
 
 
 @pytest.mark.asyncio

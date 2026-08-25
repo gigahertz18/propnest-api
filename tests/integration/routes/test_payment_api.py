@@ -150,6 +150,23 @@ class TestCreatePaymentRoute:
         response = await client.post("/api/v1/payments/", json=payload, headers=auth_ctx.headers)
         assert response.status_code == 422
 
+    async def test_accepts_mixed_case_payment_method(self, client, db, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, prop.id, tenant.id)
+
+        payload = {
+            "contract_id": str(contract.id),
+            "amount": 5000.0,
+            "payment_method": "Cash",
+            "status": "PAID",
+        }
+
+        response = await client.post("/api/v1/payments/", json=payload, headers=auth_ctx.headers)
+        assert response.status_code == 201
+        assert response.json()["payment_method"] == "cash"
+
     async def test_returns_422_for_non_positive_amount(self, client, db, authenticate_admin):
         auth_ctx = await authenticate_admin()
         prop = await make_property_model(db)
@@ -414,6 +431,20 @@ class TestCorrectPaymentRoute:
             f"/api/v1/payments/{payment.id}/corrections", json=payload, headers=auth_ctx.headers
         )
         assert response.status_code == 422
+
+    async def test_accepts_mixed_case_payment_method(self, client, db, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, prop.id, tenant.id)
+        payment = await make_payment_model(db, contract.id)
+
+        payload = {"amount": 3000.0, "payment_method": "GCash"}
+        response = await client.post(
+            f"/api/v1/payments/{payment.id}/corrections", json=payload, headers=auth_ctx.headers
+        )
+        assert response.status_code == 201
+        assert response.json()["payment_method"] == "gcash"
 
 
 @pytest.mark.asyncio

@@ -8,6 +8,18 @@ from app.models.payment import PAYMENT_METHODS, PaymentStatus
 from app.schemas.base import BaseResponse
 
 
+# ─── Helper ─────────────────────────────────────────────────
+def _normalize_payment_method(value: str | None) -> str | None:
+    """Validates payment_method case-insensitively and return its canonical
+    lowercase form, so no variant casing can reach the DB's case-sensitive ck_payment_method
+    CHECK constraint (see payment-method-casing-mismatch)"""
+    if value is None:
+        return None
+    if value.lower() not in PAYMENT_METHODS:
+        raise ValueError(f"Invalid payment_method '{value}'. Must be one of {PAYMENT_METHODS}.")
+    return value.lower()
+
+
 # ─── Base ─────────────────────────────────────────────────
 class PaymentBase(BaseModel):
     contract_id: uuid.UUID
@@ -28,8 +40,7 @@ class PaymentCreate(PaymentBase):
 
     @model_validator(mode="after")
     def validate_payment_method(self) -> "PaymentCreate":
-        if self.payment_method is not None and self.payment_method not in PAYMENT_METHODS:
-            raise ValueError(f"Invalid payment_method '{self.payment_method}'. Must be one of: {PAYMENT_METHODS}.")
+        self.payment_method = _normalize_payment_method(self.payment_method)
         return self
 
 
@@ -50,8 +61,7 @@ class PaymentUpdate(BaseModel):
 
     @model_validator(mode="after")
     def validate_payment_method(self) -> "PaymentUpdate":
-        if self.payment_method is not None and self.payment_method not in PAYMENT_METHODS:
-            raise ValueError(f"Invalid payment_method '{self.payment_method}'. Must be one of: {PAYMENT_METHODS}.")
+        self.payment_method = _normalize_payment_method(self.payment_method)
         return self
 
     @model_validator(mode="after")
@@ -80,8 +90,7 @@ class PaymentCorrectionCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_payment_method(self) -> "PaymentCorrectionCreate":
-        if self.payment_method is not None and self.payment_method not in PAYMENT_METHODS:
-            raise ValueError(f"Invalid payment_method '{self.payment_method}'. Must be one of: {PAYMENT_METHODS}.")
+        self.payment_method = _normalize_payment_method(self.payment_method)
         return self
 
     @model_validator(mode="after")
