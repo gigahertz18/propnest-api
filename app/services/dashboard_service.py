@@ -12,6 +12,7 @@ from app.repositories.lease import LeaseRepository
 from app.repositories.payment import PaymentRepository
 from app.repositories.property import PropertyRepository
 from app.services.exceptions import DashboardForbiddenError
+from app.services.utils import attach_remaining_balance
 
 
 class DashboardService:
@@ -79,9 +80,11 @@ class DashboardService:
             rows = await self.billing_record_repo.get_unpaid_with_grace_for_manager(db, current_user.id)
 
         today = date.today()
-        return [
+        records = [
             record for record, grace_period_days in rows if record.due_date + timedelta(days=grace_period_days) < today
         ]
+        await attach_remaining_balance(db, records, self.payment_repo)
+        return records
 
     async def expiring_leases(self, db: AsyncSession, current_user, lookahead_days: int = 30) -> list:
         role = self._require_manager_or_admin(current_user)

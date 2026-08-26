@@ -17,7 +17,7 @@ from app.schemas.base import PaginatedResponse
 from app.schemas.billing_record import BillingRecordCreate, BillingRecordLateFeeCorrection
 from app.services.audit import write_audit_log
 from app.services.base import ResourceAuthorizationMixin
-from app.services.utils import integrity_error_message
+from app.services.utils import attach_remaining_balance, integrity_error_message, total_owed
 from app.services.exceptions import (
     BillingRecordAlreadyGeneratedError,
     BillingRecordForbiddenError,
@@ -73,11 +73,13 @@ class LeaseBillingService(ResourceAuthorizationMixin):
         lease_repo: LeaseRepository,
         contract_repo: ContractRepository | None = None,
         property_repo=None,
+        payment_repo=None,
     ) -> None:
         self.billing_record_repo = billing_record_repo
         self.lease_repo = lease_repo
         self.contract_repo = contract_repo
         self.property_repo = property_repo
+        self.payment_repo = payment_repo
 
     def _transition(self, record: BillingRecord, new_status: BillingRecordStatus) -> None:
         allowed = self._VALID_TRANSITIONS.get(record.status, set())
@@ -141,6 +143,7 @@ class LeaseBillingService(ResourceAuthorizationMixin):
 
         write_audit_log(db, current_user, AuditAction.CREATE, "BillingRecord", record.id)
         await db.commit()
+        await attach_remaining_balance(db, [record], self.payment_repo)
         return record
 
     async def evaluate_overdue(
@@ -166,11 +169,13 @@ class LeaseBillingService(ResourceAuthorizationMixin):
         )
 
         if record.status not in (BillingRecordStatus.pending, BillingRecordStatus.partially_paid):
+            await attach_remaining_balance(db, [record], self.payment_repo)
             return record
 
         as_of = as_of or date.today()
         cutoff = record.due_date + timedelta(days=lease.grace_period_days)
         if as_of <= cutoff:
+            await attach_remaining_balance(db, [record], self.payment_repo)
             return record
 
         self._transition(record, BillingRecordStatus.overdue)
@@ -187,6 +192,7 @@ class LeaseBillingService(ResourceAuthorizationMixin):
         await db.refresh(record)
         write_audit_log(db, current_user, AuditAction.UPDATE, "BillingRecord", record.id)
         await db.commit()
+        await attach_remaining_balance(db, [record], self.payment_repo)
         return record
 
     async def list_for_lease(
@@ -210,6 +216,7 @@ class LeaseBillingService(ResourceAuthorizationMixin):
 
         items = await self.billing_record_repo.get_all_for_lease(db, lease_id, skip=skip, limit=limit)
         total = await self.billing_record_repo.count_for_lease(db, lease_id)
+        await attach_remaining_balance(db, items, self.payment_repo)
         return PaginatedResponse(items=items, total=total)
 
     async def get_billing_record(
@@ -232,7 +239,7 @@ class LeaseBillingService(ResourceAuthorizationMixin):
             property_id=None,
             contract_id=lease.contract_id,
         )
-
+        await attach_remaining_balance(db, [record], self.payment_repo)
         return record
 
     async def write_off_billing_record(
@@ -270,6 +277,7 @@ class LeaseBillingService(ResourceAuthorizationMixin):
         await db.refresh(record)
         write_audit_log(db, current_user, AuditAction.UPDATE, "BillingRecord", record.id)
         await db.commit()
+        await attach_remaining_balance(db, [record], self.payment_repo)
         return record
 
     async def correct_late_fee(
@@ -313,6 +321,7 @@ class LeaseBillingService(ResourceAuthorizationMixin):
         await db.refresh(record)
         write_audit_log(db, current_user, AuditAction.UPDATE, "BillingRecord", record.id)
         await db.commit()
+        await attach_remaining_balance(db, [record], self.payment_repo)
         return record
 
     def apply_payment(self, record: BillingRecord, cumulative_paid: Decimal) -> BillingRecord:
@@ -331,7 +340,7 @@ class LeaseBillingService(ResourceAuthorizationMixin):
         record still doesn't resurrect it, but a further overpayment on an
         already-`paid` record still updates `overpaid_amount`.
         """
-        total_due = record.amount_due + (record.late_fee_amount_charged or Decimal("0"))
+        total_due = total_owed(record)
         excess = cumulative_paid - total_due
 
         if record.status not in (BillingRecordStatus.paid, BillingRecordStatus.written_off):

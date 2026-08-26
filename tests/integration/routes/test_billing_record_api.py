@@ -11,6 +11,7 @@ from tests.factories import (
     make_property_model,
     make_tenant_model,
     make_user_model,
+    make_payment_model,
 )
 
 
@@ -167,6 +168,19 @@ class TestListBillingRecordRoute:
         response = await client.get("/api/v1/billing-records/", params={"lease_id": str(lease.id)}, headers=ctx.headers)
         assert response.status_code == 403
 
+    async def test_remaining_balance_appears_on_list_items(self, client, db, authenticate_admin):
+        ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, property_id=prop.id, tenant_id=tenant.id)
+        lease = await make_lease_model(db, contract_id=contract.id, monthly_rent=15000.00)
+        record = await make_billing_record_model(db, lease_id=lease.id, amount_due=15000.00)
+        await make_payment_model(db, contract.id, billing_record_id=record.id, amount=5000.00)
+
+        response = await client.get(f"/api/v1/billing-records/?lease_id={lease.id}", headers=ctx.headers)
+        assert response.status_code == 200
+        assert response.json()["items"][0]["remaining_balance"] == "10000.00"
+
 
 @pytest.mark.asyncio
 class TestGetBillingRecordRoute:
@@ -198,6 +212,19 @@ class TestGetBillingRecordRoute:
 
         response = await client.get(f"/api/v1/billing-records/{record.id}", headers=ctx.headers)
         assert response.status_code == 403
+
+    async def test_remaining_balance_reflects_applied_payments(self, client, db, authenticate_admin):
+        ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, property_id=prop.id, tenant_id=tenant.id)
+        lease = await make_lease_model(db, contract_id=contract.id, monthly_rent=15000.00)
+        record = await make_billing_record_model(db, lease_id=lease.id, amount_due=15000.00)
+        await make_payment_model(db, contract.id, billing_record_id=record.id, amount=5000.00)
+
+        response = await client.get(f"/api/v1/billing-records/{record.id}", headers=ctx.headers)
+        assert response.status_code == 200
+        assert response.json()["remaining_balance"] == "10000.00"
 
 
 @pytest.mark.asyncio

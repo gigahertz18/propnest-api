@@ -43,6 +43,29 @@ class PaymentRepository(BaseRepository[Payment, PaymentCreate, PaymentUpdate]):
         """Return all payments linked to a given billing record."""
         return await self._all(db, self.model.billing_record_id == billing_record_id)
 
+    async def sum_by_billing_record_ids(
+        self,
+        db: AsyncSession,
+        billing_record_ids: Sequence[uuid.UUID],
+    ) -> dict[uuid.UUID, Decimal]:
+        """Sum of non-voided payments per billing record, in one query —
+        used by LeaseBillingService's read path to compute remaining_balance
+        without N+1'ing across a list of records. Missing keys mean zero
+        paid so far; callers should use .get(id, Decimal("0"))."""
+        if not billing_record_ids:
+            return {}
+
+        stmt = (
+            select(Payment.billing_record_id, func.sum(Payment.amount))
+            .where(
+                Payment.billing_record_id.in_(billing_record_ids),
+                Payment.status != PaymentStatus.VOIDED,
+            )
+            .group_by(Payment.billing_record_id)
+        )
+        result = await db.execute(stmt)
+        return {row[0]: row[1] for row in result.all()}
+
     async def get_all_for_manager(
         self,
         db: AsyncSession,
