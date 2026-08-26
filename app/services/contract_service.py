@@ -155,7 +155,7 @@ class ContractService(ResourceAuthorizationMixin):
             if contract is not None:
                 new_prop_status = self._resolve_property_status_transition(old_status, None)
                 if new_prop_status:
-                    await self._sync_property_status(db, property_id, PropertyStatus.vacant)
+                    await self._sync_property_status(db, property_id, new_prop_status)
             write_audit_log(db, current_user, AuditAction.DELETE, "Contract", contract_id)
             await db.commit()
             return contract
@@ -245,7 +245,7 @@ class ContractService(ResourceAuthorizationMixin):
         """Returns the Property status implied by a contract status change, or None
         if the transition shouldn't touch Property at all - either because status
         didn't actually change (e.g. an unrelated field-only update), or because
-        it moved between tow non-ACTIVE states (e.g. TERMINATED -> EXPIRED)."""
+        it moved between two non-ACTIVE states (e.g. TERMINATED -> EXPIRED)."""
         if new_status == old_status:
             return None
 
