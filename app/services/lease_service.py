@@ -44,6 +44,14 @@ class LeaseService(ResourceAuthorizationMixin):
     ) -> None:
         self.lease_repo = lease_repo
         self.contract_repo = contract_repo
+        # Required by ResourceAuthorizationMixin for manager-ownership
+        # checks (_authorize_user_to_property -> _resolve_property ->
+        # _get_property) on every lease operation. Property.status sync
+        # itself is driven by Contract lifecycle only (see
+        # ContractService._sync_property_status): Contract carries the
+        # enforced one-active-per-property invariant and represents
+        # tenancy; Lease.status is independent billing-terms state and
+        # does not also drive occupancy.
         self.property_repo = property_repo
 
     async def list_leases(

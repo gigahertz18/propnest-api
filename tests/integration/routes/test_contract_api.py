@@ -2,6 +2,7 @@ import pytest
 import uuid
 
 from app.models.user import UserRole
+from app.models.property import PropertyStatus
 from tests.factories import (
     make_user_model,
     make_contract_model,
@@ -241,3 +242,63 @@ class TestDeleteContractRoute:
 
         response = await client.delete(f"/api/v1/contracts/{contract.id}", headers=auth_ctx.headers)
         assert response.status_code == 409
+
+
+@pytest.mark.asyncio
+class TestPropertyStatusSyncIntegration:
+    async def test_active_contract_flips_property_to_occupied(self, client, db, authenticate_admin):
+        """Regression for the fixed bug: previously this stayed 'vacant'
+        indefinitely regardless of how many active contracts existed."""
+        auth_ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        assert prop.status == PropertyStatus.vacant
+
+        payload = {
+            "property_id": str(prop.id),
+            "tenant_id": str(tenant.id),
+            "rental_type": "long_term",
+            "start_date": "2026-01-01",
+            "rent_amount": "15000.00",
+            "status": "ACTIVE",
+        }
+        response = await client.post("/api/v1/contracts/", json=payload, headers=auth_ctx.headers)
+        assert response.status_code == 201
+
+        prop_response = await client.get(f"/api/v1/properties/{prop.id}", headers=auth_ctx.headers)
+        assert prop_response.json()["status"] == "occupied"
+
+    async def test_terminating_active_contract_flips_property_to_vacant(self, client, db, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        prop = await make_property_model(db, status=PropertyStatus.occupied)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, prop.id, tenant.id, status="ACTIVE")
+
+        response = await client.patch(
+            f"/api/v1/contracts/{contract.id}", json={"status": "TERMINATED"}, headers=auth_ctx.headers
+        )
+        assert response.status_code == 200
+
+        prop_response = await client.get(f"/api/v1/properties/{prop.id}", headers=auth_ctx.headers)
+        assert prop_response.json()["status"] == "vacant"
+
+    async def test_deleting_active_contract_flips_property_to_vacant(self, client, db, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        prop = await make_property_model(db, status=PropertyStatus.occupied)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, prop.id, tenant.id, status="ACTIVE")
+
+        response = await client.delete(f"/api/v1/contracts/{contract.id}", headers=auth_ctx.headers)
+        assert response.status_code == 204
+
+        prop_response = await client.get(f"/api/v1/properties/{prop.id}", headers=auth_ctx.headers)
+        assert prop_response.json()["status"] == "vacant"
+
+    async def test_property_with_no_active_contract_is_unaffected(self, client, db, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        await make_contract_model(db, prop.id, tenant.id, status="TERMINATED")
+
+        prop_response = await client.get(f"/api/v1/properties/{prop.id}", headers=auth_ctx.headers)
+        assert prop_response.json()["status"] == "vacant"

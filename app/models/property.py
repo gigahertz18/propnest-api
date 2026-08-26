@@ -29,6 +29,9 @@ class Property(Base, TimestampMixin):
     # Optional manager ownership — a manager user may be assigned to a property
     manager_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
 
+    # Synced automatically by ContractService (create/update/delete_contract) to reflect
+    # whether the property currently has an ACTIVE contract. PropertyUpdate.status remains
+    # available for manual override
     status: Mapped[PropertyStatus] = mapped_column(
         Enum(PropertyStatus),
         nullable=False,

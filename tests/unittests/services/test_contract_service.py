@@ -257,7 +257,7 @@ class TestCreateContract:
     async def test_admin_can_create_for_any_property(self, mock_db):
         prop_id, tenant_id = uuid4(), uuid4()
         svc = _make_service(
-            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+            properties=MockCRUDRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())}),
             tenants={tenant_id: SimpleNamespace(id=tenant_id)},
         )
 
@@ -271,7 +271,7 @@ class TestCreateContract:
     async def test_manager_can_create_for_owned_property(self, mock_db):
         manager_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
         svc = _make_service(
-            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)},
+            properties=MockCRUDRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)}),
             tenants={tenant_id: SimpleNamespace(id=tenant_id)},
         )
 
@@ -461,7 +461,7 @@ class TestUpdateContract:
         contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="ACTIVE")
         svc = _make_service(
             contracts={contract_id: contract},
-            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+            properties=MockCRUDRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())}),
             tenants={tenant_id: SimpleNamespace(id=tenant_id)},
         )
 
@@ -477,7 +477,7 @@ class TestUpdateContract:
         contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="ACTIVE")
         svc = _make_service(
             contracts={contract_id: contract},
-            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)},
+            properties=MockCRUDRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)}),
             tenants={tenant_id: SimpleNamespace(id=tenant_id)},
         )
 
@@ -632,7 +632,7 @@ class TestUpdateContract:
         resolved for authorization — see issue #55."""
         manager_id, contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4(), uuid4()
         contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="ACTIVE")
-        property_repo = MockReadOnlyRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)})
+        property_repo = MockCRUDRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)})
         svc = _make_service(
             contracts={contract_id: contract},
             properties=property_repo,
@@ -661,7 +661,7 @@ class TestDeleteContract:
         contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="ACTIVE")
         svc = _make_service(
             contracts={contract_id: contract},
-            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+            properties=MockCRUDRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())}),
             tenants={tenant_id: SimpleNamespace(id=tenant_id)},
         )
 
@@ -675,7 +675,7 @@ class TestDeleteContract:
         contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="ACTIVE")
         svc = _make_service(
             contracts={contract_id: contract},
-            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)},
+            properties=MockCRUDRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)}),
             tenants={tenant_id: SimpleNamespace(id=tenant_id)},
         )
 
@@ -752,7 +752,7 @@ class TestDeleteContract:
         resolved for authorization — see issue #55."""
         manager_id, contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4(), uuid4()
         contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="ACTIVE")
-        property_repo = MockReadOnlyRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)})
+        property_repo = MockCRUDRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=manager_id)})
         svc = _make_service(
             contracts={contract_id: contract},
             properties=property_repo,
@@ -805,3 +805,163 @@ class TestDelegatedRepoPassthroughs:
         contract = SimpleNamespace(id=uuid4(), booking_source="airbnb")
         svc = _make_service(contracts={contract.id: contract})
         assert await svc.get_by_booking_source(mock_db, "airbnb") == [contract]
+
+
+# ─── Property status sync ────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+class TestPropertyStatusSyncOnCreate:
+    async def test_creating_active_contract_flips_property_to_occupied(self, mock_db):
+        prop_id, tenant_id = uuid4(), uuid4()
+        property_repo = MockCRUDRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4(), status="vacant")})
+        svc = _make_service(
+            contracts=MockContractRepo({}),
+            properties=property_repo,
+            tenants=MockReadOnlyRepo({tenant_id: SimpleNamespace(id=tenant_id)}),
+        )
+
+        await svc.create_contract(
+            mock_db, _payload(property_id=prop_id, tenant_id=tenant_id, status="ACTIVE"), current_user=make_admin()
+        )
+
+        assert property_repo.records[prop_id].status == "occupied"
+
+    async def test_creating_non_active_contract_leaves_property_untouched(self, mock_db):
+        prop_id, tenant_id = uuid4(), uuid4()
+        property_repo = MockCRUDRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4(), status="vacant")})
+        svc = _make_service(
+            contracts=MockContractRepo({}),
+            properties=property_repo,
+            tenants=MockReadOnlyRepo({tenant_id: SimpleNamespace(id=tenant_id)}),
+        )
+
+        await svc.create_contract(
+            mock_db,
+            _payload(property_id=prop_id, tenant_id=tenant_id, status="TERMINATED"),
+            current_user=make_admin(),
+        )
+
+        assert property_repo.records[prop_id].status == "vacant"
+        assert property_repo.updated_payloads == []
+
+
+@pytest.mark.asyncio
+class TestPropertyStatusSyncOnUpdate:
+    async def test_terminating_active_contract_flips_property_to_vacant(self, mock_db):
+        contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
+        contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="ACTIVE")
+        property_repo = MockCRUDRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4(), status="occupied")})
+        svc = _make_service(
+            contracts=MockContractRepo({contract_id: contract}),
+            properties=property_repo,
+            tenants=MockReadOnlyRepo({tenant_id: SimpleNamespace(id=tenant_id)}),
+        )
+
+        await svc.update_contract(mock_db, contract_id, ContractUpdate(status="TERMINATED"), current_user=make_admin())
+
+        assert property_repo.records[prop_id].status == "vacant"
+
+    async def test_reactivating_contract_flips_property_to_occupied(self, mock_db):
+        contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
+        contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="TERMINATED")
+        property_repo = MockCRUDRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4(), status="vacant")})
+        svc = _make_service(
+            contracts=MockContractRepo({contract_id: contract}),
+            properties=property_repo,
+            tenants=MockReadOnlyRepo({tenant_id: SimpleNamespace(id=tenant_id)}),
+        )
+
+        await svc.update_contract(mock_db, contract_id, ContractUpdate(status="ACTIVE"), current_user=make_admin())
+
+        assert property_repo.records[prop_id].status == "occupied"
+
+    async def test_unrelated_field_update_does_not_touch_property(self, mock_db):
+        contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
+        contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="ACTIVE")
+        property_repo = MockCRUDRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4(), status="occupied")})
+        svc = _make_service(
+            contracts=MockContractRepo({contract_id: contract}),
+            properties=property_repo,
+            tenants=MockReadOnlyRepo({tenant_id: SimpleNamespace(id=tenant_id)}),
+        )
+
+        await svc.update_contract(
+            mock_db, contract_id, ContractUpdate(rent_amount=Decimal("2000.00")), current_user=make_admin()
+        )
+
+        assert property_repo.updated_payloads == []
+
+    async def test_property_untouched_when_repo_update_returns_none(self, mock_db):
+        """Concurrent-delete edge case: repo.update returns None, so there's
+        nothing to derive a new status from — must not raise/no-op cleanly."""
+        contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
+        contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="ACTIVE")
+
+        class Repo(MockContractRepo):
+            async def update(self, db, id, payload):
+                return None
+
+        property_repo = MockCRUDRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4(), status="occupied")})
+        svc = _make_service(
+            contracts=Repo({contract_id: contract}),
+            properties=property_repo,
+            tenants=MockReadOnlyRepo({tenant_id: SimpleNamespace(id=tenant_id)}),
+        )
+
+        result = await svc.update_contract(
+            mock_db, contract_id, ContractUpdate(status="TERMINATED"), current_user=make_admin()
+        )
+
+        assert result is None
+        assert property_repo.updated_payloads == []
+
+
+@pytest.mark.asyncio
+class TestPropertyStatusSyncOnDelete:
+    async def test_deleting_active_contract_flips_property_to_vacant(self, mock_db):
+        contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
+        contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="ACTIVE")
+        property_repo = MockCRUDRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4(), status="occupied")})
+        svc = _make_service(
+            contracts=MockContractRepo({contract_id: contract}),
+            properties=property_repo,
+            tenants=MockReadOnlyRepo({tenant_id: SimpleNamespace(id=tenant_id)}),
+        )
+
+        await svc.delete_contract(mock_db, contract_id, current_user=make_admin())
+
+        assert property_repo.records[prop_id].status == "vacant"
+
+    async def test_deleting_non_active_contract_leaves_property_untouched(self, mock_db):
+        contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
+        contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="TERMINATED")
+        property_repo = MockCRUDRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4(), status="vacant")})
+        svc = _make_service(
+            contracts=MockContractRepo({contract_id: contract}),
+            properties=property_repo,
+            tenants=MockReadOnlyRepo({tenant_id: SimpleNamespace(id=tenant_id)}),
+        )
+
+        await svc.delete_contract(mock_db, contract_id, current_user=make_admin())
+
+        assert property_repo.updated_payloads == []
+
+    async def test_property_untouched_when_repo_delete_returns_none(self, mock_db):
+        contract_id, prop_id, tenant_id = uuid4(), uuid4(), uuid4()
+        contract = SimpleNamespace(id=contract_id, property_id=prop_id, tenant_id=tenant_id, status="ACTIVE")
+
+        class Repo(MockContractRepo):
+            async def delete(self, db, id):
+                return None
+
+        property_repo = MockCRUDRepo({prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4(), status="occupied")})
+        svc = _make_service(
+            contracts=Repo({contract_id: contract}),
+            properties=property_repo,
+            tenants=MockReadOnlyRepo({tenant_id: SimpleNamespace(id=tenant_id)}),
+        )
+
+        await svc.delete_contract(mock_db, contract_id, current_user=make_admin())
+
+        assert property_repo.updated_payloads == []
