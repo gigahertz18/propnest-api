@@ -61,11 +61,13 @@ class MockCRUDRepo:
         self.created_payloads: list = []
         self.updated_payloads: list = []
         self.deleted_ids: list = []
+        self.get_by_id_calls: list = []
 
     async def get_all(self, db, skip=0, limit=100):
         return list(self.records.values())[skip : skip + limit]
 
     async def get_by_id(self, db, id):
+        self.get_by_id_calls.append(id)
         return self.records.get(id)
 
     async def create(self, db, payload):

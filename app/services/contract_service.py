@@ -7,7 +7,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.audit_log import AuditAction
-from app.models.contract import Contract, RentalType
+from app.models.contract import Contract, ContractStatus, RentalType
+from app.models.property import PropertyStatus
 from app.models.user import User
 from app.repositories.contract import ContractRepository
 from app.repositories.property import PropertyRepository
@@ -100,6 +101,9 @@ class ContractService(ResourceAuthorizationMixin):
 
         try:
             contract = await self.contract_repo.create(db, resolved_payload)
+            prop_status = self._resolve_property_status_transition(None, contract.status)
+            if prop_status:
+                await self._sync_property_status(db, contract.property_id, prop_status)
             write_audit_log(db, current_user, AuditAction.CREATE, "Contract", contract.id)
             await db.commit()
             return contract
@@ -119,10 +123,16 @@ class ContractService(ResourceAuthorizationMixin):
         back to ACTIVE - same partial unique index as `create_contract`, translated the same way
         """
         contract = await self.get_contract(db, contract_id, current_user=current_user)
+        old_status = contract.status
+        property_id = contract.property_id
 
         try:
 
             contract = await self.contract_repo.update(db, contract_id, payload)
+            if contract is not None:
+                new_prop_status = self._resolve_property_status_transition(old_status, contract.status)
+                if new_prop_status:
+                    await self._sync_property_status(db, property_id, new_prop_status)
             write_audit_log(db, current_user, AuditAction.UPDATE, "Contract", contract_id)
             await db.commit()
             return contract
@@ -136,11 +146,16 @@ class ContractService(ResourceAuthorizationMixin):
         contract_id: UUID,
         current_user: User,
     ) -> Contract | None:
-
         contract = await self.get_contract(db, contract_id, current_user=current_user)
+        old_status = contract.status
+        property_id = contract.property_id
 
         try:
             contract = await self.contract_repo.delete(db, contract_id)
+            if contract is not None:
+                new_prop_status = self._resolve_property_status_transition(old_status, None)
+                if new_prop_status:
+                    await self._sync_property_status(db, property_id, new_prop_status)
             write_audit_log(db, current_user, AuditAction.DELETE, "Contract", contract_id)
             await db.commit()
             return contract
@@ -167,6 +182,25 @@ class ContractService(ResourceAuthorizationMixin):
 
     async def get_by_booking_source(self, db: AsyncSession, booking_source: str) -> Sequence[Contract]:
         return await self.contract_repo.get_by_booking_source(db, booking_source)
+
+    async def _sync_property_status(
+        self,
+        db: AsyncSession,
+        property_id: UUID,
+        status: PropertyStatus,
+    ) -> None:
+        """Flip the related Property's occupancy status to reflect a contract
+        lifecycle change, within the same transaction/commit as the contract
+        mutation that triggered it. Contract (not Lease) drives this sync —
+        Contract carries the enforced `uq_active_contract_property` invariant
+        and represents the tenancy relationship itself, whereas Lease models
+        billing terms only. Raises loudly rather than silently no-op'ing if
+        misconfigured, matching `ResourceAuthorizationMixin._get_property`'s
+        existing guard pattern.
+        """
+        if self.property_repo is None:
+            raise RuntimeError(f"{type(self).__name__}._sync_property_status requires property_repo to be injected.")
+        await self.property_repo.update(db, property_id, {"status": status})
 
     async def _prepare_contract_context(
         self,
@@ -202,3 +236,23 @@ class ContractService(ResourceAuthorizationMixin):
         msg = integrity_error_message(e)
         if "uq_active_contract_property" in msg or ("duplicate key value" in msg and "property_id" in msg):
             raise ContractActiveError("An active contract already exists for this property")
+
+    @staticmethod
+    def _resolve_property_status_transition(
+        old_status: ContractStatus | None,
+        new_status: ContractStatus | None,
+    ) -> PropertyStatus | None:
+        """Returns the Property status implied by a contract status change, or None
+        if the transition shouldn't touch Property at all - either because status
+        didn't actually change (e.g. an unrelated field-only update), or because
+        it moved between two non-ACTIVE states (e.g. TERMINATED -> EXPIRED)."""
+        if new_status == old_status:
+            return None
+
+        if old_status == ContractStatus.ACTIVE:
+            return PropertyStatus.vacant
+
+        if new_status == ContractStatus.ACTIVE:
+            return PropertyStatus.occupied
+
+        return None
