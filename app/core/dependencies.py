@@ -282,6 +282,7 @@ def get_lease_billing_service() -> LeaseBillingService:
         lease_repo=lease_repo,
         contract_repo=contract_repo,
         property_repo=property_repo,
+        payment_repo=payment_repo,
     )
 
 

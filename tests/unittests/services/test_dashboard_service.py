@@ -49,6 +49,9 @@ class MockPaymentRepo:
     async def get_recent_for_manager(self, db, manager_id, limit=10):
         return self.recent_for_manager[:limit]
 
+    async def sum_by_billing_record_ids(self, db, billing_record_ids):
+        return {}
+
 
 class MockBillingRecordRepo:
     def __init__(
@@ -102,8 +105,10 @@ class MockLeaseRepo:
         return self.expiring_for_manager
 
 
-def _billing_record(due_date, status="pending"):
-    return SimpleNamespace(id=uuid.uuid4(), due_date=due_date, status=status)
+def _billing_record(due_date, status="pending", amount_due=Decimal("1000.00")):
+    return SimpleNamespace(
+        id=uuid.uuid4(), due_date=due_date, status=status, amount_due=amount_due, late_fee_amount_charged=None
+    )
 
 
 def _make_service(property_repo=None, payment_repo=None, billing_record_repo=None, lease_repo=None) -> DashboardService:

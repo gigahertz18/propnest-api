@@ -52,6 +52,11 @@ class BillingRecordResponse(BillingRecordBase, BaseResponse):
 
     id: uuid.UUID
     overpaid_amount: Decimal | None = None
+    remaining_balance: Decimal = Field(
+        description="Amount still owed (amount_due + late_fee_amount_charged, "
+        "minus non-voided payments applied), floored at zero. Server-computed by "
+        "LeaseBillingService - never re-derive this on the client."
+    )
     created_at: datetime
     updated_at: datetime
 

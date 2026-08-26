@@ -2,7 +2,7 @@ import pytest
 import pytest_asyncio
 import uuid
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from decimal import Decimal
 
 from pydantic import ValidationError
@@ -474,3 +474,45 @@ class TestPaymentRepositoryGetRecent:
         result = await payment_repo.get_recent_for_manager(db, manager.id, limit=10)
 
         assert [p.id for p in result] == [owned_payment.id]
+
+
+# ─── sum_by_billing_record_ids ────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+class TestPaymentRepositorySumByBillingRecordIds:
+    async def test_sums_non_voided_payments_for_one_record(self, db, contract, billing_record):
+        await make_payment_model(db, contract.id, billing_record_id=billing_record.id, amount=5000.00)
+        await make_payment_model(db, contract.id, billing_record_id=billing_record.id, amount=3000.00)
+
+        result = await payment_repo.sum_by_billing_record_ids(db, [billing_record.id])
+
+        assert result == {billing_record.id: Decimal("8000.00")}
+
+    async def test_excludes_voided_payments(self, db, contract, billing_record):
+        await make_payment_model(db, contract.id, billing_record_id=billing_record.id, amount=5000.00)
+        await make_payment_model(db, contract.id, billing_record_id=billing_record.id, amount=9000.00, status="VOIDED")
+
+        result = await payment_repo.sum_by_billing_record_ids(db, [billing_record.id])
+
+        assert result == {billing_record.id: Decimal("5000.00")}
+
+    async def test_groups_across_multiple_billing_records(self, db, contract, lease):
+        record_a = await make_billing_record_model(db, lease.id, period_start=date(2026, 8, 1))
+        record_b = await make_billing_record_model(
+            db, lease.id, period_start=date(2026, 9, 1), period_end=date(2026, 9, 30), due_date=date(2026, 9, 5)
+        )
+        await make_payment_model(db, contract.id, billing_record_id=record_a.id, amount=1000.00)
+        await make_payment_model(db, contract.id, billing_record_id=record_b.id, amount=2000.00)
+
+        result = await payment_repo.sum_by_billing_record_ids(db, [record_a.id, record_b.id])
+
+        assert result == {record_a.id: Decimal("1000.00"), record_b.id: Decimal("2000.00")}
+
+    async def test_missing_ids_are_absent_from_the_result(self, db, billing_record):
+        result = await payment_repo.sum_by_billing_record_ids(db, [billing_record.id])
+        assert result == {}
+
+    async def test_empty_id_list_returns_empty_dict_without_querying(self, db):
+        result = await payment_repo.sum_by_billing_record_ids(db, [])
+        assert result == {}

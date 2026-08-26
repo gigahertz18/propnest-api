@@ -43,17 +43,71 @@ class MockBillingRecordRepo(MockCRUDRepo):
         return max(matches, key=lambda record: record.period_end)
 
 
-def _make_service(billing_records=None, leases=None, contracts=None, properties=None) -> LeaseBillingService:
-    billing_record_repo = MockBillingRecordRepo(billing_records or {})
-    lease_repo = MockReadOnlyRepo(leases or {})
-    contract_repo = MockReadOnlyRepo(contracts or {})
-    property_repo = MockReadOnlyRepo(properties or {})
+class MockPaymentRepo:
+    """Minimal stand-in for PaymentRepository.sum_by_billing_record_ids - LeaseBillingService's
+    read path is the only thing here that needs it."""
+
+    def __init__(self, payments=None):
+        self.payments = payments or {}
+
+    async def sum_by_billing_record_ids(self, db, billing_record_ids):
+        totals: dict = {}
+        for payment in self.payments.values():
+            if payment.billing_record_id in billing_record_ids and payment.status != "VOIDED":
+                totals[payment.billing_record_id] = totals.get(payment.billing_record_id, Decimal("0")) + payment.amount
+
+        return totals
+
+
+def _make_service(
+    billing_records=None,
+    leases=None,
+    contracts=None,
+    properties=None,
+    payments=None,
+) -> LeaseBillingService:
+
+    if billing_records is None:
+        billing_record_repo = MockBillingRecordRepo({})
+    elif isinstance(billing_records, dict):
+        billing_record_repo = MockBillingRecordRepo(billing_records)
+    else:
+        billing_record_repo = billing_records
+
+    if leases is None:
+        lease_repo = MockReadOnlyRepo({})
+    elif isinstance(leases, dict):
+        lease_repo = MockReadOnlyRepo(leases)
+    else:
+        lease_repo = leases
+
+    if contracts is None:
+        contract_repo = MockReadOnlyRepo({})
+    elif isinstance(contracts, dict):
+        contract_repo = MockReadOnlyRepo(contracts)
+    else:
+        contract_repo = contracts
+
+    if properties is None:
+        property_repo = MockReadOnlyRepo({})
+    elif isinstance(properties, dict):
+        property_repo = MockReadOnlyRepo(properties)
+    else:
+        property_repo = properties
+
+    if payments is None:
+        payment_repo = MockPaymentRepo({})
+    elif isinstance(payments, dict):
+        payment_repo = MockPaymentRepo(payments)
+    else:
+        payment_repo = payments
 
     return LeaseBillingService(
         billing_record_repo=billing_record_repo,
         lease_repo=lease_repo,
         contract_repo=contract_repo,
         property_repo=property_repo,
+        payment_repo=payment_repo,
     )
 
 
@@ -330,13 +384,11 @@ class TestGenerateBillingRecord:
                     ),
                 )
 
-        svc = LeaseBillingService(
-            billing_record_repo=Repo(),
-            lease_repo=MockReadOnlyRepo({lease.id: lease}),
-            contract_repo=MockReadOnlyRepo({contract.id: contract}),
-            property_repo=MockReadOnlyRepo(
-                {contract.property_id: SimpleNamespace(id=contract.property_id, manager_id=uuid4())}
-            ),
+        svc = _make_service(
+            billing_records=Repo(),
+            leases={lease.id: lease},
+            contracts={contract.id: contract},
+            properties={contract.property_id: SimpleNamespace(id=contract.property_id, manager_id=uuid4())},
         )
 
         with pytest.raises(BillingRecordAlreadyGeneratedError):
@@ -358,13 +410,11 @@ class TestGenerateBillingRecord:
             async def get_latest_for_lease(self, db, lease_id):
                 return None
 
-        svc = LeaseBillingService(
-            billing_record_repo=RacingRepo(),
-            lease_repo=MockReadOnlyRepo({lease.id: lease}),
-            contract_repo=MockReadOnlyRepo({contract.id: contract}),
-            property_repo=MockReadOnlyRepo(
-                {contract.property_id: SimpleNamespace(id=contract.property_id, manager_id=uuid4())}
-            ),
+        svc = _make_service(
+            billing_records=RacingRepo(),
+            leases={lease.id: lease},
+            contracts={contract.id: contract},
+            properties={contract.property_id: SimpleNamespace(id=contract.property_id, manager_id=uuid4())},
         )
         repo = svc.billing_record_repo
 
@@ -399,13 +449,11 @@ class TestGenerateBillingRecord:
             async def create(self, db, payload):
                 raise IntegrityError("INSERT", {}, Exception("some other integrity problem"))
 
-        svc = LeaseBillingService(
-            billing_record_repo=Repo(),
-            lease_repo=MockReadOnlyRepo({lease.id: lease}),
-            contract_repo=MockReadOnlyRepo({contract.id: contract}),
-            property_repo=MockReadOnlyRepo(
-                {contract.property_id: SimpleNamespace(id=contract.property_id, manager_id=uuid4())}
-            ),
+        svc = _make_service(
+            billing_records=Repo(),
+            leases={lease.id: lease},
+            contracts={contract.id: contract},
+            properties={contract.property_id: SimpleNamespace(id=contract.property_id, manager_id=uuid4())},
         )
 
         with pytest.raises(IntegrityError):
@@ -869,3 +917,104 @@ class TestBillingRecordLateFeeCorrectionSchema:
     def test_rejects_amount_when_applied_false(self):
         with pytest.raises(ValueError):
             BillingRecordLateFeeCorrection(late_fee_applied=False, late_fee_amount_charged=Decimal("10.00"))
+
+
+# ─── remaining_balance (read path) ───────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+class TestRemainingBalance:
+    async def test_get_billing_record_computes_remaining_balance_with_no_payments(self, mock_db):
+        lease = _lease()
+        contract = SimpleNamespace(id=lease.contract_id, property_id=uuid4())
+        record = _billing_record(lease_id=lease.id, amount_due=Decimal("15000.00"))
+        svc = _make_service(
+            billing_records={record.id: record},
+            leases={lease.id: lease},
+            contracts={contract.id: contract},
+        )
+
+        result = await svc.get_billing_record(mock_db, record.id, current_user=make_admin())
+        assert result.remaining_balance == Decimal("15000.00")
+
+    async def test_partial_payment_reduces_remaining_balance(self, mock_db):
+        lease = _lease()
+        contract = SimpleNamespace(id=lease.contract_id, property_id=uuid4())
+        record = _billing_record(lease_id=lease.id, amount_due=Decimal("15000.00"))
+        payment = SimpleNamespace(billing_record_id=record.id, amount=Decimal("5000.00"), status="PAID")
+        svc = _make_service(
+            billing_records={record.id: record},
+            leases={lease.id: lease},
+            contracts={contract.id: contract},
+            payments={payment.billing_record_id: payment},
+        )
+
+        result = await svc.get_billing_record(mock_db, record.id, current_user=make_admin())
+        assert result.remaining_balance == Decimal("10000.00")
+
+    async def test_overpayment_floors_remaining_balance_at_zero(self, mock_db):
+        lease = _lease()
+        contract = SimpleNamespace(id=lease.contract_id, property_id=uuid4())
+        record = _billing_record(
+            lease_id=lease.id,
+            amount_due=Decimal("15000.00"),
+            status=BillingRecordStatus.paid,
+            overpaid_amount=Decimal("500.00"),
+        )
+        payment = SimpleNamespace(billing_record_id=record.id, amount=Decimal("15500.00"), status="PAID")
+        svc = _make_service(
+            billing_records={record.id: record},
+            leases={lease.id: lease},
+            contracts={contract.id: contract},
+            payments={payment.billing_record_id: payment},
+        )
+
+        result = await svc.get_billing_record(mock_db, record.id, current_user=make_admin())
+        assert result.remaining_balance == Decimal("0")
+
+    async def test_voided_payments_excluded_from_remaining_balance(self, mock_db):
+        lease = _lease()
+        contract = SimpleNamespace(id=lease.contract_id, property_id=uuid4())
+        record = _billing_record(lease_id=lease.id, amount_due=Decimal("15000.00"))
+        payment = SimpleNamespace(billing_record_id=record.id, amount=Decimal("15000.00"), status="VOIDED")
+        svc = _make_service(
+            billing_records={record.id: record},
+            leases={lease.id: lease},
+            contracts={contract.id: contract},
+            payments={payment.billing_record_id: payment},
+        )
+
+        result = await svc.get_billing_record(mock_db, record.id, current_user=make_admin())
+        assert result.remaining_balance == Decimal("15000.00")
+
+    async def test_late_fee_counts_toward_total_owed(self, mock_db):
+        lease = _lease()
+        contract = SimpleNamespace(id=lease.contract_id, property_id=uuid4())
+        record = _billing_record(
+            lease_id=lease.id,
+            amount_due=Decimal("15000.00"),
+            late_fee_applied=True,
+            late_fee_amount_charged=Decimal("500.00"),
+            status=BillingRecordStatus.overdue,
+        )
+        svc = _make_service(
+            billing_records={record.id: record}, leases={lease.id: lease}, contracts={contract.id: contract}
+        )
+
+        result = await svc.get_billing_record(mock_db, record.id, current_user=make_admin())
+        assert result.remaining_balance == Decimal("15500.00")
+
+    async def test_list_for_lease_attaches_remaining_balance_to_every_item(self, mock_db):
+        lease = _lease()
+        contract = SimpleNamespace(id=lease.contract_id, property_id=uuid4())
+        record_a = _billing_record(lease_id=lease.id, amount_due=Decimal("15000.00"))
+        record_b = _billing_record(lease_id=lease.id, amount_due=Decimal("10000.00"))
+        svc = _make_service(
+            billing_records={record_a.id: record_a, record_b.id: record_b},
+            leases={lease.id: lease},
+            contracts={contract.id: contract},
+        )
+
+        result = await svc.list_for_lease(mock_db, lease.id, current_user=make_admin())
+        balances = {item.id: item.remaining_balance for item in result.items}
+        assert balances == {record_a.id: Decimal("15000.00"), record_b.id: Decimal("10000.00")}
