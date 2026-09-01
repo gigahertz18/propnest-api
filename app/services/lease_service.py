@@ -5,18 +5,18 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.audit_log import AuditAction
+from app.core.models.audit_log import AuditAction
 from app.models.contract import Contract, RentalType
 from app.models.lease import Lease
 from app.models.user import User
 from app.repositories.contract import ContractRepository
 from app.repositories.lease import LeaseRepository
-from app.schemas.base import PaginatedResponse
+from app.core.schemas.base import PaginatedResponse
 from app.schemas.lease import LeaseCreate, LeaseUpdate
-from app.services.audit import write_audit_log
-from app.services.base import ResourceAuthorizationMixin
-from app.services.utils import integrity_error_message
-from app.services.exceptions import (
+from app.core.services.audit import write_audit_log
+from app.core.services.base import ResourceAuthorizationMixin
+from app.core.services.utils import integrity_error_message
+from app.core.services.exceptions import (
     LeaseAlreadyExistsError,
     LeaseForbiddenError,
     LeaseRentalTypeError,

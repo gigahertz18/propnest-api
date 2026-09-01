@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 
 
 from app.core.config import settings
-from app.models.audit_log import AuditAction
+from app.core.models.audit_log import AuditAction
 from app.models.contract import Contract
 from app.models.document import Document
 from app.models.user import User
@@ -20,11 +20,11 @@ from app.repositories.collection import CollectionRepository
 from app.repositories.contract import ContractRepository
 from app.repositories.property import PropertyRepository
 from app.repositories.tenant import TenantRepository
-from app.schemas.base import PaginatedResponse
+from app.core.schemas.base import PaginatedResponse
 from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate
-from app.services.audit import write_audit_log
-from app.services.base import ResourceAuthorizationMixin
-from app.services.exceptions import (
+from app.core.services.audit import write_audit_log
+from app.core.services.base import ResourceAuthorizationMixin
+from app.core.services.exceptions import (
     DocumentUploadError,
     DocumentForbiddenError,
     DocumentStorageInconsistentError,

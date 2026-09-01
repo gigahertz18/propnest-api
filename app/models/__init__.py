@@ -5,7 +5,7 @@ from app.models.document import Document
 from app.models.payment import Payment
 from app.models.tenant import Tenant
 from app.models.collection import Collection
-from app.models.audit_log import AuditLog, AuditAction
+from app.core.models.audit_log import AuditLog, AuditAction
 from app.models.lease import Lease, BillingCycle, RenewalOption, LeaseStatus
 from app.models.billing_record import BillingRecord, BillingRecordStatus
 from app.models.receipt import Receipt

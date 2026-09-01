@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 from app.db.session import Base
-from app.models.base import TimestampMixin
+from app.core.models.base import TimestampMixin
 
 from sqlalchemy import String, Enum, Boolean, Uuid, DateTime
 from sqlalchemy.orm import Mapped, mapped_column

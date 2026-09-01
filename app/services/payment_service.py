@@ -6,7 +6,7 @@ from decimal import Decimal
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.audit_log import AuditAction
+from app.core.models.audit_log import AuditAction
 from app.models.contract import Contract
 from app.models.payment import Payment, PaymentStatus
 from app.models.user import User
@@ -15,11 +15,11 @@ from app.repositories.contract import ContractRepository
 from app.repositories.lease import LeaseRepository
 from app.repositories.payment import PaymentRepository
 from app.repositories.property import PropertyRepository
-from app.schemas.base import PaginatedResponse
+from app.core.schemas.base import PaginatedResponse
 from app.schemas.payment import PaymentCorrectionCreate, PaymentCreate, PaymentUpdate
-from app.services.audit import write_audit_log
-from app.services.base import ResourceAuthorizationMixin
-from app.services.exceptions import (
+from app.core.services.audit import write_audit_log
+from app.core.services.base import ResourceAuthorizationMixin
+from app.core.services.exceptions import (
     PaymentAlreadyVoidedError,
     PaymentForbiddenError,
     RelatedResourceNotFoundError,

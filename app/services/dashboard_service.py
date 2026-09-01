@@ -11,8 +11,8 @@ from app.repositories.billing_record import BillingRecordRepository
 from app.repositories.lease import LeaseRepository
 from app.repositories.payment import PaymentRepository
 from app.repositories.property import PropertyRepository
-from app.services.exceptions import DashboardForbiddenError
-from app.services.utils import attach_remaining_balance
+from app.core.services.exceptions import DashboardForbiddenError
+from app.core.services.utils import attach_remaining_balance
 
 
 class DashboardService:

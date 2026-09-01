@@ -1,7 +1,7 @@
 import pytest
 import uuid
 
-from app.models.audit_log import AuditAction, AuditLog
+from app.core.models.audit_log import AuditAction, AuditLog
 from tests.factories import (
     make_property_model,
     make_tenant_model,

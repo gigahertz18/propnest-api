@@ -7,11 +7,11 @@ from uuid import uuid4
 
 from sqlalchemy.exc import IntegrityError
 
-from app.models.audit_log import AuditAction, AuditLog
+from app.core.models.audit_log import AuditAction, AuditLog
 from app.models.billing_record import BillingRecordStatus
 from app.schemas.billing_record import BillingRecordLateFeeCorrection
 from app.models.lease import BillingCycle
-from app.services.exceptions import (
+from app.core.services.exceptions import (
     BillingRecordAlreadyGeneratedError,
     BillingRecordForbiddenError,
     InvalidBillingRecordTransitionError,

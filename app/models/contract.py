@@ -3,7 +3,7 @@ import uuid
 
 from app.db.constraints import sql_in_clause
 from app.db.session import Base
-from app.models.base import TimestampMixin
+from app.core.models.base import TimestampMixin
 from datetime import date
 from decimal import Decimal
 

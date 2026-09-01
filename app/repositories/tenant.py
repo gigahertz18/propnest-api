@@ -5,7 +5,7 @@ from datetime import date
 from sqlalchemy import select, exists, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.base import BaseRepository
+from app.core.repositories.base import BaseRepository
 from app.models.tenant import Tenant
 from app.models.contract import Contract
 from app.models.property import Property

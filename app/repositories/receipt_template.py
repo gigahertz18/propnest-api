@@ -3,7 +3,7 @@ import uuid
 from collections.abc import Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.base import BaseRepository
+from app.core.repositories.base import BaseRepository
 from app.models.receipt_template import ReceiptTemplate
 
 

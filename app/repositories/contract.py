@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.base import BaseRepository
+from app.core.repositories.base import BaseRepository
 from app.models.contract import Contract, RentalType
 from app.models.property import Property
 from app.schemas.contract import ContractCreate, ContractUpdate

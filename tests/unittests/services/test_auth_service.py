@@ -23,7 +23,7 @@ from app.models.user import UserRole
 from app.repositories.login_attempt import LockoutStatus
 from app.repositories.ip_rate_limit import RateLimitStatus
 from app.services.auth_service import AuthService
-from app.services.exceptions import (
+from app.core.services.exceptions import (
     AccountLockedError,
     InvalidCredentialsError,
     IpRateLimitExceededError,

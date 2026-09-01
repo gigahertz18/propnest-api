@@ -6,13 +6,13 @@ from pydantic import ValidationError
 from types import SimpleNamespace
 from uuid import uuid4
 
-from app.models.audit_log import AuditAction, AuditLog
+from app.core.models.audit_log import AuditAction, AuditLog
 from app.models.billing_record import BillingRecordStatus
 from app.models.payment import PaymentStatus
 from app.schemas.payment import PaymentCreate, PaymentCorrectionCreate, PaymentUpdate
 from app.services.lease_billing_service import LeaseBillingService
 from app.services.payment_service import PaymentService
-from app.services.exceptions import (
+from app.core.services.exceptions import (
     PaymentAlreadyVoidedError,
     PaymentForbiddenError,
     RelatedResourceNotFoundError,

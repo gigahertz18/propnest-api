@@ -4,10 +4,10 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
-from app.models.audit_log import AuditAction, AuditLog
+from app.core.models.audit_log import AuditAction, AuditLog
 from app.models.user import UserRole
 from app.services.activity_feed_service import ActivityFeedService
-from app.services.exceptions import ActivityFeedForbiddenError, RelatedResourceNotFoundError
+from app.core.services.exceptions import ActivityFeedForbiddenError, RelatedResourceNotFoundError
 from tests.mock_repos import MockReadOnlyRepo
 
 

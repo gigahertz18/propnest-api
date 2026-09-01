@@ -9,7 +9,7 @@ from sqlalchemy import Boolean, CheckConstraint, Date, Enum, ForeignKey, Numeric
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
-from app.models.base import TimestampMixin
+from app.core.models.base import TimestampMixin
 
 
 class BillingRecordStatus(str, enum.Enum):

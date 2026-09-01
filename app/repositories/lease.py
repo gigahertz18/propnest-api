@@ -5,7 +5,7 @@ from datetime import date
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.base import BaseRepository
+from app.core.repositories.base import BaseRepository
 from app.models.contract import Contract
 from app.models.lease import Lease, LeaseStatus
 from app.models.property import Property

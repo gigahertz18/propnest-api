@@ -9,10 +9,10 @@ from app.models.user import User
 from app.repositories.collection import CollectionRepository
 from app.repositories.contract import ContractRepository
 from app.repositories.property import PropertyRepository
-from app.schemas.base import PaginatedResponse
+from app.core.schemas.base import PaginatedResponse
 from app.schemas.collection import CollectionCreate, CollectionUpdate
-from app.services.base import ResourceAuthorizationMixin
-from app.services.exceptions import (
+from app.core.services.base import ResourceAuthorizationMixin
+from app.core.services.exceptions import (
     CollectionForbiddenError,
     CollectionValidationError,
     RelatedResourceNotFoundError,

@@ -5,11 +5,11 @@ from types import SimpleNamespace
 
 from sqlalchemy.exc import IntegrityError
 
-from app.models.audit_log import AuditAction, AuditLog
+from app.core.models.audit_log import AuditAction, AuditLog
 from app.models.property import PropertyStatus
 from app.models.user import UserRole
 from app.services.property_service import PropertyService
-from app.services.exceptions import (
+from app.core.services.exceptions import (
     RelatedResourceNotFoundError,
     PropertyAlreadyExistsError,
     PropertyForbiddenError,

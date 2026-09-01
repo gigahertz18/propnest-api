@@ -4,14 +4,14 @@ from sqlalchemy.exc import IntegrityError
 from uuid import UUID
 
 from app.core.security import verify_password
-from app.models.audit_log import AuditAction
+from app.core.models.audit_log import AuditAction
 from app.models.user import User, UserRole
 from app.repositories.user import UserRepository
 from app.schemas.user import UserCreate, UserUpdate
-from app.services.audit import write_audit_log
-from app.services.notification_service import NotificationService
-from app.services.utils import integrity_error_message
-from app.services.exceptions import (
+from app.core.services.audit import write_audit_log
+from app.core.services.notification_service import NotificationService
+from app.core.services.utils import integrity_error_message
+from app.core.services.exceptions import (
     UserNotFoundError,
     EmailAlreadyExistsError,
     UsernameAlreadyExistsError,

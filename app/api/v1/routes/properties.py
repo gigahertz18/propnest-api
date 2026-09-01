@@ -5,10 +5,10 @@ from uuid import UUID
 from app.core.dependencies import require_admin, get_property_service, require_manager_or_above
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.base import PaginatedResponse
+from app.core.schemas.base import PaginatedResponse
 from app.schemas.property import PropertyCreate, PropertyUpdate, PropertyResponse, PropertyAssignManager
 from app.services.property_service import PropertyService
-from app.services.exceptions import (
+from app.core.services.exceptions import (
     PropertyAlreadyExistsError,
     UserNotFoundError,
     PropertyManagerAssignmentError,

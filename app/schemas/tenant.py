@@ -3,7 +3,7 @@ import uuid
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime, date
 
-from app.schemas.base import BaseResponse
+from app.core.schemas.base import BaseResponse
 
 
 class TenantBase(BaseModel):

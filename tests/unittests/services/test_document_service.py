@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from uuid import uuid4
 
 from app.services.document_service import DocumentService
-from app.services.exceptions import (
+from app.core.services.exceptions import (
     RelatedResourceNotFoundError,
     DocumentForbiddenError,
     DocumentStorageInconsistentError,

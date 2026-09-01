@@ -9,10 +9,10 @@ from app.core.dependencies import (
 )
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.base import PaginatedResponse
+from app.core.schemas.base import PaginatedResponse
 from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate, DocumentResponse
 from app.services.document_service import DocumentService
-from app.services.exceptions import (
+from app.core.services.exceptions import (
     DocumentUploadError,
     DocumentValidationError,
 )

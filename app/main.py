@@ -20,7 +20,6 @@ from app.api.v1.routes import (
     documents,
     payments,
     collections,
-    audit_logs,
     activity_feed,
     dashboard,
     leases,
@@ -28,7 +27,8 @@ from app.api.v1.routes import (
     receipts,
     receipt_templates,
 )
-from app.services.exceptions import (
+from app.core.routes import audit_logs
+from app.core.services.exceptions import (
     RelatedResourceNotFoundError,
     ResourceForbiddenError,
     UserForbiddenError,

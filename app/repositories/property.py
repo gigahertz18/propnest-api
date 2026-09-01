@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
-from app.repositories.base import BaseRepository
+from app.core.repositories.base import BaseRepository
 from app.models.property import Property, PropertyStatus
 from app.schemas.property import PropertyCreate, PropertyUpdate
 

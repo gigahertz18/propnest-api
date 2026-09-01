@@ -5,9 +5,9 @@ from uuid import UUID
 from app.core.dependencies import get_tenant_service, require_manager_or_above, get_current_user
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.base import PaginatedResponse
+from app.core.schemas.base import PaginatedResponse
 from app.schemas.tenant import TenantCreate, TenantUpdate, TenantResponse, TenantLinkUser
-from app.services.exceptions import (
+from app.core.services.exceptions import (
     UserNotFoundError,
     TenantAlreadyLinkedError,
     TenantAlreadyExistsError,
