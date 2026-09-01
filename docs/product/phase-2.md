@@ -85,7 +85,7 @@ state:
 - Overpayment isn't rejected: the record still resolves to `paid`, with the excess
   tracked on `BillingRecord.overpaid_amount` for later Dashboard/Accounting use.
 
-### Immutable Receipts
+### Immutable Receipts — done
 
 Generate sequential receipts as PDFs.
 

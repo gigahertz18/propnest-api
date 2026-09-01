@@ -31,6 +31,7 @@ from app.services.exceptions import (
     DocumentValidationError,
     RelatedResourceNotFoundError,
     DocumentDeletionError,
+    ServiceException,
 )
 
 logger = logging.getLogger(__name__)
@@ -132,6 +133,33 @@ class DocumentService(ResourceAuthorizationMixin):
             contract_id=doc.contract_id,
         )
         return doc
+
+    async def get_document_content(
+        self,
+        db: AsyncSession,
+        doc_id: UUID,
+        current_user: User,
+        storage_client,
+    ) -> tuple[Document, bytes]:
+        """Fetch a document's metadata (authorized via `get_document`) and
+        its raw bytes from storage. Raises ServiceException if the DB
+        record exists but the object can't be read back from storage."""
+        document = await self.get_document(db, doc_id, current_user)
+        storage_key = self._build_storage_key(document.id, document.file_name)
+        try:
+            response = storage_client.get_object(settings.MINIO_BUCKET_NAME, storage_key)
+            try:
+                data = response.read()
+            finally:
+                close = getattr(response, "close", None)
+                if close:
+                    close()
+                release_conn = getattr(response, "release_conn", None)
+                if release_conn:
+                    release_conn()
+        except Exception as e:
+            raise ServiceException(f"Failed to read document {doc_id} from storage: {e}") from e
+        return document, data
 
     async def create_document(
         self,

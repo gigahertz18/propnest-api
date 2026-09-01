@@ -176,6 +176,16 @@ class ReceiptService(ResourceAuthorizationMixin):
         )
         return receipt
 
+    async def get_receipt_document(
+        self,
+        db: AsyncSession,
+        receipt_id: UUID,
+        current_user: User,
+        storage_client,
+    ):
+        receipt = await self.get_receipt(db, receipt_id, current_user)
+        return await self.document_service.get_document_content(db, receipt.document_id, current_user, storage_client)
+
     async def _get_payment_or_404(self, db: AsyncSession, payment_id: UUID):
         payment = await self.payment_repo.get_by_id(db, payment_id)
         if not payment:
