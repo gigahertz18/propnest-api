@@ -6,7 +6,7 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.billing_record import BillingRecord, last_day_of_month
-from app.models.user import UserRole
+from app.identity.models.user import UserRole
 from app.repositories.billing_record import BillingRecordRepository
 from app.repositories.lease import LeaseRepository
 from app.repositories.payment import PaymentRepository

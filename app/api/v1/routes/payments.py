@@ -11,7 +11,7 @@ from app.core.dependencies import (
     require_manager_or_above,
 )
 from app.db.session import get_db
-from app.models.user import User
+from app.identity.models.user import User
 from app.core.schemas.base import PaginatedResponse
 from app.schemas.payment import PaymentCorrectionCreate, PaymentCreate, PaymentUpdate, PaymentResponse
 from app.core.services.exceptions import PaymentAlreadyVoidedError

@@ -3,7 +3,7 @@ import pytest
 from types import SimpleNamespace
 from uuid import uuid4
 
-from app.models.user import UserRole
+from app.identity.models.user import UserRole
 from app.core.services.base import ResourceAuthorizationMixin
 from app.core.services.exceptions import RelatedResourceNotFoundError, ResourceForbiddenError
 from tests.mock_repos import MockReadOnlyRepo

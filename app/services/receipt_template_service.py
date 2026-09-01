@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.models.audit_log import AuditAction
 from app.models.receipt_template import ReceiptTemplate
-from app.models.user import User, UserRole
+from app.identity.models.user import User, UserRole
 from app.repositories.property import PropertyRepository
 from app.repositories.receipt_template import ReceiptTemplateRepository
 from app.core.services.audit import write_audit_log

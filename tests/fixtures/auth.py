@@ -3,7 +3,7 @@ import pytest_asyncio
 
 from dataclasses import dataclass
 
-from app.models.user import User, UserRole
+from app.identity.models.user import User, UserRole
 from tests.factories import make_user_model
 
 

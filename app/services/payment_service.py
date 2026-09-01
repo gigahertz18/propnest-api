@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.models.audit_log import AuditAction
 from app.models.contract import Contract
 from app.models.payment import Payment, PaymentStatus
-from app.models.user import User
+from app.identity.models.user import User
 from app.repositories.billing_record import BillingRecordRepository
 from app.repositories.contract import ContractRepository
 from app.repositories.lease import LeaseRepository

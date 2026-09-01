@@ -1,7 +1,7 @@
 import pytest
 import uuid
 
-from app.models.user import UserRole
+from app.identity.models.user import UserRole
 from app.models.property import PropertyStatus
 from tests.factories import (
     make_user_model,

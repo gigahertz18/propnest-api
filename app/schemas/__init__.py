@@ -4,7 +4,7 @@ from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentF
 from app.schemas.payment import PaymentCreate, PaymentUpdate, PaymentResponse
 from app.schemas.property import PropertyCreate, PropertyUpdate, PropertyResponse
 from app.schemas.tenant import TenantCreate, TenantUpdate, TenantResponse, TenantLinkUser
-from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserLogin, TokenResponse
+from app.identity.schemas.user import UserCreate, UserUpdate, UserResponse, UserLogin, TokenResponse
 
 __all__ = [
     "BaseResponse",

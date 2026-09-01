@@ -21,7 +21,7 @@ import pytest
 from sqlalchemy import select
 
 from app.db.session import AsyncSessionLocal
-from app.models.user import User
+from app.identity.models.user import User
 from scripts.seed_admin import seed
 
 TEST_USERNAME = "seed_smoke_test_admin"

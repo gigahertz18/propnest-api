@@ -3,7 +3,7 @@ import uuid
 
 from datetime import date, timedelta
 
-from app.models.user import UserRole
+from app.identity.models.user import UserRole
 from tests.factories import (
     make_billing_record_model,
     make_contract_model,

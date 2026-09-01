@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.security import hash_password
-from app.models.user import User, UserRole
+from app.identity.models.user import User, UserRole
 
 
 async def seed_system_user(db: AsyncSession) -> tuple[User, bool]:

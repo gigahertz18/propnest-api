@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.core.models.audit_log import AuditAction
 from app.models.contract import Contract
 from app.models.document import Document
-from app.models.user import User
+from app.identity.models.user import User
 from app.repositories.document import DocumentRepository
 from app.repositories.collection import CollectionRepository
 from app.repositories.contract import ContractRepository
