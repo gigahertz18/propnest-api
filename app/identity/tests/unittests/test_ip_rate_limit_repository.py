@@ -11,7 +11,7 @@ import pytest_asyncio
 import redis.asyncio as redis
 
 from app.core.config import settings
-from app.repositories.ip_rate_limit import IpRateLimitRepository
+from app.identity.repositories.ip_rate_limit import IpRateLimitRepository
 
 
 @pytest_asyncio.fixture

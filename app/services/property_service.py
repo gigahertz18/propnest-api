@@ -6,11 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
 from app.repositories.property import PropertyRepository
-from app.repositories.user import UserRepository
+from app.identity.repositories.user import UserRepository
 from app.core.schemas.base import PaginatedResponse
 from app.schemas.property import PropertyCreate, PropertyUpdate
 from app.models.property import Property, PropertyStatus
-from app.models.user import User, UserRole
+from app.identity.models.user import User, UserRole
 from app.core.models.audit_log import AuditAction
 from app.core.services.audit import write_audit_log
 from app.core.services.base import ResourceAuthorizationMixin

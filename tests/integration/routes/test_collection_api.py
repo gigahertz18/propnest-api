@@ -1,7 +1,7 @@
 import pytest
 import uuid
 
-from app.models.user import UserRole
+from app.identity.models.user import UserRole
 from tests.factories import (
     make_collection_model,
     make_property_model,

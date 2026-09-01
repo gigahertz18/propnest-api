@@ -3,8 +3,8 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
-from app.schemas.user import UserLogin, TokenResponse, UserResponse
-from app.services.auth_service import AuthService
+from app.identity.schemas.user import UserLogin, TokenResponse, UserResponse
+from app.identity.services.auth_service import AuthService
 from app.core.services.exceptions import (
     AccountLockedError,
     InvalidCredentialsError,
@@ -12,7 +12,7 @@ from app.core.services.exceptions import (
     LoginThrottleUnavailableError,
 )
 from app.core.dependencies import get_current_user, get_auth_service
-from app.models.user import User
+from app.identity.models.user import User
 
 logger = logging.getLogger(__name__)
 

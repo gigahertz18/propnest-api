@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
-from app.schemas.user import UserCreate, UserUpdate, UserResponse
+from app.identity.schemas.user import UserCreate, UserUpdate, UserResponse
 from app.core.dependencies import require_admin, get_current_user, get_user_service
-from app.models.user import User
-from app.services.user_service import UserService
+from app.identity.models.user import User
+from app.identity.services.user_service import UserService
 from app.core.services.exceptions import (
     UserNotFoundError,
     EmailAlreadyExistsError,

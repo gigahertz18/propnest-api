@@ -2,7 +2,7 @@ import uuid
 
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
-from app.models.user import UserRole
+from app.identity.models.user import UserRole
 from app.core.schemas.base import BaseResponse
 
 

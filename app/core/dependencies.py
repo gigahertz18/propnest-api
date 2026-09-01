@@ -13,10 +13,10 @@ from app.core.config import settings
 from app.core.security import decode_access_token
 from app.db.session import get_db
 
-from app.models.user import User, UserRole
+from app.identity.models.user import User, UserRole
 
-from app.repositories.ip_rate_limit import IpRateLimitRepository
-from app.repositories.login_attempt import LoginAttemptRepository
+from app.identity.repositories.ip_rate_limit import IpRateLimitRepository
+from app.identity.repositories.login_attempt import LoginAttemptRepository
 from app.repositories.activity_feed import activity_feed_repo
 from app.core.repositories.audit_log import audit_log_repo
 from app.repositories.billing_record import billing_record_repo
@@ -29,12 +29,12 @@ from app.repositories.payment import payment_repo
 from app.repositories.receipt import receipt_repo
 from app.repositories.receipt_template import receipt_template_repo
 from app.repositories.tenant import tenant_repo
-from app.repositories.user import user_repo
+from app.identity.repositories.user import user_repo
 
 from app.services.activity_feed_service import ActivityFeedService
 from app.core.services.audit_log_service import AuditLogService
 from app.services.dashboard_service import DashboardService
-from app.services.auth_service import AuthService
+from app.identity.services.auth_service import AuthService
 from app.services.collection_service import CollectionService
 from app.services.contract_service import ContractService
 from app.services.document_service import DocumentService
@@ -46,7 +46,7 @@ from app.services.property_service import PropertyService
 from app.services.receipt_service import ReceiptService
 from app.services.receipt_template_service import ReceiptTemplateService
 from app.services.tenant_service import TenantService
-from app.services.user_service import UserService
+from app.identity.services.user_service import UserService
 
 logger = logging.getLogger(__name__)
 bearer_scheme = HTTPBearer()

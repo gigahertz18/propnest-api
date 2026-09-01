@@ -1,5 +1,5 @@
 from app.repositories.property import property_repo
-from app.repositories.user import user_repo
+from app.identity.repositories.user import user_repo
 from app.repositories.contract import contract_repo
 from app.repositories.document import document_repo
 from app.repositories.payment import payment_repo

@@ -4,7 +4,7 @@ from uuid import UUID
 
 from app.core.dependencies import get_activity_feed_service, require_manager_or_above
 from app.db.session import get_db
-from app.models.user import User
+from app.identity.models.user import User
 from app.core.schemas.audit_log import AuditLogResponse
 from app.core.schemas.base import PaginatedResponse
 from app.services.activity_feed_service import ActivityFeedService

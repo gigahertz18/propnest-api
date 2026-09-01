@@ -4,7 +4,7 @@ from uuid import UUID
 
 from app.core.dependencies import get_lease_service, require_manager_or_above
 from app.db.session import get_db
-from app.models.user import User
+from app.identity.models.user import User
 from app.core.schemas.base import PaginatedResponse
 from app.schemas.lease import LeaseCreate, LeaseUpdate, LeaseResponse
 from app.services.lease_service import LeaseService

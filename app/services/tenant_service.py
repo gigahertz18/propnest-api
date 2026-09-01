@@ -9,9 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.models.audit_log import AuditAction
 from app.models.tenant import Tenant
-from app.models.user import User, UserRole
+from app.identity.models.user import User, UserRole
 from app.repositories.tenant import TenantRepository
-from app.repositories.user import UserRepository
+from app.identity.repositories.user import UserRepository
 from app.core.schemas.base import PaginatedResponse
 from app.schemas.tenant import TenantCreate, TenantUpdate
 from app.core.services.audit import write_audit_log

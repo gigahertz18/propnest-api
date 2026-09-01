@@ -16,7 +16,7 @@ import pytest_asyncio
 import redis.asyncio as redis
 
 from app.core.config import settings
-from app.repositories.login_attempt import LoginAttemptRepository
+from app.identity.repositories.login_attempt import LoginAttemptRepository
 
 
 @pytest_asyncio.fixture

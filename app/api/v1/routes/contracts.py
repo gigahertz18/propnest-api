@@ -5,7 +5,7 @@ from uuid import UUID
 
 from app.core.dependencies import get_contract_service, require_manager_or_above
 from app.db.session import get_db
-from app.models.user import User
+from app.identity.models.user import User
 from app.core.schemas.base import PaginatedResponse
 from app.schemas.contract import ContractCreate, ContractUpdate, ContractResponse
 from app.services.contract_service import ContractService

@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.models.audit_log import AuditAction
 from app.models.contract import Contract, RentalType
 from app.models.lease import Lease
-from app.models.user import User
+from app.identity.models.user import User
 from app.repositories.contract import ContractRepository
 from app.repositories.lease import LeaseRepository
 from app.core.schemas.base import PaginatedResponse

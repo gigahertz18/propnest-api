@@ -5,9 +5,9 @@ from uuid import UUID
 
 from app.core.security import verify_password
 from app.core.models.audit_log import AuditAction
-from app.models.user import User, UserRole
-from app.repositories.user import UserRepository
-from app.schemas.user import UserCreate, UserUpdate
+from app.identity.models.user import User, UserRole
+from app.identity.repositories.user import UserRepository
+from app.identity.schemas.user import UserCreate, UserUpdate
 from app.core.services.audit import write_audit_log
 from app.core.services.notification_service import NotificationService
 from app.core.services.utils import integrity_error_message

@@ -8,7 +8,7 @@ from app.core.dependencies import (
     get_storage_client,
 )
 from app.db.session import get_db
-from app.models.user import User
+from app.identity.models.user import User
 from app.core.schemas.base import PaginatedResponse
 from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate, DocumentResponse
 from app.services.document_service import DocumentService

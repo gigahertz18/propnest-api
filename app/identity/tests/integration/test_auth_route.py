@@ -204,7 +204,7 @@ class TestFailsClosedOnRedisOutage:
         await make_user_model(db, username="john", password="secret123")
 
         with patch(
-            "app.repositories.ip_rate_limit.IpRateLimitRepository.check",
+            "app.identity.repositories.ip_rate_limit.IpRateLimitRepository.check",
             side_effect=RedisConnectionError("simulated outage"),
         ):
             response = await client.post(

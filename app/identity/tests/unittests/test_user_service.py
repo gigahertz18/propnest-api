@@ -5,10 +5,10 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app.core.security import hash_password
-from app.models.user import UserRole
+from app.identity.models.user import UserRole
 from app.core.services.notification_service import NotificationService
-from app.services.user_service import UserService
-from app.schemas.user import UserCreate, UserUpdate
+from app.identity.services.user_service import UserService
+from app.identity.schemas.user import UserCreate, UserUpdate
 from app.core.services.exceptions import (
     EmailAlreadyExistsError,
     UsernameAlreadyExistsError,

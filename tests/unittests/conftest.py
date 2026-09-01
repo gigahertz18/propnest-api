@@ -2,7 +2,7 @@ import pytest
 from types import SimpleNamespace
 
 from app.main import app
-from app.models.user import UserRole
+from app.identity.models.user import UserRole
 
 
 @pytest.fixture

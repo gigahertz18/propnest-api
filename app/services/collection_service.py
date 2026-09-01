@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.collection import Collection
-from app.models.user import User
+from app.identity.models.user import User
 from app.repositories.collection import CollectionRepository
 from app.repositories.contract import ContractRepository
 from app.repositories.property import PropertyRepository

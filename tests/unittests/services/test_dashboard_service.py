@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 
-from app.models.user import UserRole
+from app.identity.models.user import UserRole
 from app.services.dashboard_service import DashboardService
 from app.core.services.exceptions import DashboardForbiddenError
 

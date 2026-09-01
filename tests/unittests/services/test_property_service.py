@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.models.audit_log import AuditAction, AuditLog
 from app.models.property import PropertyStatus
-from app.models.user import UserRole
+from app.identity.models.user import UserRole
 from app.services.property_service import PropertyService
 from app.core.services.exceptions import (
     RelatedResourceNotFoundError,

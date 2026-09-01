@@ -5,11 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.security import verify_password, create_access_token
-from app.repositories.user import UserRepository
-from app.repositories.login_attempt import LoginAttemptRepository, LockoutStatus
-from app.repositories.ip_rate_limit import IpRateLimitRepository
-from app.schemas.user import TokenResponse, UserResponse
-from app.models.user import User
+from app.identity.repositories.user import UserRepository
+from app.identity.repositories.login_attempt import LoginAttemptRepository, LockoutStatus
+from app.identity.repositories.ip_rate_limit import IpRateLimitRepository
+from app.identity.schemas.user import TokenResponse, UserResponse
+from app.identity.models.user import User
 from app.core.services.exceptions import (
     AccountLockedError,
     InvalidCredentialsError,

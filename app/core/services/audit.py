@@ -15,7 +15,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.models.audit_log import AuditAction, AuditLog
-from app.models.user import User
+from app.identity.models.user import User
 
 
 def write_audit_log(

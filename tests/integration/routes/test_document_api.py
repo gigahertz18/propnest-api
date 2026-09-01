@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 from app.core.dependencies import get_storage_client, get_document_service
 from app.main import app
 
-from app.models.user import UserRole
+from app.identity.models.user import UserRole
 from tests.factories import (
     make_collection_model,
     make_document,

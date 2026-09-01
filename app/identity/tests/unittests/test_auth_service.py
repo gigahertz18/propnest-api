@@ -19,10 +19,10 @@ import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
 
 from app.core.config import settings
-from app.models.user import UserRole
-from app.repositories.login_attempt import LockoutStatus
-from app.repositories.ip_rate_limit import RateLimitStatus
-from app.services.auth_service import AuthService
+from app.identity.models.user import UserRole
+from app.identity.repositories.login_attempt import LockoutStatus
+from app.identity.repositories.ip_rate_limit import RateLimitStatus
+from app.identity.services.auth_service import AuthService
 from app.core.services.exceptions import (
     AccountLockedError,
     InvalidCredentialsError,
@@ -90,7 +90,7 @@ class TestLoginLockout:
     async def test_wrong_password_records_a_failure(self, service, user_repo, login_attempt_repo):
         user_repo.get_by_identifier.return_value = _fake_user()
 
-        with patch("app.services.auth_service.verify_password", return_value=False):
+        with patch("app.identity.services.auth_service.verify_password", return_value=False):
             with pytest.raises(InvalidCredentialsError):
                 await service.login(db=AsyncMock(), identifier="john", password="wrong")
 
@@ -108,7 +108,7 @@ class TestLoginLockout:
     async def test_inactive_account_records_a_failure(self, service, user_repo, login_attempt_repo):
         user_repo.get_by_identifier.return_value = _fake_user(is_active=False)
 
-        with patch("app.services.auth_service.verify_password", return_value=True):
+        with patch("app.identity.services.auth_service.verify_password", return_value=True):
             with pytest.raises(InvalidCredentialsError):
                 await service.login(db=AsyncMock(), identifier="john", password="x")
 
@@ -117,7 +117,7 @@ class TestLoginLockout:
     async def test_successful_login_clears_lockout_state(self, service, user_repo, login_attempt_repo):
         user_repo.get_by_identifier.return_value = _fake_user()
 
-        with patch("app.services.auth_service.verify_password", return_value=True):
+        with patch("app.identity.services.auth_service.verify_password", return_value=True):
             await service.login(db=AsyncMock(), identifier="john", password="x")
 
         login_attempt_repo.record_success.assert_awaited_once_with("john")
@@ -127,7 +127,7 @@ class TestLoginLockout:
         """client_ip shouldn't affect lockout keys — it's log-only context."""
         user_repo.get_by_identifier.return_value = _fake_user()
 
-        with patch("app.services.auth_service.verify_password", return_value=True):
+        with patch("app.identity.services.auth_service.verify_password", return_value=True):
             await service.login(db=AsyncMock(), identifier="john", password="x", client_ip="1.2.3.4")
 
         login_attempt_repo.record_success.assert_awaited_once_with("john")
@@ -169,7 +169,7 @@ class TestIpRateLimit:
     async def test_no_client_ip_skips_the_ip_check(self, service, user_repo, ip_rate_limit_repo):
         user_repo.get_by_identifier.return_value = _fake_user()
 
-        with patch("app.services.auth_service.verify_password", return_value=True):
+        with patch("app.identity.services.auth_service.verify_password", return_value=True):
             await service.login(db=AsyncMock(), identifier="john", password="x", client_ip=None)
 
         ip_rate_limit_repo.check.assert_not_called()
@@ -177,7 +177,7 @@ class TestIpRateLimit:
     async def test_ip_check_runs_with_the_given_ip(self, service, user_repo, ip_rate_limit_repo):
         user_repo.get_by_identifier.return_value = _fake_user()
 
-        with patch("app.services.auth_service.verify_password", return_value=True):
+        with patch("app.identity.services.auth_service.verify_password", return_value=True):
             await service.login(db=AsyncMock(), identifier="john", password="x", client_ip="1.2.3.4")
 
         ip_rate_limit_repo.check.assert_awaited_once_with("1.2.3.4")
@@ -214,7 +214,7 @@ class TestFailsClosedOnRedisOutage:
         user_repo.get_by_identifier.return_value = _fake_user()
         login_attempt_repo.record_success.side_effect = RedisConnectionError("boom")
 
-        with patch("app.services.auth_service.verify_password", return_value=True):
+        with patch("app.identity.services.auth_service.verify_password", return_value=True):
             with pytest.raises(LoginThrottleUnavailableError):
                 await service.login(db=AsyncMock(), identifier="john", password="x")
 

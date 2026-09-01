@@ -4,7 +4,7 @@ from uuid import UUID
 
 from app.core.dependencies import get_receipt_template_service, get_storage_client, require_manager_or_above
 from app.db.session import get_db
-from app.models.user import User
+from app.identity.models.user import User
 from app.schemas.receipt_template import ReceiptTemplateResponse
 from app.core.services.exceptions import ReceiptTemplateUploadError, ReceiptTemplateValidationError
 from app.services.receipt_template_service import ReceiptTemplateService

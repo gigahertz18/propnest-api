@@ -13,7 +13,7 @@ instead of sending. Adding a real channel later means implementing
 import logging
 from abc import ABC, abstractmethod
 
-from app.models.user import User
+from app.identity.models.user import User
 
 logger = logging.getLogger(__name__)
 

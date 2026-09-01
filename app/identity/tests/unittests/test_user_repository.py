@@ -7,9 +7,9 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.core.config import settings
-from app.repositories.user import user_repo
-from app.schemas.user import UserCreate, UserUpdate
-from app.models.user import UserRole
+from app.identity.repositories.user import user_repo
+from app.identity.schemas.user import UserCreate, UserUpdate
+from app.identity.models.user import UserRole
 from app.core.security import verify_password
 from tests.factories import make_user, make_user_model, make_admin_model
 

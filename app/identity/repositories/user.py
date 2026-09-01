@@ -5,8 +5,8 @@ from uuid import UUID
 
 from app.core.security import hash_password
 from app.core.repositories.base import BaseRepository
-from app.models.user import User, UserRole
-from app.schemas.user import UserCreate, UserUpdate
+from app.identity.models.user import User, UserRole
+from app.identity.schemas.user import UserCreate, UserUpdate
 
 
 def _normalize_email(email: str) -> str:

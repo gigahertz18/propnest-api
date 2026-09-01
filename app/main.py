@@ -13,8 +13,6 @@ from app.core.storage_provisioning import ensure_bucket_exists
 from app.db.session import engine, wait_for_db
 from app.api.v1.routes import (
     properties,
-    auth,
-    users,
     contracts,
     tenants,
     documents,
@@ -27,6 +25,7 @@ from app.api.v1.routes import (
     receipts,
     receipt_templates,
 )
+from app.identity.routes import auth, users
 from app.core.routes import audit_logs
 from app.core.services.exceptions import (
     RelatedResourceNotFoundError,
