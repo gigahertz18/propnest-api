@@ -9,6 +9,7 @@ from app.services.exceptions import (
     ReceiptForbiddenError,
     RelatedResourceNotFoundError,
     ResourceForbiddenError,
+    ServiceException,
 )
 from app.services.receipt_service import ReceiptService
 from tests.mock_repos import MockCRUDRepo, MockReadOnlyRepo
@@ -37,13 +38,31 @@ class MockReceiptRepo(MockCRUDRepo):
 
 
 class FakeStorageClient:
-    def __init__(self):
+    def __init__(self, raise_on_get=None):
         self.put_calls: list[str] = []
         self.objects: dict[str, bytes] = {}
+        self.raise_on_get = raise_on_get
 
     def put_object(self, bucket, name, stream, length, content_type=None):
         self.put_calls.append(name)
         self.objects[name] = stream.read()
+
+    def get_object(self, bucket, name):
+        if self.raise_on_get:
+            raise self.raise_on_get
+        data = self.objects[name]
+
+        class _Response:
+            def read(self_inner):
+                return data
+
+            def close(self_inner):
+                pass
+
+            def release_conn(self_inner):
+                pass
+
+        return _Response()
 
     def remove_object(self, bucket, name):
         self.objects.pop(name, None)
@@ -300,3 +319,102 @@ class TestGetReceipt:
 
         with pytest.raises(ReceiptForbiddenError):
             await svc.get_receipt(mock_db, issued.id, make_manager())
+
+    async def test_manager_can_fetch_receipt_for_owned_property(self, mock_db):
+        manager_id = uuid4()
+        payment, contract, property_, tenant = _scenario(manager_id=manager_id)
+        svc = _make_service(
+            payments=MockReadOnlyRepo({payment.id: payment}),
+            contracts=MockReadOnlyRepo({contract.id: contract}),
+            properties=MockReadOnlyRepo({property_.id: property_}),
+            tenants=MockReadOnlyRepo({tenant.id: tenant}),
+        )
+
+        admin = make_admin()
+        issued = await svc.issue_receipt(mock_db, payment.id, admin, storage_client=FakeStorageClient())
+
+        fetched = await svc.get_receipt(mock_db, issued.id, make_manager(manager_id))
+        assert fetched.id == issued.id
+
+
+@pytest.mark.asyncio
+class TestGetReceiptDocument:
+    async def test_admin_can_download_any_receipts_document(self, mock_db):
+        payment, contract, property_, tenant = _scenario()
+        document_repo = MockCRUDRepo({})
+        doc_service = _make_document_service(
+            documents=document_repo,
+            contracts=MockReadOnlyRepo({contract.id: contract}),
+            properties=MockReadOnlyRepo({property_.id: property_}),
+            tenants=MockReadOnlyRepo({tenant.id: tenant}),
+        )
+        svc = _make_service(
+            payments=MockReadOnlyRepo({payment.id: payment}),
+            contracts=MockReadOnlyRepo({contract.id: contract}),
+            properties=MockReadOnlyRepo({property_.id: property_}),
+            tenants=MockReadOnlyRepo({tenant.id: tenant}),
+            document_service=doc_service,
+        )
+
+        admin = make_admin()
+        storage = FakeStorageClient()
+        issued = await svc.issue_receipt(mock_db, payment.id, admin, storage_client=storage)
+
+        document, data = await svc.get_receipt_document(mock_db, issued.id, admin, storage_client=storage)
+
+        assert document.id == issued.document_id
+        assert data == storage.objects[doc_service._build_storage_key(document.id, document.file_name)]
+
+    async def test_manager_forbidden_for_unowned_property(self, mock_db):
+        payment, contract, property_, tenant = _scenario()
+        document_repo = MockCRUDRepo({})
+        doc_service = _make_document_service(
+            documents=document_repo,
+            contracts=MockReadOnlyRepo({contract.id: contract}),
+            properties=MockReadOnlyRepo({property_.id: property_}),
+            tenants=MockReadOnlyRepo({tenant.id: tenant}),
+        )
+        svc = _make_service(
+            payments=MockReadOnlyRepo({payment.id: payment}),
+            contracts=MockReadOnlyRepo({contract.id: contract}),
+            properties=MockReadOnlyRepo({property_.id: property_}),
+            tenants=MockReadOnlyRepo({tenant.id: tenant}),
+            document_service=doc_service,
+        )
+
+        admin = make_admin()
+        storage = FakeStorageClient()
+        issued = await svc.issue_receipt(mock_db, payment.id, admin, storage_client=storage)
+
+        with pytest.raises(ReceiptForbiddenError):
+            await svc.get_receipt_document(mock_db, issued.id, make_manager(), storage_client=storage)
+
+    async def test_raises_when_receipt_not_found(self, mock_db):
+        svc = _make_service()
+        with pytest.raises(RelatedResourceNotFoundError):
+            await svc.get_receipt_document(mock_db, uuid4(), make_admin(), storage_client=FakeStorageClient())
+
+    async def test_raises_service_exception_when_object_missing_from_storage(self, mock_db):
+        payment, contract, property_, tenant = _scenario()
+        document_repo = MockCRUDRepo({})
+        doc_service = _make_document_service(
+            documents=document_repo,
+            contracts=MockReadOnlyRepo({contract.id: contract}),
+            properties=MockReadOnlyRepo({property_.id: property_}),
+            tenants=MockReadOnlyRepo({tenant.id: tenant}),
+        )
+        svc = _make_service(
+            payments=MockReadOnlyRepo({payment.id: payment}),
+            contracts=MockReadOnlyRepo({contract.id: contract}),
+            properties=MockReadOnlyRepo({property_.id: property_}),
+            tenants=MockReadOnlyRepo({tenant.id: tenant}),
+            document_service=doc_service,
+        )
+
+        admin = make_admin()
+        issuing_storage = FakeStorageClient()
+        issued = await svc.issue_receipt(mock_db, payment.id, admin, storage_client=issuing_storage)
+
+        broken_storage = FakeStorageClient(raise_on_get=RuntimeError("object not found"))
+        with pytest.raises(ServiceException):
+            await svc.get_receipt_document(mock_db, issued.id, admin, storage_client=broken_storage)

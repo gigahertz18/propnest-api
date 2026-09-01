@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
@@ -56,3 +56,19 @@ async def get_receipt(
     receipt_service: ReceiptService = Depends(get_receipt_service),
 ):
     return await receipt_service.get_receipt(db, receipt_id, current_user)
+
+
+@router.get("/receipts/{receipt_id}/download")
+async def download_receipt(
+    receipt_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_manager_or_above),
+    receipt_service: ReceiptService = Depends(get_receipt_service),
+    storage_client=Depends(get_storage_client),
+):
+    document, data = await receipt_service.get_receipt_document(db, receipt_id, current_user, storage_client)
+    return Response(
+        content=data,
+        media_type=document.file_type,
+        headers={"Content-Disposition": f'attachment; filename="{document.file_name}"'},
+    )

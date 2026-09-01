@@ -41,11 +41,12 @@ class TestGetDashboardSummaryRoute:
         lease = await make_lease_model(
             db, contract_id=contract.id, end_date=date.today() + timedelta(days=10), grace_period_days=0
         )
+        due_date = date.today() - timedelta(days=5)
         billing_record = await make_billing_record_model(
             db,
             lease_id=lease.id,
-            period_start=date.today().replace(day=1),
-            due_date=date.today() - timedelta(days=5),
+            period_start=due_date.replace(day=1),
+            due_date=due_date,
             amount_due=1000.00,
             status="pending",
         )
