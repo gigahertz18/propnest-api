@@ -5,7 +5,7 @@ from app.schemas.user import UserCreate, UserUpdate, UserResponse
 from app.core.dependencies import require_admin, get_current_user, get_user_service
 from app.models.user import User
 from app.services.user_service import UserService
-from app.services.exceptions import (
+from app.core.services.exceptions import (
     UserNotFoundError,
     EmailAlreadyExistsError,
     UsernameAlreadyExistsError,

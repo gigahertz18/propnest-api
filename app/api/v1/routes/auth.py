@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.schemas.user import UserLogin, TokenResponse, UserResponse
 from app.services.auth_service import AuthService
-from app.services.exceptions import (
+from app.core.services.exceptions import (
     AccountLockedError,
     InvalidCredentialsError,
     IpRateLimitExceededError,

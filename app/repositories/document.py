@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from sqlalchemy import select, or_, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.base import BaseRepository
+from app.core.repositories.base import BaseRepository
 from app.models.document import Document
 from app.models.contract import Contract
 from app.models.property import Property

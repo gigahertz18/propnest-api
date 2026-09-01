@@ -7,7 +7,7 @@ from app.jobs.billing_jobs import (
     evaluate_overdue_billing_records,
     generate_due_billing_records,
 )
-from app.services.exceptions import BillingRecordAlreadyGeneratedError
+from app.core.services.exceptions import BillingRecordAlreadyGeneratedError
 from tests.factories import make_admin
 
 

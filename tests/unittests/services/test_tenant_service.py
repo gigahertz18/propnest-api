@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.services.tenant_service import TenantService
 from app.models.user import UserRole
-from app.services.exceptions import (
+from app.core.services.exceptions import (
     RelatedResourceNotFoundError,
     UserNotFoundError,
     TenantAlreadyLinkedError,

@@ -3,7 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from pydantic import BaseModel, model_validator, Field
 
-from app.schemas.base import BaseResponse
+from app.core.schemas.base import BaseResponse
 from app.models.lease import BillingCycle, RenewalOption, LeaseStatus
 
 

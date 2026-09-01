@@ -3,12 +3,12 @@ from __future__ import annotations
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.audit_log import AuditLog
+from app.core.models.audit_log import AuditLog
 from app.models.user import UserRole
 from app.repositories.activity_feed import ActivityFeedRepository
 from app.repositories.property import PropertyRepository
-from app.schemas.base import PaginatedResponse
-from app.services.exceptions import ActivityFeedForbiddenError, RelatedResourceNotFoundError
+from app.core.schemas.base import PaginatedResponse
+from app.core.services.exceptions import ActivityFeedForbiddenError, RelatedResourceNotFoundError
 
 
 class ActivityFeedService:

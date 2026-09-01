@@ -6,7 +6,7 @@ from app.core.dependencies import get_receipt_template_service, get_storage_clie
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.receipt_template import ReceiptTemplateResponse
-from app.services.exceptions import ReceiptTemplateUploadError, ReceiptTemplateValidationError
+from app.core.services.exceptions import ReceiptTemplateUploadError, ReceiptTemplateValidationError
 from app.services.receipt_template_service import ReceiptTemplateService
 
 router = APIRouter(prefix="/receipt-templates", tags=["Receipt Templates"])

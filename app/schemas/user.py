@@ -3,7 +3,7 @@ import uuid
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 from app.models.user import UserRole
-from app.schemas.base import BaseResponse
+from app.core.schemas.base import BaseResponse
 
 
 # ─── Base ─────────────────────────────────────────────────

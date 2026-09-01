@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.base import BaseRepository
+from app.core.repositories.base import BaseRepository
 from app.models.receipt import Receipt
 from app.models.payment import Payment
 from app.models.contract import Contract

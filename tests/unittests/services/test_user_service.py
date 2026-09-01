@@ -6,10 +6,10 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.security import hash_password
 from app.models.user import UserRole
-from app.services.notification_service import NotificationService
+from app.core.services.notification_service import NotificationService
 from app.services.user_service import UserService
 from app.schemas.user import UserCreate, UserUpdate
-from app.services.exceptions import (
+from app.core.services.exceptions import (
     EmailAlreadyExistsError,
     UsernameAlreadyExistsError,
     UserNotFoundError,

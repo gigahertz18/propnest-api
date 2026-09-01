@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from uuid import UUID, uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.audit_log import AuditAction
+from app.core.models.audit_log import AuditAction
 from app.models.receipt import Receipt
 from app.models.user import User
 from app.repositories.contract import ContractRepository
@@ -15,10 +15,10 @@ from app.repositories.property import PropertyRepository
 from app.repositories.receipt import ReceiptRepository
 from app.repositories.tenant import TenantRepository
 from app.schemas.document import DocumentCreate
-from app.services.audit import write_audit_log
-from app.services.base import ResourceAuthorizationMixin
+from app.core.services.audit import write_audit_log
+from app.core.services.base import ResourceAuthorizationMixin
 from app.services.document_service import DocumentService
-from app.services.exceptions import (
+from app.core.services.exceptions import (
     ReceiptCreationError,
     ReceiptForbiddenError,
     RelatedResourceNotFoundError,

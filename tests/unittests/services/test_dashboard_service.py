@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from app.models.user import UserRole
 from app.services.dashboard_service import DashboardService
-from app.services.exceptions import DashboardForbiddenError
+from app.core.services.exceptions import DashboardForbiddenError
 
 
 class MockPropertyRepo:

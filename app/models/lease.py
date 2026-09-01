@@ -8,7 +8,7 @@ from sqlalchemy import CheckConstraint, Date, Enum, ForeignKey, Numeric, Uuid, t
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
-from app.models.base import TimestampMixin
+from app.core.models.base import TimestampMixin
 
 
 class BillingCycle(str, enum.Enum):

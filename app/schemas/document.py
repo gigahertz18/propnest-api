@@ -3,7 +3,7 @@ import uuid
 from pydantic import BaseModel
 from datetime import datetime
 
-from app.schemas.base import BaseResponse
+from app.core.schemas.base import BaseResponse
 
 
 # ─── Base ─────────────────────────────────────────────────

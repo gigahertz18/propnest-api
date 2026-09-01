@@ -11,7 +11,7 @@ from app.models.contract import RentalType
 from app.repositories.contract import contract_repo
 from app.schemas.contract import ContractCreate, ContractUpdate
 from app.services.contract_service import ContractService
-from app.services.exceptions import (
+from app.core.services.exceptions import (
     ContractActiveError,
     ContractForbiddenError,
     RelatedResourceNotFoundError,

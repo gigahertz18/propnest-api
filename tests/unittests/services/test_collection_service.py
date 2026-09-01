@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from app.schemas.collection import CollectionCreate, CollectionUpdate
 from app.services.collection_service import CollectionService
-from app.services.exceptions import (
+from app.core.services.exceptions import (
     CollectionForbiddenError,
     CollectionValidationError,
     RelatedResourceNotFoundError,

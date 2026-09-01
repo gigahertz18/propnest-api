@@ -10,7 +10,7 @@ from app.repositories.login_attempt import LoginAttemptRepository, LockoutStatus
 from app.repositories.ip_rate_limit import IpRateLimitRepository
 from app.schemas.user import TokenResponse, UserResponse
 from app.models.user import User
-from app.services.exceptions import (
+from app.core.services.exceptions import (
     AccountLockedError,
     InvalidCredentialsError,
     IpRateLimitExceededError,

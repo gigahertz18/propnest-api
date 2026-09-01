@@ -7,17 +7,17 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-from app.models.audit_log import AuditAction
+from app.core.models.audit_log import AuditAction
 from app.models.tenant import Tenant
 from app.models.user import User, UserRole
 from app.repositories.tenant import TenantRepository
 from app.repositories.user import UserRepository
-from app.schemas.base import PaginatedResponse
+from app.core.schemas.base import PaginatedResponse
 from app.schemas.tenant import TenantCreate, TenantUpdate
-from app.services.audit import write_audit_log
-from app.services.base import ResourceAuthorizationMixin
-from app.services.utils import integrity_error_message
-from app.services.exceptions import (
+from app.core.services.audit import write_audit_log
+from app.core.services.base import ResourceAuthorizationMixin
+from app.core.services.utils import integrity_error_message
+from app.core.services.exceptions import (
     RelatedResourceNotFoundError,
     UserNotFoundError,
     TenantAlreadyLinkedError,

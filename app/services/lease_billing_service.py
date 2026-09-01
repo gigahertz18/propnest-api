@@ -7,18 +7,18 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.audit_log import AuditAction
+from app.core.models.audit_log import AuditAction
 from app.models.billing_record import BillingRecord, BillingRecordStatus
 from app.models.lease import BillingCycle
 from app.repositories.billing_record import BillingRecordRepository
 from app.repositories.contract import ContractRepository
 from app.repositories.lease import LeaseRepository
-from app.schemas.base import PaginatedResponse
+from app.core.schemas.base import PaginatedResponse
 from app.schemas.billing_record import BillingRecordCreate, BillingRecordLateFeeCorrection
-from app.services.audit import write_audit_log
-from app.services.base import ResourceAuthorizationMixin
-from app.services.utils import attach_remaining_balance, integrity_error_message, total_owed
-from app.services.exceptions import (
+from app.core.services.audit import write_audit_log
+from app.core.services.base import ResourceAuthorizationMixin
+from app.core.services.utils import attach_remaining_balance, integrity_error_message, total_owed
+from app.core.services.exceptions import (
     BillingRecordAlreadyGeneratedError,
     BillingRecordForbiddenError,
     BillingRecordCorrectionNotAllowedError,

@@ -4,8 +4,8 @@ from collections.abc import Sequence
 from sqlalchemy import select, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.base import BaseRepository
-from app.models.audit_log import AuditLog
+from app.core.repositories.base import BaseRepository
+from app.core.models.audit_log import AuditLog
 from app.models.contract import Contract
 from app.models.document import Document
 from app.models.payment import Payment
@@ -15,7 +15,7 @@ class ActivityFeedRepository(BaseRepository[AuditLog, dict, dict]):
     """
     Read-only queries deriving a per-property activity feed from `AuditLog`
     rows. `create`/`update`/`delete` are inherited but never called — audit
-    rows are appended directly via `app.services.audit.write_audit_log` and
+    rows are appended directly via `app.core.services.audit.write_audit_log` and
     are never modified or deleted (mirrors `AuditLogRepository`).
     """
 

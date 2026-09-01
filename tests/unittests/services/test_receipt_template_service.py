@@ -4,8 +4,8 @@ from io import BytesIO
 from types import SimpleNamespace
 from uuid import uuid4
 
-from app.models.audit_log import AuditAction, AuditLog
-from app.services.exceptions import (
+from app.core.models.audit_log import AuditAction, AuditLog
+from app.core.services.exceptions import (
     ReceiptTemplateForbiddenError,
     ReceiptTemplateUploadError,
     ReceiptTemplateValidationError,

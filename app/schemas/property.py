@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 
 from app.models.property import PropertyStatus
-from app.schemas.base import BaseResponse
+from app.core.schemas.base import BaseResponse
 
 
 # ─── Base ─────────────────────────────────────────────────

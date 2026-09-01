@@ -6,7 +6,7 @@ from decimal import Decimal
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.base import BaseRepository
+from app.core.repositories.base import BaseRepository
 from app.models.payment import Payment, PaymentStatus
 from app.models.contract import Contract
 from app.models.property import Property

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.constraints import sql_in_clause
 from app.db.session import Base
-from app.models.base import TimestampMixin
+from app.core.models.base import TimestampMixin
 
 # Listing platforms as a constant — easy to extend without a native enum migration
 PAYMENT_METHODS = ("cash", "bank transfer", "gcash", "maya", "check")

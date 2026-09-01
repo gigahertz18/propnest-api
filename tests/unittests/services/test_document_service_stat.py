@@ -6,7 +6,7 @@ import pytest
 
 from app.services.document_service import DocumentService
 from app.schemas.document import DocumentCreate
-from app.services.exceptions import DocumentUploadError
+from app.core.services.exceptions import DocumentUploadError
 
 from tests.factories import make_admin
 

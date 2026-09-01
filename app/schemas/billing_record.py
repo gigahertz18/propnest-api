@@ -3,7 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from pydantic import BaseModel, Field, model_validator
 
-from app.schemas.base import BaseResponse
+from app.core.schemas.base import BaseResponse
 from app.models.billing_record import BillingRecordStatus
 
 

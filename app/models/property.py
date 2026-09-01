@@ -5,7 +5,7 @@ from sqlalchemy import String, Text, Enum, Uuid, Boolean, ForeignKey, UniqueCons
 
 from sqlalchemy.orm import Mapped, mapped_column
 from app.db.session import Base
-from app.models.base import TimestampMixin
+from app.core.models.base import TimestampMixin
 
 
 class PropertyStatus(str, enum.Enum):

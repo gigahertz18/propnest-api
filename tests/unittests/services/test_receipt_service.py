@@ -3,9 +3,9 @@ import pytest
 from types import SimpleNamespace
 from uuid import uuid4
 
-from app.models.audit_log import AuditAction, AuditLog
+from app.core.models.audit_log import AuditAction, AuditLog
 from app.services.document_service import DocumentService
-from app.services.exceptions import (
+from app.core.services.exceptions import (
     ReceiptForbiddenError,
     RelatedResourceNotFoundError,
     ResourceForbiddenError,

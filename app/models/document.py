@@ -2,7 +2,7 @@ import uuid
 from sqlalchemy import ForeignKey, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import TimestampMixin
+from app.core.models.base import TimestampMixin
 from app.db.session import Base
 
 

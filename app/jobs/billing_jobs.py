@@ -26,7 +26,7 @@ from app.db.session import AsyncSessionLocal
 from app.db.seed import seed_system_user
 from app.repositories.billing_record import billing_record_repo
 from app.repositories.lease import lease_repo
-from app.services.exceptions import BillingRecordAlreadyGeneratedError
+from app.core.services.exceptions import BillingRecordAlreadyGeneratedError
 
 logger = logging.getLogger(__name__)
 

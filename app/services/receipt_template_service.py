@@ -8,14 +8,14 @@ from uuid import UUID, uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.models.audit_log import AuditAction
+from app.core.models.audit_log import AuditAction
 from app.models.receipt_template import ReceiptTemplate
 from app.models.user import User, UserRole
 from app.repositories.property import PropertyRepository
 from app.repositories.receipt_template import ReceiptTemplateRepository
-from app.services.audit import write_audit_log
-from app.services.base import ResourceAuthorizationMixin
-from app.services.exceptions import (
+from app.core.services.audit import write_audit_log
+from app.core.services.base import ResourceAuthorizationMixin
+from app.core.services.exceptions import (
     ReceiptTemplateForbiddenError,
     ReceiptTemplateUploadError,
     ReceiptTemplateValidationError,

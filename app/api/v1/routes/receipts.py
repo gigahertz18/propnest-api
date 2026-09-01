@@ -6,7 +6,7 @@ from app.core.dependencies import get_receipt_service, get_storage_client, requi
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.receipt import ReceiptResponse
-from app.services.exceptions import ReceiptCreationError
+from app.core.services.exceptions import ReceiptCreationError
 from app.services.receipt_service import ReceiptService
 
 router = APIRouter(tags=["Receipts"])

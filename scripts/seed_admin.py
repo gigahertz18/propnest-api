@@ -40,7 +40,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from sqlalchemy import select  # noqa: E402
 
 from app.db.session import AsyncSessionLocal  # noqa: E402
-from app.models.base import TimestampMixin  # noqa: F401 — ensure TimestampMixin is loaded
+from app.core.models.base import TimestampMixin  # noqa: F401 — ensure TimestampMixin is loaded
 from app.models.user import User, UserRole  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
 from app.models import Property, Contract, Tenant, Document  # noqa: F401 — register all models
