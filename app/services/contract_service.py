@@ -12,7 +12,7 @@ from app.properties.models.property import PropertyStatus
 from app.identity.models.user import User
 from app.repositories.contract import ContractRepository
 from app.properties.repositories.property import PropertyRepository
-from app.repositories.tenant import TenantRepository
+from app.crm.repositories.tenant import TenantRepository
 from app.core.schemas.base import PaginatedResponse
 from app.schemas.contract import ContractCreate, ContractUpdate
 from app.core.services.audit import write_audit_log

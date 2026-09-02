@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from app.services.tenant_service import TenantService
+from app.crm.services.tenant_service import TenantService
 from app.identity.models.user import UserRole
 from app.core.services.exceptions import (
     RelatedResourceNotFoundError,

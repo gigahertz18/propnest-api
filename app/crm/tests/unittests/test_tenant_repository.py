@@ -5,8 +5,8 @@ from datetime import date, datetime, timezone
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 
-from app.repositories.tenant import tenant_repo, TenantRepository
-from app.schemas.tenant import TenantCreate, TenantUpdate
+from app.crm.repositories.tenant import tenant_repo, TenantRepository
+from app.crm.schemas.tenant import TenantCreate, TenantUpdate
 from tests.factories import make_tenant, make_tenant_model, make_user_model, make_manager_model
 
 
@@ -353,7 +353,7 @@ class TestTenantRepositoryGetByUserId:
         user = await make_user_model(db, username="shared_user", email="shared_user@example.com")
         await make_tenant_model(db, user_id=user.id, email="first_tenant@example.com")
 
-        from app.models.tenant import Tenant as TenantModel
+        from app.crm.models.tenant import Tenant as TenantModel
 
         dupe = TenantModel(
             id=uuid.uuid4(),

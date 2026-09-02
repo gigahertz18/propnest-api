@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
 from app.properties.models.property import Property
-from app.models.tenant import Tenant
+from app.crm.models.tenant import Tenant
 from app.repositories.contract import contract_repo
 from tests.factories import (
     make_property_model,

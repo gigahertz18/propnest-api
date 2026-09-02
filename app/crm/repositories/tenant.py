@@ -6,10 +6,10 @@ from sqlalchemy import select, exists, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.repositories.base import BaseRepository
-from app.models.tenant import Tenant
+from app.crm.models.tenant import Tenant
 from app.models.contract import Contract
 from app.properties.models.property import Property
-from app.schemas.tenant import TenantCreate, TenantUpdate
+from app.crm.schemas.tenant import TenantCreate, TenantUpdate
 
 
 def _normalize_email(email: str) -> str:

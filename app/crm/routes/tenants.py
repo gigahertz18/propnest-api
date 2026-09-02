@@ -6,14 +6,14 @@ from app.core.dependencies import get_tenant_service, require_manager_or_above, 
 from app.db.session import get_db
 from app.identity.models.user import User
 from app.core.schemas.base import PaginatedResponse
-from app.schemas.tenant import TenantCreate, TenantUpdate, TenantResponse, TenantLinkUser
+from app.crm.schemas.tenant import TenantCreate, TenantUpdate, TenantResponse, TenantLinkUser
 from app.core.services.exceptions import (
     UserNotFoundError,
     TenantAlreadyLinkedError,
     TenantAlreadyExistsError,
     TenantInUseError,
 )
-from app.services.tenant_service import TenantService
+from app.crm.services.tenant_service import TenantService
 
 router = APIRouter(prefix="/tenants", tags=["Tenants"])
 

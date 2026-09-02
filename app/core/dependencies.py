@@ -28,7 +28,7 @@ from app.properties.repositories.property import property_repo
 from app.repositories.payment import payment_repo
 from app.repositories.receipt import receipt_repo
 from app.repositories.receipt_template import receipt_template_repo
-from app.repositories.tenant import tenant_repo
+from app.crm.repositories.tenant import tenant_repo
 from app.identity.repositories.user import user_repo
 
 from app.services.activity_feed_service import ActivityFeedService
@@ -45,7 +45,7 @@ from app.services.payment_service import PaymentService
 from app.properties.services.property_service import PropertyService
 from app.services.receipt_service import ReceiptService
 from app.services.receipt_template_service import ReceiptTemplateService
-from app.services.tenant_service import TenantService
+from app.crm.services.tenant_service import TenantService
 from app.identity.services.user_service import UserService
 
 logger = logging.getLogger(__name__)
