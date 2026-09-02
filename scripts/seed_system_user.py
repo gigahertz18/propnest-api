@@ -22,7 +22,7 @@ layer changes) but is intentionally impossible to log in as:
     no legitimate credential to "know."
   - AuthService.login additionally refuses this identity outright by
     username/email, as defense-in-depth on top of the unguessable
-    password (see app/services/auth_service.py).
+    password (see app/identity/services/auth_service.py).
 
 Usage (inside the backend container):
     python scripts/seed_system_user.py

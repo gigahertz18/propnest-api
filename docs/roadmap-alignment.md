@@ -58,7 +58,7 @@ Capabilities from the supplied roadmap:
 
 ## Capability-based restructure
 
-The roadmap proposes eventually moving from:
+Completed. The backend moved from:
 
 ```text
 models/
@@ -67,9 +67,7 @@ schemas/
 services/
 ```
 
-toward capability packages.
-
-The most important decision is not the exact folder name; it is whether module ownership maps to business capabilities and keeps related tests/routes/models/services together.
+to per-entity capability packages (`app/identity/`, `app/properties/`, `app/crm/`, `app/leasing/`, `app/collections/`, `app/documents/`, `app/billing/`, `app/receipts/`, `app/reporting/`), each keeping its own tests/routes/models/services together, with `app/core/` holding shared cross-cutting infra. The old flat directories have been removed.
 
 ## Backend design rule
 

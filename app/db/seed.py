@@ -1,6 +1,6 @@
 """
 Idempotent bootstrap helpers for system-managed (non-human) identities.
-Kept out of app/repositories/user.py since this makes policy decisions
+Kept out of app/identity/repositories/user.py since this makes policy decisions
 (role, fields, password-hash generation) a thin CRUD repository
 shouldn't own — and out of scripts/ since scripts/seed_system_user.py is
 a thin CLI wrapper around this, not the other way around.

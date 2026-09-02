@@ -249,46 +249,36 @@ DocumentService
 ---
 
 
-## 35. Recommended Evolution
+## 35. Capability-Package Structure (Completed)
 
-As PropNest grows, the backend should evolve toward clear domain modules.
-
-A mature structure can converge toward:
+The backend has evolved from a flat, layer-first structure (`app/models/`, `app/schemas/`, `app/repositories/`, `app/services/`, `app/api/v1/routes/`) into domain modules — this was the evolution a prior version of this document proposed as a future option, and it has since been carried out:
 
 ```text
 app/
-├── api/
-│   └── v1/
-│       └── routes/
-├── core/
-│   ├── config.py
-│   ├── security.py
-│   └── exceptions.py
-├── db/
-│   ├── session.py
-│   └── base.py
-├── models/
-├── schemas/
-├── repositories/
-├── services/
-├── storage/
+├── identity/       (User/UserRole, auth)
+├── properties/     (Property)
+├── crm/            (Tenant)
+├── leasing/        (Contract, Lease)
+├── collections/    (Collection)
+├── documents/      (Document)
+├── billing/        (BillingRecord, Payment, Dashboard, LeaseBillingService)
+├── receipts/       (Receipt, ReceiptTemplate)
+├── reporting/      (Activity Feed — read-model over AuditLog, no own model/schema)
+├── core/           (shared/cross-cutting infra: config, DI, security, BaseRepository,
+│                    TimestampMixin, BaseResponse/PaginatedResponse, audit logging,
+│                    notifications, shared service exceptions)
+├── ai/             (scaffolded, unimplemented)
+├── analytics/      (scaffolded, unimplemented)
+├── maintenance/    (scaffolded, unimplemented)
+├── notifications/  (scaffolded, unimplemented)
+├── db/             (session, migrations provisioning, seed data)
+├── jobs/           (arq worker entry point)
 └── main.py
 ```
 
-Feature/domain organization may eventually be preferable if the number of modules increases substantially:
+Each populated capability package follows the same internal shape: `models/`, `schemas/`, `repositories/`, `services/`, `routes/`, `tests/` (with its own `unittests/`/`integration/` subdirs and a `conftest.py` re-exporting the root test fixtures).
 
-```text
-app/
-├── domains/
-│   ├── users/
-│   ├── properties/
-│   ├── tenants/
-│   ├── contracts/
-│   ├── documents/
-│   └── payments/
-```
-
-The team should not introduce this reorganization merely for aesthetics. It becomes valuable when cross-module navigation and ownership become difficult.
+Cross-package imports are expected and correct where one capability's data depends on another's (e.g. `app.crm`'s tenant repository importing `Property` from `app.properties`) — this is not layering leakage to "fix," it reflects the actual domain dependency graph.
 
 ---
 

@@ -230,7 +230,7 @@ POST /payments/{payment_id}/receipts
              +--> template HTML resolved: property's active ReceiptTemplate, else the
              |    active global ReceiptTemplate, else the built-in default (see below)
              |
-             +--> PDF rendered via Jinja2 + WeasyPrint (app/services/receipt_pdf.py)
+             +--> PDF rendered via Jinja2 + WeasyPrint (app/receipts/services/receipt_pdf.py)
              |
              +--> DocumentService.create_document stores the PDF (reuses the existing
              |    MinIO-backed Document pattern, linked via contract_id)
