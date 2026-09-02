@@ -4,7 +4,7 @@ from decimal import Decimal
 from pydantic import BaseModel, model_validator, Field
 
 from app.core.schemas.base import BaseResponse
-from app.models.lease import BillingCycle, RenewalOption, LeaseStatus
+from app.leasing.models.lease import BillingCycle, RenewalOption, LeaseStatus
 
 
 def _validate_dates_and_late_fee(end_date, start_date, late_fee_amount, late_fee_percent):

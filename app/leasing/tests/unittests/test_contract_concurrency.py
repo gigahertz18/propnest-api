@@ -6,22 +6,18 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
-from app.models.contract import Contract
 from app.properties.models.property import Property
 from app.crm.models.tenant import Tenant
-from app.repositories.lease import lease_repo
+from app.leasing.repositories.contract import contract_repo
 from tests.factories import (
     make_property_model,
     make_tenant_model,
-    make_contract_model,
-    make_lease,
+    make_contract,
 )
 
 
 @pytest.mark.asyncio
-async def test_concurrent_create_leases_for_same_contract_fails_once():
-    """Same class of race as test_contract_concurrency.py, guarded here by
-    the plain unique FK (uq_lease_contract_id) instead of a partial index."""
+async def test_concurrent_create_active_contracts_fails_once():
 
     engine = create_async_engine(settings.DATABASE_URL)
 
@@ -30,24 +26,26 @@ async def test_concurrent_create_leases_for_same_contract_fails_once():
         class_=AsyncSession,
         expire_on_commit=False,
     )
-
+    successes = failures = 0
     async with SessionLocal() as setup_session:
         prop = await make_property_model(setup_session)
         tenant = await make_tenant_model(setup_session)
-        contract = await make_contract_model(setup_session, property_id=prop.id, tenant_id=tenant.id)
 
         await setup_session.commit()
 
         prop_id = prop.id
         tenant_id = tenant.id
-        contract_id = contract.id
 
-    async def create_lease():
+    async def create_contract():
         async with SessionLocal() as session:
             try:
-                from app.schemas.lease import LeaseCreate
-
-                await lease_repo.create(session, LeaseCreate(**make_lease(contract_id=contract_id)))
+                await contract_repo.create(
+                    session,
+                    make_contract(
+                        property_id=prop_id,
+                        tenant_id=tenant_id,
+                    ),
+                )
                 await session.commit()
                 return True
             except IntegrityError:
@@ -56,21 +54,21 @@ async def test_concurrent_create_leases_for_same_contract_fails_once():
 
     try:
         results = await asyncio.gather(
-            create_lease(),
-            create_lease(),
+            create_contract(),
+            create_contract(),
         )
 
         successes = sum(results)
         failures = len(results) - successes
 
     finally:
+        # cleanup created contracts, property, and tenant so subsequent tests
+        # are not affected by rows inserted outside the test transaction.
         async with SessionLocal() as cleanup_session:
-            lease = await lease_repo.get_by_contract(cleanup_session, contract_id)
-            if lease:
-                await cleanup_session.delete(lease)
-            c = await cleanup_session.get(Contract, contract_id)
-            if c:
+            contracts = await contract_repo.get_by_property(cleanup_session, prop_id)
+            for c in contracts:
                 await cleanup_session.delete(c)
+            # Remove property and tenant created for the concurrency test
             p = await cleanup_session.get(Property, prop_id)
             if p:
                 await cleanup_session.delete(p)

@@ -6,9 +6,9 @@ from datetime import date, timedelta
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 
-from app.repositories.lease import lease_repo
-from app.schemas.lease import LeaseCreate, LeaseUpdate
-from app.models.lease import BillingCycle, RenewalOption
+from app.leasing.repositories.lease import lease_repo
+from app.leasing.schemas.lease import LeaseCreate, LeaseUpdate
+from app.leasing.models.lease import BillingCycle, RenewalOption
 from tests.factories import (
     make_lease,
     make_lease_model,

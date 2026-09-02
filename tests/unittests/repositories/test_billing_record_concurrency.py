@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
-from app.models.contract import Contract
-from app.models.lease import Lease
+from app.leasing.models.contract import Contract
+from app.leasing.models.lease import Lease
 from app.properties.models.property import Property
 from app.crm.models.tenant import Tenant
 from app.repositories.billing_record import billing_record_repo

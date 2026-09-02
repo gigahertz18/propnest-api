@@ -1,5 +1,5 @@
 from app.core.schemas.base import BaseResponse, PaginatedResponse
-from app.schemas.contract import ContractCreate, ContractUpdate, ContractResponse
+from app.leasing.schemas.contract import ContractCreate, ContractUpdate, ContractResponse
 from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate, DocumentResponse
 from app.schemas.payment import PaymentCreate, PaymentUpdate, PaymentResponse
 from app.properties.schemas.property import PropertyCreate, PropertyUpdate, PropertyResponse

@@ -1,5 +1,5 @@
 from app.identity.services.auth_service import AuthService
-from app.services.contract_service import ContractService
+from app.leasing.services.contract_service import ContractService
 from app.services.document_service import DocumentService
 from app.core.services.notification_service import LoggingNotificationChannel, NotificationChannel, NotificationService
 from app.services.payment_service import PaymentService

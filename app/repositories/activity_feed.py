@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.repositories.base import BaseRepository
 from app.core.models.audit_log import AuditLog
-from app.models.contract import Contract
+from app.leasing.models.contract import Contract
 from app.models.document import Document
 from app.models.payment import Payment
 

@@ -9,10 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.models.audit_log import AuditAction
 from app.models.billing_record import BillingRecord, BillingRecordStatus
-from app.models.lease import BillingCycle
+from app.leasing.models.lease import BillingCycle
 from app.repositories.billing_record import BillingRecordRepository
-from app.repositories.contract import ContractRepository
-from app.repositories.lease import LeaseRepository
+from app.leasing.repositories.contract import ContractRepository
+from app.leasing.repositories.lease import LeaseRepository
 from app.core.schemas.base import PaginatedResponse
 from app.schemas.billing_record import BillingRecordCreate, BillingRecordLateFeeCorrection
 from app.core.services.audit import write_audit_log

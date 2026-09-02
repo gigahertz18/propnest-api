@@ -5,9 +5,9 @@ from datetime import date, datetime, timedelta, timezone
 
 from pydantic import ValidationError
 
-from app.repositories.contract import contract_repo
-from app.schemas.contract import ContractCreate, ContractUpdate
-from app.models.contract import RentalType
+from app.leasing.repositories.contract import contract_repo
+from app.leasing.schemas.contract import ContractCreate, ContractUpdate
+from app.leasing.models.contract import RentalType
 from tests.factories import (
     make_contract,
     make_contract_model,

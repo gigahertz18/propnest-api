@@ -1,7 +1,7 @@
 import pytest
 import uuid
 
-from app.models.contract import RentalType
+from app.leasing.models.contract import RentalType
 from app.identity.models.user import UserRole
 from tests.factories import (
     make_lease_model,
