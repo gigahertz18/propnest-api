@@ -6,8 +6,8 @@ from decimal import Decimal
 
 from sqlalchemy.exc import IntegrityError
 
-from app.repositories.billing_record import billing_record_repo
-from app.schemas.billing_record import BillingRecordCreate
+from app.billing.repositories.billing_record import billing_record_repo
+from app.billing.schemas.billing_record import BillingRecordCreate
 from tests.factories import (
     make_billing_record,
     make_billing_record_model,

@@ -7,11 +7,11 @@ from sqlalchemy import Row, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.repositories.base import BaseRepository
-from app.models.billing_record import BillingRecord, UNPAID_STATUSES
+from app.billing.models.billing_record import BillingRecord, UNPAID_STATUSES
 from app.leasing.models.contract import Contract
 from app.leasing.models.lease import Lease
 from app.properties.models.property import Property
-from app.schemas.billing_record import BillingRecordCreate, BillingRecordUpdate
+from app.billing.schemas.billing_record import BillingRecordCreate, BillingRecordUpdate
 
 
 class BillingRecordRepository(BaseRepository[BillingRecord, BillingRecordCreate, BillingRecordUpdate]):

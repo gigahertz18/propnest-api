@@ -2,7 +2,7 @@ from app.identity.services.auth_service import AuthService
 from app.leasing.services.contract_service import ContractService
 from app.documents.services.document_service import DocumentService
 from app.core.services.notification_service import LoggingNotificationChannel, NotificationChannel, NotificationService
-from app.services.payment_service import PaymentService
+from app.billing.services.payment_service import PaymentService
 from app.properties.services.property_service import PropertyService
 from app.crm.services.tenant_service import TenantService
 from app.identity.services.user_service import UserService

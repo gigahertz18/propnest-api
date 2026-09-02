@@ -8,8 +8,8 @@ from uuid import uuid4
 from sqlalchemy.exc import IntegrityError
 
 from app.core.models.audit_log import AuditAction, AuditLog
-from app.models.billing_record import BillingRecordStatus
-from app.schemas.billing_record import BillingRecordLateFeeCorrection
+from app.billing.models.billing_record import BillingRecordStatus
+from app.billing.schemas.billing_record import BillingRecordLateFeeCorrection
 from app.leasing.models.lease import BillingCycle
 from app.core.services.exceptions import (
     BillingRecordAlreadyGeneratedError,
@@ -19,7 +19,7 @@ from app.core.services.exceptions import (
     RelatedResourceNotFoundError,
     ResourceForbiddenError,
 )
-from app.services.lease_billing_service import LeaseBillingService
+from app.billing.services.lease_billing_service import LeaseBillingService
 from tests.mock_repos import MockCRUDRepo, MockReadOnlyRepo
 from tests.factories import make_admin, make_manager, make_regular_user
 

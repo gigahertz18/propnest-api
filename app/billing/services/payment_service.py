@@ -8,15 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.models.audit_log import AuditAction
 from app.leasing.models.contract import Contract
-from app.models.payment import Payment, PaymentStatus
+from app.billing.models.payment import Payment, PaymentStatus
 from app.identity.models.user import User
-from app.repositories.billing_record import BillingRecordRepository
+from app.billing.repositories.billing_record import BillingRecordRepository
 from app.leasing.repositories.contract import ContractRepository
 from app.leasing.repositories.lease import LeaseRepository
-from app.repositories.payment import PaymentRepository
+from app.billing.repositories.payment import PaymentRepository
 from app.properties.repositories.property import PropertyRepository
 from app.core.schemas.base import PaginatedResponse
-from app.schemas.payment import PaymentCorrectionCreate, PaymentCreate, PaymentUpdate
+from app.billing.schemas.payment import PaymentCorrectionCreate, PaymentCreate, PaymentUpdate
 from app.core.services.audit import write_audit_log
 from app.core.services.base import ResourceAuthorizationMixin
 from app.core.services.exceptions import (
@@ -24,7 +24,7 @@ from app.core.services.exceptions import (
     PaymentForbiddenError,
     RelatedResourceNotFoundError,
 )
-from app.services.lease_billing_service import LeaseBillingService
+from app.billing.services.lease_billing_service import LeaseBillingService
 
 
 @dataclass(frozen=True)

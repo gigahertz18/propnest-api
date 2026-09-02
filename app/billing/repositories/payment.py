@@ -7,10 +7,10 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.repositories.base import BaseRepository
-from app.models.payment import Payment, PaymentStatus
+from app.billing.models.payment import Payment, PaymentStatus
 from app.leasing.models.contract import Contract
 from app.properties.models.property import Property
-from app.schemas.payment import PaymentCreate, PaymentUpdate
+from app.billing.schemas.payment import PaymentCreate, PaymentUpdate
 
 
 class PaymentRepository(BaseRepository[Payment, PaymentCreate, PaymentUpdate]):

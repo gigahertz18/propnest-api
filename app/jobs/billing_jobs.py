@@ -24,7 +24,7 @@ from app.core.config import settings
 from app.core.dependencies import get_lease_billing_service
 from app.db.session import AsyncSessionLocal
 from app.db.seed import seed_system_user
-from app.repositories.billing_record import billing_record_repo
+from app.billing.repositories.billing_record import billing_record_repo
 from app.leasing.repositories.lease import lease_repo
 from app.core.services.exceptions import BillingRecordAlreadyGeneratedError
 

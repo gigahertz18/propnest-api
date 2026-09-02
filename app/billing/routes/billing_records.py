@@ -8,12 +8,12 @@ from app.core.dependencies import get_lease_billing_service, require_manager_or_
 from app.db.session import get_db
 from app.identity.models.user import User
 from app.core.schemas.base import PaginatedResponse
-from app.schemas.billing_record import (
+from app.billing.schemas.billing_record import (
     BillingRecordGenerateRequest,
     BillingRecordLateFeeCorrection,
     BillingRecordResponse,
 )
-from app.services.lease_billing_service import LeaseBillingService
+from app.billing.services.lease_billing_service import LeaseBillingService
 from app.core.services.exceptions import (
     BillingRecordAlreadyGeneratedError,
     BillingRecordCorrectionNotAllowedError,

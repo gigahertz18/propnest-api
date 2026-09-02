@@ -10,7 +10,7 @@ from app.core.models.audit_log import AuditAction
 from app.models.receipt import Receipt
 from app.identity.models.user import User
 from app.leasing.repositories.contract import ContractRepository
-from app.repositories.payment import PaymentRepository
+from app.billing.repositories.payment import PaymentRepository
 from app.properties.repositories.property import PropertyRepository
 from app.repositories.receipt import ReceiptRepository
 from app.crm.repositories.tenant import TenantRepository

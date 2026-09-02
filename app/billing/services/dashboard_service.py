@@ -5,11 +5,11 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.billing_record import BillingRecord, last_day_of_month
+from app.billing.models.billing_record import BillingRecord, last_day_of_month
 from app.identity.models.user import UserRole
-from app.repositories.billing_record import BillingRecordRepository
+from app.billing.repositories.billing_record import BillingRecordRepository
 from app.leasing.repositories.lease import LeaseRepository
-from app.repositories.payment import PaymentRepository
+from app.billing.repositories.payment import PaymentRepository
 from app.properties.repositories.property import PropertyRepository
 from app.core.services.exceptions import DashboardForbiddenError
 from app.core.services.utils import attach_remaining_balance

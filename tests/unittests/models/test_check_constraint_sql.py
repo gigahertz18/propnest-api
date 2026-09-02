@@ -16,7 +16,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db.constraints import sql_in_clause
 from app.leasing.models.contract import BOOKING_SOURCE, Contract, RentalType
-from app.models.payment import PAYMENT_METHODS, Payment
+from app.billing.models.payment import PAYMENT_METHODS, Payment
 from tests.factories import make_contract_model, make_property_model, make_tenant_model
 
 

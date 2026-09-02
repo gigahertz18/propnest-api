@@ -7,8 +7,8 @@ from decimal import Decimal
 
 from pydantic import ValidationError
 
-from app.repositories.payment import payment_repo
-from app.schemas.payment import PaymentCreate, PaymentUpdate
+from app.billing.repositories.payment import payment_repo
+from app.billing.schemas.payment import PaymentCreate, PaymentUpdate
 from tests.factories import (
     make_payment,
     make_payment_model,
