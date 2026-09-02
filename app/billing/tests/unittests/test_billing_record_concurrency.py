@@ -12,7 +12,7 @@ from app.leasing.models.contract import Contract
 from app.leasing.models.lease import Lease
 from app.properties.models.property import Property
 from app.crm.models.tenant import Tenant
-from app.repositories.billing_record import billing_record_repo
+from app.billing.repositories.billing_record import billing_record_repo
 from tests.factories import (
     make_property_model,
     make_tenant_model,
@@ -51,7 +51,7 @@ async def test_concurrent_generate_same_lease_and_period_only_one_succeeds():
     async def generate():
         async with SessionLocal() as session:
             try:
-                from app.schemas.billing_record import BillingRecordCreate
+                from app.billing.schemas.billing_record import BillingRecordCreate
 
                 payload = BillingRecordCreate(**make_billing_record(lease_id=lease_id, period_start=date(2026, 8, 1)))
                 await billing_record_repo.create(session, payload)

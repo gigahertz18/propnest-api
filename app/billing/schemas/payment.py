@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.models.payment import PAYMENT_METHODS, PaymentStatus
+from app.billing.models.payment import PAYMENT_METHODS, PaymentStatus
 from app.core.schemas.base import BaseResponse
 
 

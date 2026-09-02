@@ -6,7 +6,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from app.identity.models.user import UserRole
-from app.services.dashboard_service import DashboardService
+from app.billing.services.dashboard_service import DashboardService
 from app.core.services.exceptions import DashboardForbiddenError
 
 

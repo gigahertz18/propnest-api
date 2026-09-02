@@ -19,13 +19,13 @@ from app.identity.repositories.ip_rate_limit import IpRateLimitRepository
 from app.identity.repositories.login_attempt import LoginAttemptRepository
 from app.repositories.activity_feed import activity_feed_repo
 from app.core.repositories.audit_log import audit_log_repo
-from app.repositories.billing_record import billing_record_repo
+from app.billing.repositories.billing_record import billing_record_repo
 from app.collections.repositories.collection import collection_repo
 from app.leasing.repositories.contract import contract_repo
 from app.documents.repositories.document import document_repo
 from app.leasing.repositories.lease import lease_repo
 from app.properties.repositories.property import property_repo
-from app.repositories.payment import payment_repo
+from app.billing.repositories.payment import payment_repo
 from app.repositories.receipt import receipt_repo
 from app.repositories.receipt_template import receipt_template_repo
 from app.crm.repositories.tenant import tenant_repo
@@ -33,15 +33,15 @@ from app.identity.repositories.user import user_repo
 
 from app.services.activity_feed_service import ActivityFeedService
 from app.core.services.audit_log_service import AuditLogService
-from app.services.dashboard_service import DashboardService
+from app.billing.services.dashboard_service import DashboardService
 from app.identity.services.auth_service import AuthService
 from app.collections.services.collection_service import CollectionService
 from app.leasing.services.contract_service import ContractService
 from app.documents.services.document_service import DocumentService
-from app.services.lease_billing_service import LeaseBillingService
+from app.billing.services.lease_billing_service import LeaseBillingService
 from app.leasing.services.lease_service import LeaseService
 from app.core.services.notification_service import LoggingNotificationChannel, NotificationService
-from app.services.payment_service import PaymentService
+from app.billing.services.payment_service import PaymentService
 from app.properties.services.property_service import PropertyService
 from app.services.receipt_service import ReceiptService
 from app.services.receipt_template_service import ReceiptTemplateService

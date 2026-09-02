@@ -8,7 +8,7 @@ from app.core.repositories.base import BaseRepository
 from app.core.models.audit_log import AuditLog
 from app.leasing.models.contract import Contract
 from app.documents.models.document import Document
-from app.models.payment import Payment
+from app.billing.models.payment import Payment
 
 
 class ActivityFeedRepository(BaseRepository[AuditLog, dict, dict]):

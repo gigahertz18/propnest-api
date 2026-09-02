@@ -4,12 +4,12 @@ from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from app.core.security import hash_password
-from app.models.billing_record import BillingRecord, BillingRecordStatus
+from app.billing.models.billing_record import BillingRecord, BillingRecordStatus
 from app.collections.models.collection import Collection
 from app.leasing.models.contract import Contract, RentalType as ContractRentalType
 from app.documents.models.document import Document
 from app.leasing.models.lease import BillingCycle, Lease, RenewalOption
-from app.models.payment import Payment
+from app.billing.models.payment import Payment
 from app.properties.models.property import Property, PropertyStatus
 from app.models.receipt import Receipt
 from app.crm.models.tenant import Tenant

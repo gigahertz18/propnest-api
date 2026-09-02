@@ -2,9 +2,9 @@ from decimal import Decimal
 
 from pydantic import BaseModel
 
-from app.schemas.billing_record import BillingRecordResponse
+from app.billing.schemas.billing_record import BillingRecordResponse
 from app.leasing.schemas.lease import LeaseResponse
-from app.schemas.payment import PaymentResponse
+from app.billing.schemas.payment import PaymentResponse
 
 
 class DashboardSummaryResponse(BaseModel):

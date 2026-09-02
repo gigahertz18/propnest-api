@@ -13,9 +13,9 @@ from app.core.dependencies import (
 from app.db.session import get_db
 from app.identity.models.user import User
 from app.core.schemas.base import PaginatedResponse
-from app.schemas.payment import PaymentCorrectionCreate, PaymentCreate, PaymentUpdate, PaymentResponse
+from app.billing.schemas.payment import PaymentCorrectionCreate, PaymentCreate, PaymentUpdate, PaymentResponse
 from app.core.services.exceptions import PaymentAlreadyVoidedError
-from app.services.payment_service import PaymentService
+from app.billing.services.payment_service import PaymentService
 from app.services.receipt_service import ReceiptService
 
 logger = logging.getLogger(__name__)

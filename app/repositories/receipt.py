@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.repositories.base import BaseRepository
 from app.models.receipt import Receipt
-from app.models.payment import Payment
+from app.billing.models.payment import Payment
 from app.leasing.models.contract import Contract
 from app.properties.models.property import Property
 
