@@ -6,9 +6,9 @@ from types import SimpleNamespace
 from app.core.security import hash_password
 from app.models.billing_record import BillingRecord, BillingRecordStatus
 from app.models.collection import Collection
-from app.models.contract import Contract, RentalType as ContractRentalType
+from app.leasing.models.contract import Contract, RentalType as ContractRentalType
 from app.models.document import Document
-from app.models.lease import BillingCycle, Lease, RenewalOption
+from app.leasing.models.lease import BillingCycle, Lease, RenewalOption
 from app.models.payment import Payment
 from app.properties.models.property import Property, PropertyStatus
 from app.models.receipt import Receipt

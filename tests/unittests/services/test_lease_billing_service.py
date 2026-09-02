@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from app.core.models.audit_log import AuditAction, AuditLog
 from app.models.billing_record import BillingRecordStatus
 from app.schemas.billing_record import BillingRecordLateFeeCorrection
-from app.models.lease import BillingCycle
+from app.leasing.models.lease import BillingCycle
 from app.core.services.exceptions import (
     BillingRecordAlreadyGeneratedError,
     BillingRecordForbiddenError,

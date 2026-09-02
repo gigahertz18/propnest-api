@@ -5,9 +5,9 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.repositories.base import BaseRepository
-from app.models.contract import Contract, RentalType
+from app.leasing.models.contract import Contract, RentalType
 from app.properties.models.property import Property
-from app.schemas.contract import ContractCreate, ContractUpdate
+from app.leasing.schemas.contract import ContractCreate, ContractUpdate
 
 
 class ContractRepository(BaseRepository[Contract, ContractCreate, ContractUpdate]):

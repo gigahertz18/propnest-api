@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.billing_record import BillingRecord, last_day_of_month
 from app.identity.models.user import UserRole
 from app.repositories.billing_record import BillingRecordRepository
-from app.repositories.lease import LeaseRepository
+from app.leasing.repositories.lease import LeaseRepository
 from app.repositories.payment import PaymentRepository
 from app.properties.repositories.property import PropertyRepository
 from app.core.services.exceptions import DashboardForbiddenError

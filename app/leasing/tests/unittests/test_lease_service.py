@@ -8,10 +8,10 @@ from uuid import uuid4
 from sqlalchemy.exc import IntegrityError
 
 from app.core.models.audit_log import AuditAction, AuditLog
-from app.models.contract import RentalType
-from app.repositories.lease import lease_repo
-from app.schemas.lease import LeaseCreate, LeaseUpdate
-from app.services.lease_service import LeaseService
+from app.leasing.models.contract import RentalType
+from app.leasing.repositories.lease import lease_repo
+from app.leasing.schemas.lease import LeaseCreate, LeaseUpdate
+from app.leasing.services.lease_service import LeaseService
 from app.core.services.exceptions import (
     LeaseAlreadyExistsError,
     LeaseForbiddenError,

@@ -12,12 +12,12 @@ from uuid import UUID, uuid4
 
 from app.core.config import settings
 from app.core.models.audit_log import AuditAction
-from app.models.contract import Contract
+from app.leasing.models.contract import Contract
 from app.models.document import Document
 from app.identity.models.user import User
 from app.repositories.document import DocumentRepository
 from app.repositories.collection import CollectionRepository
-from app.repositories.contract import ContractRepository
+from app.leasing.repositories.contract import ContractRepository
 from app.properties.repositories.property import PropertyRepository
 from app.crm.repositories.tenant import TenantRepository
 from app.core.schemas.base import PaginatedResponse

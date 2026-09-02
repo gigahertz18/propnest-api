@@ -3,7 +3,7 @@ from decimal import Decimal
 from pydantic import BaseModel
 
 from app.schemas.billing_record import BillingRecordResponse
-from app.schemas.lease import LeaseResponse
+from app.leasing.schemas.lease import LeaseResponse
 from app.schemas.payment import PaymentResponse
 
 

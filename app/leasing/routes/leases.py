@@ -6,8 +6,8 @@ from app.core.dependencies import get_lease_service, require_manager_or_above
 from app.db.session import get_db
 from app.identity.models.user import User
 from app.core.schemas.base import PaginatedResponse
-from app.schemas.lease import LeaseCreate, LeaseUpdate, LeaseResponse
-from app.services.lease_service import LeaseService
+from app.leasing.schemas.lease import LeaseCreate, LeaseUpdate, LeaseResponse
+from app.leasing.services.lease_service import LeaseService
 from app.core.services.exceptions import LeaseAlreadyExistsError, LeaseRentalTypeError
 
 router = APIRouter(prefix="/leases", tags=["Leases"])

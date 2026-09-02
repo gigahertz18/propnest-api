@@ -6,13 +6,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.models.audit_log import AuditAction
-from app.models.contract import Contract, RentalType
-from app.models.lease import Lease
+from app.leasing.models.contract import Contract, RentalType
+from app.leasing.models.lease import Lease
 from app.identity.models.user import User
-from app.repositories.contract import ContractRepository
-from app.repositories.lease import LeaseRepository
+from app.leasing.repositories.contract import ContractRepository
+from app.leasing.repositories.lease import LeaseRepository
 from app.core.schemas.base import PaginatedResponse
-from app.schemas.lease import LeaseCreate, LeaseUpdate
+from app.leasing.schemas.lease import LeaseCreate, LeaseUpdate
 from app.core.services.audit import write_audit_log
 from app.core.services.base import ResourceAuthorizationMixin
 from app.core.services.utils import integrity_error_message

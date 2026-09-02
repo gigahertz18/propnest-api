@@ -4,7 +4,7 @@ from decimal import Decimal
 from pydantic import BaseModel, model_validator, Field
 
 from app.core.schemas.base import BaseResponse
-from app.models.contract import RentalType, BOOKING_SOURCE, ContractStatus
+from app.leasing.models.contract import RentalType, BOOKING_SOURCE, ContractStatus
 
 
 # ─── Base ─────────────────────────────────────────────────

@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.repositories.base import BaseRepository
 from app.models.payment import Payment, PaymentStatus
-from app.models.contract import Contract
+from app.leasing.models.contract import Contract
 from app.properties.models.property import Property
 from app.schemas.payment import PaymentCreate, PaymentUpdate
 

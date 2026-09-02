@@ -7,14 +7,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.models.audit_log import AuditAction
-from app.models.contract import Contract, ContractStatus, RentalType
+from app.leasing.models.contract import Contract, ContractStatus, RentalType
 from app.properties.models.property import PropertyStatus
 from app.identity.models.user import User
-from app.repositories.contract import ContractRepository
+from app.leasing.repositories.contract import ContractRepository
 from app.properties.repositories.property import PropertyRepository
 from app.crm.repositories.tenant import TenantRepository
 from app.core.schemas.base import PaginatedResponse
-from app.schemas.contract import ContractCreate, ContractUpdate
+from app.leasing.schemas.contract import ContractCreate, ContractUpdate
 from app.core.services.audit import write_audit_log
 from app.core.services.base import ResourceAuthorizationMixin
 from app.core.services.utils import integrity_error_message

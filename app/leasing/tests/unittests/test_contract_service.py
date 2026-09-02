@@ -7,10 +7,10 @@ from uuid import uuid4
 
 from sqlalchemy.exc import IntegrityError
 
-from app.models.contract import RentalType
-from app.repositories.contract import contract_repo
-from app.schemas.contract import ContractCreate, ContractUpdate
-from app.services.contract_service import ContractService
+from app.leasing.models.contract import RentalType
+from app.leasing.repositories.contract import contract_repo
+from app.leasing.schemas.contract import ContractCreate, ContractUpdate
+from app.leasing.services.contract_service import ContractService
 from app.core.services.exceptions import (
     ContractActiveError,
     ContractForbiddenError,
