@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
 from app.models.contract import Contract
-from app.models.property import Property
+from app.properties.models.property import Property
 from app.models.tenant import Tenant
 from app.repositories.lease import lease_repo
 from tests.factories import (

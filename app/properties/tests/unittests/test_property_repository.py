@@ -1,8 +1,8 @@
 import pytest
 import uuid
-from app.repositories.property import property_repo
-from app.schemas.property import PropertyCreate, PropertyUpdate
-from app.models.property import PropertyStatus
+from app.properties.repositories.property import property_repo
+from app.properties.schemas.property import PropertyCreate, PropertyUpdate
+from app.properties.models.property import PropertyStatus
 from tests.factories import make_property, make_property_model, make_manager_model
 
 

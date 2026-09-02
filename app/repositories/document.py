@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.repositories.base import BaseRepository
 from app.models.document import Document
 from app.models.contract import Contract
-from app.models.property import Property
+from app.properties.models.property import Property
 from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate
 
 

@@ -3,7 +3,7 @@ import pytest
 from datetime import date, timedelta
 from decimal import Decimal
 
-from app.models.property import PropertyStatus
+from app.properties.models.property import PropertyStatus
 from tests.factories import (
     make_property_model,
     make_tenant_model,

@@ -1,4 +1,4 @@
-from app.repositories.property import property_repo
+from app.properties.repositories.property import property_repo
 from app.identity.repositories.user import user_repo
 from app.repositories.contract import contract_repo
 from app.repositories.document import document_repo

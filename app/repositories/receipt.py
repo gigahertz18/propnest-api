@@ -8,7 +8,7 @@ from app.core.repositories.base import BaseRepository
 from app.models.receipt import Receipt
 from app.models.payment import Payment
 from app.models.contract import Contract
-from app.models.property import Property
+from app.properties.models.property import Property
 
 
 class ReceiptRepository(BaseRepository[Receipt, dict, None]):

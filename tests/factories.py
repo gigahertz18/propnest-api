@@ -10,7 +10,7 @@ from app.models.contract import Contract, RentalType as ContractRentalType
 from app.models.document import Document
 from app.models.lease import BillingCycle, Lease, RenewalOption
 from app.models.payment import Payment
-from app.models.property import Property, PropertyStatus
+from app.properties.models.property import Property, PropertyStatus
 from app.models.receipt import Receipt
 from app.models.tenant import Tenant
 from app.identity.models.user import User, UserRole

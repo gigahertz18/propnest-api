@@ -10,7 +10,7 @@ from app.core.repositories.base import BaseRepository
 from app.models.billing_record import BillingRecord, UNPAID_STATUSES
 from app.models.contract import Contract
 from app.models.lease import Lease
-from app.models.property import Property
+from app.properties.models.property import Property
 from app.schemas.billing_record import BillingRecordCreate, BillingRecordUpdate
 
 

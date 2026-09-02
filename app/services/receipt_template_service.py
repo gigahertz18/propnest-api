@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.core.models.audit_log import AuditAction
 from app.models.receipt_template import ReceiptTemplate
 from app.identity.models.user import User, UserRole
-from app.repositories.property import PropertyRepository
+from app.properties.repositories.property import PropertyRepository
 from app.repositories.receipt_template import ReceiptTemplateRepository
 from app.core.services.audit import write_audit_log
 from app.core.services.base import ResourceAuthorizationMixin

@@ -11,7 +11,7 @@ from app.models.receipt import Receipt
 from app.identity.models.user import User
 from app.repositories.contract import ContractRepository
 from app.repositories.payment import PaymentRepository
-from app.repositories.property import PropertyRepository
+from app.properties.repositories.property import PropertyRepository
 from app.repositories.receipt import ReceiptRepository
 from app.repositories.tenant import TenantRepository
 from app.schemas.document import DocumentCreate

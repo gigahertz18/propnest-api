@@ -18,7 +18,7 @@ from app.identity.models.user import User
 from app.repositories.document import DocumentRepository
 from app.repositories.collection import CollectionRepository
 from app.repositories.contract import ContractRepository
-from app.repositories.property import PropertyRepository
+from app.properties.repositories.property import PropertyRepository
 from app.repositories.tenant import TenantRepository
 from app.core.schemas.base import PaginatedResponse
 from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate

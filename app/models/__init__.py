@@ -1,4 +1,4 @@
-from app.models.property import Property, PropertyStatus
+from app.properties.models.property import Property, PropertyStatus
 from app.identity.models.user import UserRole, User
 from app.models.contract import Contract, RentalType
 from app.models.document import Document

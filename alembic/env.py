@@ -7,7 +7,7 @@ from app.core.config import settings
 from app.db.session import Base
 
 # Import all models here so Alembic detects them for autogenerate
-from app.models import Property  # noqa: F401 — must be imported to be detected
+from app.properties.models.property import Property  # noqa: F401 — must be imported to be detected
 
 POSTGRESQL_DB_URL = settings.DATABASE_URL.replace("postgresql+asyncpg", "postgresql+psycopg2")
 

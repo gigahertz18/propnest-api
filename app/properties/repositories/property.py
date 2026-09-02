@@ -3,8 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
 from app.core.repositories.base import BaseRepository
-from app.models.property import Property, PropertyStatus
-from app.schemas.property import PropertyCreate, PropertyUpdate
+from app.properties.models.property import Property, PropertyStatus
+from app.properties.schemas.property import PropertyCreate, PropertyUpdate
 
 
 class PropertyRepository(BaseRepository[Property, PropertyCreate, PropertyUpdate]):

@@ -5,11 +5,11 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
-from app.repositories.property import PropertyRepository
+from app.properties.repositories.property import PropertyRepository
 from app.identity.repositories.user import UserRepository
 from app.core.schemas.base import PaginatedResponse
-from app.schemas.property import PropertyCreate, PropertyUpdate
-from app.models.property import Property, PropertyStatus
+from app.properties.schemas.property import PropertyCreate, PropertyUpdate
+from app.properties.models.property import Property, PropertyStatus
 from app.identity.models.user import User, UserRole
 from app.core.models.audit_log import AuditAction
 from app.core.services.audit import write_audit_log
