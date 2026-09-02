@@ -3,7 +3,7 @@ from app.identity.models.user import UserRole, User
 from app.models.contract import Contract, RentalType
 from app.models.document import Document
 from app.models.payment import Payment
-from app.models.tenant import Tenant
+from app.crm.models.tenant import Tenant
 from app.models.collection import Collection
 from app.core.models.audit_log import AuditLog, AuditAction
 from app.models.lease import Lease, BillingCycle, RenewalOption, LeaseStatus

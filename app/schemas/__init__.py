@@ -3,7 +3,7 @@ from app.schemas.contract import ContractCreate, ContractUpdate, ContractRespons
 from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate, DocumentResponse
 from app.schemas.payment import PaymentCreate, PaymentUpdate, PaymentResponse
 from app.properties.schemas.property import PropertyCreate, PropertyUpdate, PropertyResponse
-from app.schemas.tenant import TenantCreate, TenantUpdate, TenantResponse, TenantLinkUser
+from app.crm.schemas.tenant import TenantCreate, TenantUpdate, TenantResponse, TenantLinkUser
 from app.identity.schemas.user import UserCreate, UserUpdate, UserResponse, UserLogin, TokenResponse
 
 __all__ = [

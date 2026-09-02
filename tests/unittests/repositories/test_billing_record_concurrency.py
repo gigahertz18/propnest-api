@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.models.contract import Contract
 from app.models.lease import Lease
 from app.properties.models.property import Property
-from app.models.tenant import Tenant
+from app.crm.models.tenant import Tenant
 from app.repositories.billing_record import billing_record_repo
 from tests.factories import (
     make_property_model,

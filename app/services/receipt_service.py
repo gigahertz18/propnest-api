@@ -13,7 +13,7 @@ from app.repositories.contract import ContractRepository
 from app.repositories.payment import PaymentRepository
 from app.properties.repositories.property import PropertyRepository
 from app.repositories.receipt import ReceiptRepository
-from app.repositories.tenant import TenantRepository
+from app.crm.repositories.tenant import TenantRepository
 from app.schemas.document import DocumentCreate
 from app.core.services.audit import write_audit_log
 from app.core.services.base import ResourceAuthorizationMixin

@@ -8,12 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 from app.core.models.audit_log import AuditAction
-from app.models.tenant import Tenant
+from app.crm.models.tenant import Tenant
 from app.identity.models.user import User, UserRole
-from app.repositories.tenant import TenantRepository
+from app.crm.repositories.tenant import TenantRepository
 from app.identity.repositories.user import UserRepository
 from app.core.schemas.base import PaginatedResponse
-from app.schemas.tenant import TenantCreate, TenantUpdate
+from app.crm.schemas.tenant import TenantCreate, TenantUpdate
 from app.core.services.audit import write_audit_log
 from app.core.services.base import ResourceAuthorizationMixin
 from app.core.services.utils import integrity_error_message
