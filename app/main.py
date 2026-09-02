@@ -12,7 +12,6 @@ from app.core.redis_client import RedisClientManager
 from app.core.storage_provisioning import ensure_bucket_exists
 from app.db.session import engine, wait_for_db
 from app.api.v1.routes import (
-    documents,
     payments,
     activity_feed,
     dashboard,
@@ -25,6 +24,7 @@ from app.properties.routes import properties
 from app.crm.routes import tenants
 from app.leasing.routes import contracts, leases
 from app.collections.routes import collections
+from app.documents.routes import documents
 from app.core.routes import audit_logs
 from app.core.services.exceptions import (
     RelatedResourceNotFoundError,

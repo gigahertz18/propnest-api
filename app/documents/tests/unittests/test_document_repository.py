@@ -4,8 +4,8 @@ import uuid
 
 from datetime import datetime, timezone
 
-from app.repositories.document import document_repo
-from app.schemas.document import DocumentRelinkUpdate, DocumentFileUpdate
+from app.documents.repositories.document import document_repo
+from app.documents.schemas.document import DocumentRelinkUpdate, DocumentFileUpdate
 from tests.factories import (
     make_document,
     make_document_model,

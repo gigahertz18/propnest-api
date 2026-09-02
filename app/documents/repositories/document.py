@@ -5,10 +5,10 @@ from sqlalchemy import select, or_, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.repositories.base import BaseRepository
-from app.models.document import Document
+from app.documents.models.document import Document
 from app.leasing.models.contract import Contract
 from app.properties.models.property import Property
-from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate
+from app.documents.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate
 
 
 class DocumentRepository(BaseRepository[Document, DocumentCreate, DocumentRelinkUpdate | DocumentFileUpdate]):

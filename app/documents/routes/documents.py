@@ -10,8 +10,8 @@ from app.core.dependencies import (
 from app.db.session import get_db
 from app.identity.models.user import User
 from app.core.schemas.base import PaginatedResponse
-from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate, DocumentResponse
-from app.services.document_service import DocumentService
+from app.documents.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate, DocumentResponse
+from app.documents.services.document_service import DocumentService
 from app.core.services.exceptions import (
     DocumentUploadError,
     DocumentValidationError,

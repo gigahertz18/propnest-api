@@ -1,7 +1,7 @@
 from app.properties.models.property import Property, PropertyStatus
 from app.identity.models.user import UserRole, User
 from app.leasing.models.contract import Contract, RentalType
-from app.models.document import Document
+from app.documents.models.document import Document
 from app.models.payment import Payment
 from app.crm.models.tenant import Tenant
 from app.collections.models.collection import Collection
