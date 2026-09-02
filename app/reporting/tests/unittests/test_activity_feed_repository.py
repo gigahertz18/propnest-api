@@ -2,7 +2,7 @@ import pytest
 import uuid
 
 from app.core.models.audit_log import AuditAction, AuditLog
-from app.repositories.activity_feed import activity_feed_repo
+from app.reporting.repositories.activity_feed import activity_feed_repo
 from tests.factories import (
     make_property_model,
     make_tenant_model,
