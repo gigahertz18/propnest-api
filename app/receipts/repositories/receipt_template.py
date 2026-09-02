@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.repositories.base import BaseRepository
-from app.models.receipt_template import ReceiptTemplate
+from app.receipts.models.receipt_template import ReceiptTemplate
 
 
 class ReceiptTemplateRepository(BaseRepository[ReceiptTemplate, dict, dict]):

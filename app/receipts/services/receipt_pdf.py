@@ -9,7 +9,7 @@ _jinja_env = Environment(loader=BaseLoader(), autoescape=select_autoescape(["htm
 # Repo-root-level, not under app/ — a sibling of alembic/, scripts/, docs/ —
 # so it stays organized as a home for template *assets* (not Python code) as
 # more default templates are added later (e.g. templates/invoice/default.html).
-_TEMPLATES_ROOT = Path(__file__).resolve().parent.parent.parent / "templates"
+_TEMPLATES_ROOT = Path(__file__).resolve().parent.parent.parent.parent / "templates"
 _DEFAULT_RECEIPT_TEMPLATE = _TEMPLATES_ROOT / "receipt" / "default.html"
 
 

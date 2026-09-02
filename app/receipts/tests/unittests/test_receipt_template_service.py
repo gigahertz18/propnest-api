@@ -12,8 +12,8 @@ from app.core.services.exceptions import (
     RelatedResourceNotFoundError,
     ResourceForbiddenError,
 )
-from app.services.receipt_pdf import load_default_template
-from app.services.receipt_template_service import ReceiptTemplateService
+from app.receipts.services.receipt_pdf import load_default_template
+from app.receipts.services.receipt_template_service import ReceiptTemplateService
 from tests.mock_repos import MockCRUDRepo, MockReadOnlyRepo
 from tests.factories import make_admin, make_manager, make_regular_user
 

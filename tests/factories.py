@@ -11,7 +11,7 @@ from app.documents.models.document import Document
 from app.leasing.models.lease import BillingCycle, Lease, RenewalOption
 from app.billing.models.payment import Payment
 from app.properties.models.property import Property, PropertyStatus
-from app.models.receipt import Receipt
+from app.receipts.models.receipt import Receipt
 from app.crm.models.tenant import Tenant
 from app.identity.models.user import User, UserRole
 

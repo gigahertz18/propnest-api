@@ -5,9 +5,9 @@ from uuid import UUID
 from app.core.dependencies import get_receipt_service, get_storage_client, require_manager_or_above
 from app.db.session import get_db
 from app.identity.models.user import User
-from app.schemas.receipt import ReceiptResponse
+from app.receipts.schemas.receipt import ReceiptResponse
 from app.core.services.exceptions import ReceiptCreationError
-from app.services.receipt_service import ReceiptService
+from app.receipts.services.receipt_service import ReceiptService
 
 router = APIRouter(tags=["Receipts"])
 

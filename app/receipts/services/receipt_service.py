@@ -7,12 +7,12 @@ from uuid import UUID, uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.models.audit_log import AuditAction
-from app.models.receipt import Receipt
+from app.receipts.models.receipt import Receipt
 from app.identity.models.user import User
 from app.leasing.repositories.contract import ContractRepository
 from app.billing.repositories.payment import PaymentRepository
 from app.properties.repositories.property import PropertyRepository
-from app.repositories.receipt import ReceiptRepository
+from app.receipts.repositories.receipt import ReceiptRepository
 from app.crm.repositories.tenant import TenantRepository
 from app.documents.schemas.document import DocumentCreate
 from app.core.services.audit import write_audit_log
@@ -23,8 +23,8 @@ from app.core.services.exceptions import (
     ReceiptForbiddenError,
     RelatedResourceNotFoundError,
 )
-from app.services.receipt_pdf import load_default_template, render_receipt_pdf
-from app.services.receipt_template_service import ReceiptTemplateService
+from app.receipts.services.receipt_pdf import load_default_template, render_receipt_pdf
+from app.receipts.services.receipt_template_service import ReceiptTemplateService
 
 logger = logging.getLogger(__name__)
 

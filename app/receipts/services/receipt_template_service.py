@@ -9,10 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.models.audit_log import AuditAction
-from app.models.receipt_template import ReceiptTemplate
+from app.receipts.models.receipt_template import ReceiptTemplate
 from app.identity.models.user import User, UserRole
 from app.properties.repositories.property import PropertyRepository
-from app.repositories.receipt_template import ReceiptTemplateRepository
+from app.receipts.repositories.receipt_template import ReceiptTemplateRepository
 from app.core.services.audit import write_audit_log
 from app.core.services.base import ResourceAuthorizationMixin
 from app.core.services.exceptions import (
@@ -21,7 +21,7 @@ from app.core.services.exceptions import (
     ReceiptTemplateValidationError,
     RelatedResourceNotFoundError,
 )
-from app.services.receipt_pdf import load_default_template
+from app.receipts.services.receipt_pdf import load_default_template
 
 logger = logging.getLogger(__name__)
 

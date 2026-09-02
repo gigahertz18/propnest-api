@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 
-from app.services.receipt_pdf import _blocked_url_fetcher, load_default_template, render_receipt_pdf
+from app.receipts.services.receipt_pdf import _blocked_url_fetcher, load_default_template, render_receipt_pdf
 
 
 def _payment(**kwargs):

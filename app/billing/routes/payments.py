@@ -16,7 +16,7 @@ from app.core.schemas.base import PaginatedResponse
 from app.billing.schemas.payment import PaymentCorrectionCreate, PaymentCreate, PaymentUpdate, PaymentResponse
 from app.core.services.exceptions import PaymentAlreadyVoidedError
 from app.billing.services.payment_service import PaymentService
-from app.services.receipt_service import ReceiptService
+from app.receipts.services.receipt_service import ReceiptService
 
 logger = logging.getLogger(__name__)
 
