@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from sqlalchemy.exc import IntegrityError
 from uuid import uuid4
 
-from app.services.document_service import DocumentService
+from app.documents.services.document_service import DocumentService
 from app.core.services.exceptions import (
     RelatedResourceNotFoundError,
     DocumentForbiddenError,
@@ -14,8 +14,8 @@ from app.core.services.exceptions import (
     DocumentValidationError,
     ResourceForbiddenError,
 )
-from app.repositories.document import document_repo
-from app.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate
+from app.documents.repositories.document import document_repo
+from app.documents.schemas.document import DocumentCreate, DocumentRelinkUpdate, DocumentFileUpdate
 from tests.mock_repos import MockCRUDRepo, MockReadOnlyRepo
 from tests.factories import make_admin, make_manager, make_regular_user
 
@@ -1232,7 +1232,7 @@ class TestCreateDocumentStorageCleanupOnDbFailure:
 
     async def test_deletes_orphaned_storage_object_when_db_write_fails(self, mock_db, monkeypatch):
         fixed_id = uuid4()
-        monkeypatch.setattr("app.services.document_service.uuid4", lambda: fixed_id)
+        monkeypatch.setattr("app.documents.services.document_service.uuid4", lambda: fixed_id)
 
         class FailingCreateRepo(MockCRUDRepo):
             async def create(self, db, payload):

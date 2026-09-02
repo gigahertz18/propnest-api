@@ -14,10 +14,10 @@ from app.repositories.payment import PaymentRepository
 from app.properties.repositories.property import PropertyRepository
 from app.repositories.receipt import ReceiptRepository
 from app.crm.repositories.tenant import TenantRepository
-from app.schemas.document import DocumentCreate
+from app.documents.schemas.document import DocumentCreate
 from app.core.services.audit import write_audit_log
 from app.core.services.base import ResourceAuthorizationMixin
-from app.services.document_service import DocumentService
+from app.documents.services.document_service import DocumentService
 from app.core.services.exceptions import (
     ReceiptCreationError,
     ReceiptForbiddenError,

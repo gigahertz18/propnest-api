@@ -3,9 +3,9 @@ import pytest
 from types import SimpleNamespace
 from io import BytesIO
 
-from app.services.document_service import DocumentService
-from app.repositories.document import document_repo
-from app.schemas.document import DocumentCreate
+from app.documents.services.document_service import DocumentService
+from app.documents.repositories.document import document_repo
+from app.documents.schemas.document import DocumentCreate
 from app.core.services.exceptions import DocumentUploadError
 
 from tests.factories import make_admin_model

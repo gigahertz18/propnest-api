@@ -2,8 +2,8 @@ import uuid
 import pytest
 from datetime import datetime, timezone
 
-from app.repositories.document import document_repo
-from app.models.document import Document
+from app.documents.repositories.document import document_repo
+from app.documents.models.document import Document
 
 
 async def _make_tied_documents(db, n=4):

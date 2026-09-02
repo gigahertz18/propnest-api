@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 from app.core.models.audit_log import AuditAction, AuditLog
-from app.services.document_service import DocumentService
+from app.documents.services.document_service import DocumentService
 from app.core.services.exceptions import (
     ReceiptForbiddenError,
     RelatedResourceNotFoundError,

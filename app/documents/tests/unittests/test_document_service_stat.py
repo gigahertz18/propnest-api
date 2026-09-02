@@ -4,8 +4,8 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.document_service import DocumentService
-from app.schemas.document import DocumentCreate
+from app.documents.services.document_service import DocumentService
+from app.documents.schemas.document import DocumentCreate
 from app.core.services.exceptions import DocumentUploadError
 
 from tests.factories import make_admin

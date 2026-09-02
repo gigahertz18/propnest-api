@@ -22,7 +22,7 @@ from app.core.repositories.audit_log import audit_log_repo
 from app.repositories.billing_record import billing_record_repo
 from app.collections.repositories.collection import collection_repo
 from app.leasing.repositories.contract import contract_repo
-from app.repositories.document import document_repo
+from app.documents.repositories.document import document_repo
 from app.leasing.repositories.lease import lease_repo
 from app.properties.repositories.property import property_repo
 from app.repositories.payment import payment_repo
@@ -37,7 +37,7 @@ from app.services.dashboard_service import DashboardService
 from app.identity.services.auth_service import AuthService
 from app.collections.services.collection_service import CollectionService
 from app.leasing.services.contract_service import ContractService
-from app.services.document_service import DocumentService
+from app.documents.services.document_service import DocumentService
 from app.services.lease_billing_service import LeaseBillingService
 from app.leasing.services.lease_service import LeaseService
 from app.core.services.notification_service import LoggingNotificationChannel, NotificationService
