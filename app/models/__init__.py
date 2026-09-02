@@ -4,7 +4,7 @@ from app.leasing.models.contract import Contract, RentalType
 from app.models.document import Document
 from app.models.payment import Payment
 from app.crm.models.tenant import Tenant
-from app.models.collection import Collection
+from app.collections.models.collection import Collection
 from app.core.models.audit_log import AuditLog, AuditAction
 from app.leasing.models.lease import Lease, BillingCycle, RenewalOption, LeaseStatus
 from app.models.billing_record import BillingRecord, BillingRecordStatus

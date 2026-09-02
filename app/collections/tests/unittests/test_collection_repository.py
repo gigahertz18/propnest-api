@@ -2,8 +2,8 @@ import pytest
 import pytest_asyncio
 import uuid
 
-from app.repositories.collection import collection_repo
-from app.schemas.collection import CollectionCreate, CollectionUpdate
+from app.collections.repositories.collection import collection_repo
+from app.collections.schemas.collection import CollectionCreate, CollectionUpdate
 from tests.factories import (
     make_collection,
     make_collection_model,

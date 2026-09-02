@@ -14,7 +14,6 @@ from app.db.session import engine, wait_for_db
 from app.api.v1.routes import (
     documents,
     payments,
-    collections,
     activity_feed,
     dashboard,
     billing_records,
@@ -25,6 +24,7 @@ from app.identity.routes import auth, users
 from app.properties.routes import properties
 from app.crm.routes import tenants
 from app.leasing.routes import contracts, leases
+from app.collections.routes import collections
 from app.core.routes import audit_logs
 from app.core.services.exceptions import (
     RelatedResourceNotFoundError,

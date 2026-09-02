@@ -4,13 +4,13 @@ from dataclasses import dataclass
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.collection import Collection
+from app.collections.models.collection import Collection
 from app.identity.models.user import User
-from app.repositories.collection import CollectionRepository
+from app.collections.repositories.collection import CollectionRepository
 from app.leasing.repositories.contract import ContractRepository
 from app.properties.repositories.property import PropertyRepository
 from app.core.schemas.base import PaginatedResponse
-from app.schemas.collection import CollectionCreate, CollectionUpdate
+from app.collections.schemas.collection import CollectionCreate, CollectionUpdate
 from app.core.services.base import ResourceAuthorizationMixin
 from app.core.services.exceptions import (
     CollectionForbiddenError,

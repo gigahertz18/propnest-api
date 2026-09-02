@@ -16,7 +16,7 @@ from app.leasing.models.contract import Contract
 from app.models.document import Document
 from app.identity.models.user import User
 from app.repositories.document import DocumentRepository
-from app.repositories.collection import CollectionRepository
+from app.collections.repositories.collection import CollectionRepository
 from app.leasing.repositories.contract import ContractRepository
 from app.properties.repositories.property import PropertyRepository
 from app.crm.repositories.tenant import TenantRepository

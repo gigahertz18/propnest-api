@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.leasing.models.contract import Contract
 from app.properties.models.property import Property
 from app.identity.models.user import User, UserRole
-from app.repositories.collection import CollectionRepository
+from app.collections.repositories.collection import CollectionRepository
 from app.leasing.repositories.contract import ContractRepository
 from app.repositories.document import DocumentRepository
 from app.properties.repositories.property import PropertyRepository

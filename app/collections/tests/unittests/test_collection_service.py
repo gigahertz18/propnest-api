@@ -3,8 +3,8 @@ import pytest
 from types import SimpleNamespace
 from uuid import uuid4
 
-from app.schemas.collection import CollectionCreate, CollectionUpdate
-from app.services.collection_service import CollectionService
+from app.collections.schemas.collection import CollectionCreate, CollectionUpdate
+from app.collections.services.collection_service import CollectionService
 from app.core.services.exceptions import (
     CollectionForbiddenError,
     CollectionValidationError,
