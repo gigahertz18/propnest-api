@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 from app.core.models.audit_log import AuditAction, AuditLog
 from app.identity.models.user import UserRole
-from app.services.activity_feed_service import ActivityFeedService
+from app.reporting.services.activity_feed_service import ActivityFeedService
 from app.core.services.exceptions import ActivityFeedForbiddenError, RelatedResourceNotFoundError
 from tests.mock_repos import MockReadOnlyRepo
 

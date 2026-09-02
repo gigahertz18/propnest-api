@@ -17,7 +17,7 @@ from app.identity.models.user import User, UserRole
 
 from app.identity.repositories.ip_rate_limit import IpRateLimitRepository
 from app.identity.repositories.login_attempt import LoginAttemptRepository
-from app.repositories.activity_feed import activity_feed_repo
+from app.reporting.repositories.activity_feed import activity_feed_repo
 from app.core.repositories.audit_log import audit_log_repo
 from app.billing.repositories.billing_record import billing_record_repo
 from app.collections.repositories.collection import collection_repo
@@ -31,7 +31,7 @@ from app.receipts.repositories.receipt_template import receipt_template_repo
 from app.crm.repositories.tenant import tenant_repo
 from app.identity.repositories.user import user_repo
 
-from app.services.activity_feed_service import ActivityFeedService
+from app.reporting.services.activity_feed_service import ActivityFeedService
 from app.core.services.audit_log_service import AuditLogService
 from app.billing.services.dashboard_service import DashboardService
 from app.identity.services.auth_service import AuthService

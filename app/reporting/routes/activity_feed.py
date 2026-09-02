@@ -7,7 +7,7 @@ from app.db.session import get_db
 from app.identity.models.user import User
 from app.core.schemas.audit_log import AuditLogResponse
 from app.core.schemas.base import PaginatedResponse
-from app.services.activity_feed_service import ActivityFeedService
+from app.reporting.services.activity_feed_service import ActivityFeedService
 
 router = APIRouter(tags=["Activity Feed"])
 
