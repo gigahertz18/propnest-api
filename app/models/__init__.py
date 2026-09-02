@@ -8,8 +8,8 @@ from app.collections.models.collection import Collection
 from app.core.models.audit_log import AuditLog, AuditAction
 from app.leasing.models.lease import Lease, BillingCycle, RenewalOption, LeaseStatus
 from app.billing.models.billing_record import BillingRecord, BillingRecordStatus
-from app.models.receipt import Receipt
-from app.models.receipt_template import ReceiptTemplate
+from app.receipts.models.receipt import Receipt
+from app.receipts.models.receipt_template import ReceiptTemplate
 
 __all__ = [
     "Property",

@@ -11,7 +11,7 @@ from app.core.services.exceptions import (
     ResourceForbiddenError,
     ServiceException,
 )
-from app.services.receipt_service import ReceiptService
+from app.receipts.services.receipt_service import ReceiptService
 from tests.mock_repos import MockCRUDRepo, MockReadOnlyRepo
 from tests.factories import make_admin, make_manager, make_regular_user
 

@@ -1,7 +1,7 @@
 import pytest
 import pytest_asyncio
 
-from app.repositories.receipt_template import receipt_template_repo
+from app.receipts.repositories.receipt_template import receipt_template_repo
 from tests.factories import make_property_model
 
 

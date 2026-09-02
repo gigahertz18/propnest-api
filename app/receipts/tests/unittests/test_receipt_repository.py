@@ -1,7 +1,7 @@
 import pytest
 import pytest_asyncio
 
-from app.repositories.receipt import receipt_repo
+from app.receipts.repositories.receipt import receipt_repo
 from tests.factories import (
     make_contract_model,
     make_document_model,
