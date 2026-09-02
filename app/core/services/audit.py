@@ -4,7 +4,7 @@ Shared audit-writing helper.
 Not a `ResourceAuthorizationMixin` method: `UserService` doesn't inherit
 that mixin (it has no property/contract/tenant resolution to share), so a
 plain function importable by all six mutating services — the same shape
-as `integrity_error_message` in `app/services/utils.py` — is the smallest
+as `integrity_error_message` in `app/core/services/utils.py` — is the smallest
 way to give every service the same call without forcing an unrelated
 composition change onto `UserService`.
 """

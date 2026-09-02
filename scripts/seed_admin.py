@@ -43,7 +43,10 @@ from app.db.session import AsyncSessionLocal  # noqa: E402
 from app.core.models.base import TimestampMixin  # noqa: F401 — ensure TimestampMixin is loaded
 from app.identity.models.user import User, UserRole  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
-from app.models import Property, Contract, Tenant, Document  # noqa: F401 — register all models
+from app.properties.models.property import Property  # noqa: F401 — register all models
+from app.leasing.models.contract import Contract  # noqa: F401 — register all models
+from app.crm.models.tenant import Tenant  # noqa: F401 — register all models
+from app.documents.models.document import Document  # noqa: F401 — register all models
 
 
 def _get_credentials() -> tuple[str, str, str, str]:

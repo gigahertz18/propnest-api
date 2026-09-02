@@ -148,7 +148,7 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
     the route layer without being translated into a domain exception first.
     Services should still catch IntegrityError explicitly and raise a
     specific exception where the failure mode is known (see
-    app/services/exceptions.py) — this handler exists so a future
+    app/core/services/exceptions.py) — this handler exists so a future
     relationship that's missed in a service degrades into a 409 instead of
     a bare, unhandled 500.
     """
@@ -165,7 +165,7 @@ async def redis_error_handler(request: Request, exc: RedisError) -> JSONResponse
     Last-resort safety net for Redis connection/timeout errors that reach the route
     layer without being translated into a domain exception first. AuthService.login should still
     catch RedisError explicitly and fail closed with LoginThrottleUnavailableError (see
-    app/services/exceptions.py) - this handler exists so a future Redis call that's missed in a service
+    app/core/services/exceptions.py) - this handler exists so a future Redis call that's missed in a service
     degrades into a 503 instead of a bare, unhandled 500.
     """
     logger.error("Unhandled RedisError reached the global handler: %s", exc)
