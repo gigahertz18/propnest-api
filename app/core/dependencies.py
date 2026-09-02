@@ -24,7 +24,7 @@ from app.repositories.collection import collection_repo
 from app.repositories.contract import contract_repo
 from app.repositories.document import document_repo
 from app.repositories.lease import lease_repo
-from app.repositories.property import property_repo
+from app.properties.repositories.property import property_repo
 from app.repositories.payment import payment_repo
 from app.repositories.receipt import receipt_repo
 from app.repositories.receipt_template import receipt_template_repo
@@ -42,7 +42,7 @@ from app.services.lease_billing_service import LeaseBillingService
 from app.services.lease_service import LeaseService
 from app.core.services.notification_service import LoggingNotificationChannel, NotificationService
 from app.services.payment_service import PaymentService
-from app.services.property_service import PropertyService
+from app.properties.services.property_service import PropertyService
 from app.services.receipt_service import ReceiptService
 from app.services.receipt_template_service import ReceiptTemplateService
 from app.services.tenant_service import TenantService

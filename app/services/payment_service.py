@@ -14,7 +14,7 @@ from app.repositories.billing_record import BillingRecordRepository
 from app.repositories.contract import ContractRepository
 from app.repositories.lease import LeaseRepository
 from app.repositories.payment import PaymentRepository
-from app.repositories.property import PropertyRepository
+from app.properties.repositories.property import PropertyRepository
 from app.core.schemas.base import PaginatedResponse
 from app.schemas.payment import PaymentCorrectionCreate, PaymentCreate, PaymentUpdate
 from app.core.services.audit import write_audit_log

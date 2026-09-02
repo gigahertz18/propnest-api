@@ -97,10 +97,10 @@ test-be:
 	$(TEST_EXEC) backend pytest $(debug)
 
 test-be-unit:
-	$(TEST_EXEC) backend pytest tests/unittests app/core/tests/unittests $(debug)
+	$(TEST_EXEC) backend pytest tests/unittests app/*/tests/unittests $(debug)
 
 test-be-integration:
-	$(TEST_EXEC) backend pytest tests/integration app/core/tests/integration $(debug)
+	$(TEST_EXEC) backend pytest tests/integration app/*/tests/integration $(debug)
 
 # test-be-e2e:
 # 	$(TEST_EXEC) backend pytest tests/e2e $(debug)

@@ -6,9 +6,9 @@ from types import SimpleNamespace
 from sqlalchemy.exc import IntegrityError
 
 from app.core.models.audit_log import AuditAction, AuditLog
-from app.models.property import PropertyStatus
+from app.properties.models.property import PropertyStatus
 from app.identity.models.user import UserRole
-from app.services.property_service import PropertyService
+from app.properties.services.property_service import PropertyService
 from app.core.services.exceptions import (
     RelatedResourceNotFoundError,
     PropertyAlreadyExistsError,
@@ -16,7 +16,7 @@ from app.core.services.exceptions import (
     UserNotFoundError,
     PropertyManagerAssignmentError,
 )
-from app.schemas.property import PropertyCreate, PropertyUpdate
+from app.properties.schemas.property import PropertyCreate, PropertyUpdate
 from tests.mock_repos import MockCRUDRepo, MockReadOnlyRepo
 
 

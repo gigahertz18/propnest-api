@@ -8,10 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.models.audit_log import AuditAction
 from app.models.contract import Contract, ContractStatus, RentalType
-from app.models.property import PropertyStatus
+from app.properties.models.property import PropertyStatus
 from app.identity.models.user import User
 from app.repositories.contract import ContractRepository
-from app.repositories.property import PropertyRepository
+from app.properties.repositories.property import PropertyRepository
 from app.repositories.tenant import TenantRepository
 from app.core.schemas.base import PaginatedResponse
 from app.schemas.contract import ContractCreate, ContractUpdate

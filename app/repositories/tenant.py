@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.repositories.base import BaseRepository
 from app.models.tenant import Tenant
 from app.models.contract import Contract
-from app.models.property import Property
+from app.properties.models.property import Property
 from app.schemas.tenant import TenantCreate, TenantUpdate
 
 

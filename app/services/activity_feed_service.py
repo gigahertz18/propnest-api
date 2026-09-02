@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.models.audit_log import AuditLog
 from app.identity.models.user import UserRole
 from app.repositories.activity_feed import ActivityFeedRepository
-from app.repositories.property import PropertyRepository
+from app.properties.repositories.property import PropertyRepository
 from app.core.schemas.base import PaginatedResponse
 from app.core.services.exceptions import ActivityFeedForbiddenError, RelatedResourceNotFoundError
 

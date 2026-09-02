@@ -8,7 +8,7 @@ from app.models.collection import Collection
 from app.identity.models.user import User
 from app.repositories.collection import CollectionRepository
 from app.repositories.contract import ContractRepository
-from app.repositories.property import PropertyRepository
+from app.properties.repositories.property import PropertyRepository
 from app.core.schemas.base import PaginatedResponse
 from app.schemas.collection import CollectionCreate, CollectionUpdate
 from app.core.services.base import ResourceAuthorizationMixin

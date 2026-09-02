@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
-from app.models.property import Property
+from app.properties.models.property import Property
 from app.models.tenant import Tenant
 from app.repositories.contract import contract_repo
 from tests.factories import (

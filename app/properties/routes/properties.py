@@ -6,8 +6,8 @@ from app.core.dependencies import require_admin, get_property_service, require_m
 from app.db.session import get_db
 from app.identity.models.user import User
 from app.core.schemas.base import PaginatedResponse
-from app.schemas.property import PropertyCreate, PropertyUpdate, PropertyResponse, PropertyAssignManager
-from app.services.property_service import PropertyService
+from app.properties.schemas.property import PropertyCreate, PropertyUpdate, PropertyResponse, PropertyAssignManager
+from app.properties.services.property_service import PropertyService
 from app.core.services.exceptions import (
     PropertyAlreadyExistsError,
     UserNotFoundError,

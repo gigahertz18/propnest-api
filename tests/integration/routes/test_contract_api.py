@@ -2,7 +2,7 @@ import pytest
 import uuid
 
 from app.identity.models.user import UserRole
-from app.models.property import PropertyStatus
+from app.properties.models.property import PropertyStatus
 from tests.factories import (
     make_user_model,
     make_contract_model,

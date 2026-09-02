@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.repositories.base import BaseRepository
 from app.models.collection import Collection
-from app.models.property import Property
+from app.properties.models.property import Property
 from app.schemas.collection import CollectionCreate, CollectionUpdate
 
 

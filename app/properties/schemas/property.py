@@ -3,7 +3,7 @@ import uuid
 from pydantic import BaseModel, Field
 from datetime import datetime
 
-from app.models.property import PropertyStatus
+from app.properties.models.property import PropertyStatus
 from app.core.schemas.base import BaseResponse
 
 
