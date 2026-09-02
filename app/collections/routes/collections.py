@@ -6,8 +6,8 @@ from app.core.dependencies import get_collection_service, require_manager_or_abo
 from app.db.session import get_db
 from app.identity.models.user import User
 from app.core.schemas.base import PaginatedResponse
-from app.schemas.collection import CollectionCreate, CollectionUpdate, CollectionResponse
-from app.services.collection_service import CollectionService
+from app.collections.schemas.collection import CollectionCreate, CollectionUpdate, CollectionResponse
+from app.collections.services.collection_service import CollectionService
 from app.core.services.exceptions import CollectionValidationError
 
 router = APIRouter(prefix="/collections", tags=["Collections"])

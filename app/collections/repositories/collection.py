@@ -5,9 +5,9 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.repositories.base import BaseRepository
-from app.models.collection import Collection
+from app.collections.models.collection import Collection
 from app.properties.models.property import Property
-from app.schemas.collection import CollectionCreate, CollectionUpdate
+from app.collections.schemas.collection import CollectionCreate, CollectionUpdate
 
 
 class CollectionRepository(BaseRepository[Collection, CollectionCreate, CollectionUpdate]):
