@@ -20,16 +20,42 @@ from tests.factories import (
 class FakeStorageClient:
     """Minimal stand-in for the MinIO client — only what DocumentService touches."""
 
-    def __init__(self, raise_on_put: Exception | None = None, raise_on_remove: Exception | None = None):
+    def __init__(
+        self,
+        raise_on_put: Exception | None = None,
+        raise_on_remove: Exception | None = None,
+        raise_on_get: Exception | None = None,
+    ):
         self.raise_on_put = raise_on_put
         self.raise_on_remove = raise_on_remove
+        self.raise_on_get = raise_on_get
         self.put_calls: list[tuple] = []
         self.remove_calls: list[tuple] = []
+        self.objects: dict[str, bytes] = {}
 
-    def put_object(self, *args, **kwargs):
+    def put_object(self, bucket, storage_key, stream, size, content_type=None):
         if self.raise_on_put:
             raise self.raise_on_put
-        self.put_calls.append((args, kwargs))
+        self.put_calls.append(((bucket, storage_key, stream, size), {"content_type": content_type}))
+        self.objects[storage_key] = stream.read()
+
+    def get_object(self, bucket, storage_key):
+        if self.raise_on_get:
+            raise self.raise_on_get
+
+        data = self.objects[storage_key]
+
+        class _Response:
+            def read(self_inner):
+                return data
+
+            def close(self_inner):
+                pass
+
+            def release_conn(self_inner):
+                pass
+
+        return _Response()
 
     def remove_object(self, *args, **kwargs):
         if self.raise_on_remove:
@@ -719,3 +745,124 @@ class TestReplaceDocumentFileRoute:
         )
         assert response.status_code == 500
         assert response.json() == {"detail": "An unexpected error occurred while processing this request."}
+
+
+# ─── GET /documents/{document_id}/download ────────────────────────────────────
+
+
+@pytest.mark.asyncio
+class TestDownloadDocumentRoute:
+    async def test_admin_can_download_any_document(self, client, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        storage = FakeStorageClient()
+        app.dependency_overrides[get_storage_client] = lambda: storage
+
+        upload = await client.post(
+            "/api/v1/documents/upload",
+            files={"file": ("lease.pdf", b"%PDF-1.4 fake content", "application/pdf")},
+            data={"file_type": "application/pdf"},
+            headers=auth_ctx.headers,
+        )
+        document_id = upload.json()["id"]
+
+        response = await client.get(f"/api/v1/documents/{document_id}/download", headers=auth_ctx.headers)
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/pdf"
+        assert "attachment" in response.headers["content-disposition"]
+        assert response.content == b"%PDF-1.4 fake content"
+
+    async def test_manager_can_download_document_for_owned_property(self, client, db, authenticate_manager):
+        mgr_ctx = await authenticate_manager()
+        prop = await make_property_model(db, manager_id=mgr_ctx.user.id)
+        storage = FakeStorageClient()
+        app.dependency_overrides[get_storage_client] = lambda: storage
+
+        upload = await client.post(
+            "/api/v1/documents/upload",
+            files={"file": ("lease.pdf", b"%PDF-1.4 fake content", "application/pdf")},
+            data={"file_type": "application/pdf", "property_id": str(prop.id)},
+            headers=mgr_ctx.headers,
+        )
+        document_id = upload.json()["id"]
+
+        response = await client.get(f"/api/v1/documents/{document_id}/download", headers=mgr_ctx.headers)
+        assert response.status_code == 200
+
+    async def test_returns_403_for_manager_not_owning_the_property(
+        self, client, db, authenticate_manager, authenticate_admin
+    ):
+        admin_ctx = await authenticate_admin()
+        mgr = await make_user_model(db, username="dlmgr-owner", email="dlmgr-owner@example.com", role=UserRole.MANAGER)
+        prop = await make_property_model(db, manager_id=mgr.id)
+        storage = FakeStorageClient()
+        app.dependency_overrides[get_storage_client] = lambda: storage
+
+        upload = await client.post(
+            "/api/v1/documents/upload",
+            files={"file": ("lease.pdf", b"%PDF-1.4 fake content", "application/pdf")},
+            data={"file_type": "application/pdf", "property_id": str(prop.id)},
+            headers=admin_ctx.headers,
+        )
+        document_id = upload.json()["id"]
+
+        outsider_ctx = await authenticate_manager(username="dlmgr-other", email="dlmgr-other@example.com")
+        response = await client.get(f"/api/v1/documents/{document_id}/download", headers=outsider_ctx.headers)
+        assert response.status_code == 403
+
+    async def test_returns_403_for_regular_user(self, client, authenticate_admin, authenticate_user):
+        auth_ctx = await authenticate_admin()
+        storage = FakeStorageClient()
+        app.dependency_overrides[get_storage_client] = lambda: storage
+
+        upload = await client.post(
+            "/api/v1/documents/upload",
+            files={"file": ("lease.pdf", b"%PDF-1.4 fake content", "application/pdf")},
+            data={"file_type": "application/pdf"},
+            headers=auth_ctx.headers,
+        )
+        document_id = upload.json()["id"]
+
+        user_ctx = await authenticate_user()
+        response = await client.get(f"/api/v1/documents/{document_id}/download", headers=user_ctx.headers)
+        assert response.status_code == 403
+
+    async def test_returns_404_for_unknown_document(self, client, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        response = await client.get(f"/api/v1/documents/{uuid.uuid4()}/download", headers=auth_ctx.headers)
+        assert response.status_code == 404
+
+    async def test_returns_500_when_object_missing_from_storage(self, client, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        storage = FakeStorageClient()
+        app.dependency_overrides[get_storage_client] = lambda: storage
+
+        upload = await client.post(
+            "/api/v1/documents/upload",
+            files={"file": ("lease.pdf", b"%PDF-1.4 fake content", "application/pdf")},
+            data={"file_type": "application/pdf"},
+            headers=auth_ctx.headers,
+        )
+        document_id = upload.json()["id"]
+
+        storage.objects.clear()  # simulate the object having disappeared from storage
+        response = await client.get(f"/api/v1/documents/{document_id}/download", headers=auth_ctx.headers)
+        assert response.status_code == 500
+
+    async def test_get_document_metadata_route_unaffected(self, client, authenticate_admin):
+        """Regression: the existing metadata route still works after adding /download."""
+        auth_ctx = await authenticate_admin()
+        storage = FakeStorageClient()
+        app.dependency_overrides[get_storage_client] = lambda: storage
+
+        upload = await client.post(
+            "/api/v1/documents/upload",
+            files={"file": ("lease.pdf", b"%PDF-1.4 fake content", "application/pdf")},
+            data={"file_type": "application/pdf"},
+            headers=auth_ctx.headers,
+        )
+        document_id = upload.json()["id"]
+
+        response = await client.get(f"/api/v1/documents/{document_id}", headers=auth_ctx.headers)
+        assert response.status_code == 200
+        assert response.json()["id"] == document_id
