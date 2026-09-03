@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Response, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
@@ -47,6 +47,26 @@ async def get_document(
 ):
     """Get a single document by ID."""
     return await document_service.get_document(db, document_id, current_user)
+
+
+@router.get("/{document_id}/download")
+async def download_document(
+    document_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    document_service: DocumentService = Depends(get_document_service),
+    current_user: User = Depends(require_manager_or_above),
+    storage_client=Depends(get_storage_client),
+):
+    """Stream a document's file content through this backend's own
+    authenticated storage client — the only correct way for a client to
+    retrieve a document's bytes. `DocumentResponse.file_url` is an
+    internal storage reference, not directly fetchable."""
+    document, data = await document_service.get_document_content(db, document_id, current_user, storage_client)
+    return Response(
+        content=data,
+        media_type=document.file_type,
+        headers={"Content-Disposition": f'attachment; filename="{document.file_name}"'},
+    )
 
 
 @router.post(

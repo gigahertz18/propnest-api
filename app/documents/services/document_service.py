@@ -473,8 +473,14 @@ class DocumentService(ResourceAuthorizationMixin):
 
     def build_object_url(self, storage_key: str) -> str:
         """
-        Build the public-facing URL for a stored object.
-        Format : {endpoint}/{bucket}/{file_name}
+        Build this object's internal storage reference (endpoint + bucket +
+        key). NOT a public or directly fetchable URL — the
+        `propnest-documents` MinIO bucket is private and nothing grants it
+        anonymous read access. Clients must never fetch this value
+        directly; use `GET /documents/{document_id}/download` (or, for
+        receipts, `GET /receipts/{receipt_id}/download`), which streams the
+        object through this backend's own authenticated storage client.
+        Format: {endpoint}/{bucket}/{storage_key}
         """
         endpoint = settings.MINIO_ENDPOINT.rstrip("/")
         bucket = settings.MINIO_BUCKET_NAME

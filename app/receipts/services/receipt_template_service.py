@@ -212,6 +212,10 @@ class ReceiptTemplateService(ResourceAuthorizationMixin):
                 release_conn()
 
     def _build_object_url(self, storage_key: str) -> str:
+        """Internal storage reference — NOT a public/directly fetchable
+        URL. The bucket is private; templates are only ever read back via
+        `_fetch_html`'s authenticated storage client, never fetched
+        directly by a client."""
         endpoint = settings.MINIO_ENDPOINT.rstrip("/")
         bucket = settings.MINIO_BUCKET_NAME
         return f"{endpoint}/{bucket}/{storage_key}"

@@ -1,6 +1,6 @@
 import uuid
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 
 from app.core.schemas.base import BaseResponse
@@ -44,6 +44,11 @@ class DocumentResponse(DocumentBase, BaseResponse):
     """Returned to the client — includes DB-generated fields."""
 
     id: uuid.UUID
-    file_url: str
+    file_url: str = Field(
+        description=(
+            "Internal storage reference - not a public or directly "
+            "fetchable URL. Use GET /documents/{document_id}/download to retrieve the actual file content."
+        )
+    )
     created_at: datetime
     updated_at: datetime

@@ -151,6 +151,23 @@ class TestDocumentServiceClassAttributes:
         assert svc.contract_repo is None
 
 
+class TestBuildObjectUrlDocstring:
+    def test_docstring_no_longer_claims_public(self):
+        """Regression for the file_url-not-actually-public bug: the
+        docstring must not claim this URL is public/directly fetchable."""
+        doc = DocumentService.build_object_url.__doc__ or ""
+        assert "not a public" in doc.lower()
+
+
+class TestFileUrlFieldDescription:
+    def test_file_url_description_no_longer_claims_public(self):
+        from app.documents.schemas.document import DocumentResponse
+
+        field = DocumentResponse.model_fields["file_url"]
+        assert field.description is not None
+        assert "not a public" in field.description.lower()
+
+
 @pytest.mark.asyncio
 class TestCreateDocument:
 

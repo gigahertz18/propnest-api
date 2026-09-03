@@ -326,3 +326,18 @@ class TestListAndGetTemplate:
         svc = _make_service()
         with pytest.raises(RelatedResourceNotFoundError):
             await svc.get_template(mock_db, uuid4(), make_admin())
+
+
+class TestBuildObjectUrlDocstring:
+    def test_docstring_no_longer_claims_public(self):
+        doc = ReceiptTemplateService._build_object_url.__doc__ or ""
+        assert "not a public" in doc.lower()
+
+
+class TestFileUrlFieldDescription:
+    def test_file_url_description_no_longer_claims_public(self):
+        from app.receipts.schemas.receipt_template import ReceiptTemplateResponse
+
+        field = ReceiptTemplateResponse.model_fields["file_url"]
+        assert field.description is not None
+        assert "not a public" in field.description.lower()
