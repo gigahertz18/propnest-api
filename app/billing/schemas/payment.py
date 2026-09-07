@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, field_validator
 
 from app.billing.models.payment import PAYMENT_METHODS, PaymentStatus
 from app.core.schemas.base import BaseResponse
@@ -19,6 +19,22 @@ def _normalize_payment_method(value: str | None) -> str | None:
     if value.lower() not in PAYMENT_METHODS:
         raise ValueError(f"Invalid payment_method '{value}'. Must be one of {PAYMENT_METHODS}.")
     return value.lower()
+
+
+_DATE_ONLY_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _reject_date_only_paid_at(value: object) -> object:
+    """Rejects a bare ISO date (e.g. '2026-09-03') for paid_at, which Pydantic
+    v2 would otherwise silently coerce to midnight UTC — producing a
+    fabricated time-of-day wherever paid_at is displayed (see
+    payment-paid-at-accepts-date-only-value). Only strings are checked; a
+    native datetime object (however it was constructed) passes through
+    unchanged, since the ambiguity is specifically about the *input shape*
+    reaching the API boundary, not the parsed value."""
+    if isinstance(value, str) and _DATE_ONLY_PATTERN.match(value.strip()):
+        raise ValueError("paid_at must include a time component (e.g. '2026-09-03T14:30:00Z'), not a date-only value.")
+    return value
 
 
 # `cash` is exempt — it's auto-generated server-side (see
@@ -83,6 +99,11 @@ class PaymentCreate(PaymentBase):
         _validate_reference_number_format(self.payment_method, self.reference_number)
         return self
 
+    @field_validator("paid_at", mode="before")
+    @classmethod
+    def reject_date_only_paid_at(cls, value):
+        return _reject_date_only_paid_at(value)
+
 
 # ─── Update ───────────────────────────────────────────────
 class PaymentUpdate(BaseModel):
@@ -121,6 +142,11 @@ class PaymentUpdate(BaseModel):
             raise ValueError("status cannot be set to VOIDED directly; use the payment correction endpoint instead.")
         return self
 
+    @field_validator("paid_at", mode="before")
+    @classmethod
+    def reject_date_only_paid_at(cls, value):
+        return _reject_date_only_paid_at(value)
+
 
 # ─── Correction ───────────────────────────────────────────
 class PaymentCorrectionCreate(BaseModel):
@@ -154,6 +180,11 @@ class PaymentCorrectionCreate(BaseModel):
         if self.status == PaymentStatus.VOIDED:
             raise ValueError("A correction can't be created as VOIDED — it must start out as an active payment.")
         return self
+
+    @field_validator("paid_at", mode="before")
+    @classmethod
+    def reject_date_only_paid_at(cls, value):
+        return _reject_date_only_paid_at(value)
 
 
 # ─── Response ─────────────────────────────────────────────
