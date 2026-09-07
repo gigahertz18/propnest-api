@@ -257,6 +257,8 @@ def get_receipt_service() -> ReceiptService:
         property_repo=property_repo,
         tenant_repo=tenant_repo,
         receipt_template_service=get_receipt_template_service(),
+        billing_record_repo=billing_record_repo,
+        user_repo=user_repo,
     )
 
 
