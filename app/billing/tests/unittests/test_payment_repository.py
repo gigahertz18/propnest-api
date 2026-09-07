@@ -161,9 +161,16 @@ class TestPaymentRepositoryCreate:
         assert result.reference_number == "REF-12345"
 
     async def test_creates_payment_with_check_method(self, db, contract):
-        payload = PaymentCreate(**make_payment(contract_id=contract.id, payment_method="check"))
+        payload = PaymentCreate(
+            **make_payment(contract_id=contract.id, payment_method="check", reference_number="123456")
+        )
         result = await payment_repo.create(db, payload)
         assert result.payment_method == "check"
+
+    async def test_next_cash_reference_number_returns_increasing_integers(self, db):
+        first = await payment_repo.next_cash_reference_number(db)
+        second = await payment_repo.next_cash_reference_number(db)
+        assert second == first + 1
 
 
 class TestPaymentRepositoryCreateEdgeCases:
