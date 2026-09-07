@@ -111,7 +111,10 @@ Payments is a fully implemented vertical slice: model, schema, repository, servi
 
 The `Payment` model supports:
 
-- `reference_number` (nullable) — cross-references the transaction on the provider side (bank transfer/GCash/Maya/check)
+- `reference_number` (nullable at the DB level, but effectively always populated by the service layer) — cross-references the transaction on the provider side. Behavior is per-`payment_method`, resolved server-side in `PaymentService._resolve_reference_number` and applied on create, correction, and update:
+  - `cash`: auto-generated from a dedicated Postgres sequence (`cash_reference_number_seq`) as `CASH-####` when the caller omits one; an explicitly supplied value is kept as-is, unprefixed and unvalidated.
+  - `check`/`gcash`/`bank transfer`/`maya`: required, format-validated in the Pydantic schemas against a per-method regex (`REFERENCE_NUMBER_FORMATS` in `app/billing/schemas/payment.py` — e.g. check is 4-10 digits, gcash is exactly 13 digits), then auto-prefixed server-side (`CHECK-`, `GCASH-`, `TRANSFER-`, `MAYA-`) onto the caller's raw core value — callers submit the unprefixed core value, never the prefix itself.
+  - `payment_method` unset (`None`): `reference_number` stays fully optional and unvalidated, matching legacy behavior.
 - `payment_method` including `check` alongside cash/bank transfer/gcash/maya
 - a real `PaymentStatus` lifecycle: `PAID`, `PENDING`, `VOIDED`, `REFUNDED`
 - `billing_record_id` (nullable) — additive to the required `contract_id`, not a replacement; a payment may optionally link to a specific `BillingRecord`. `PaymentService.create_payment` validates the billing record belongs to the same contract (via its Lease) before recording, then reconciles cumulative non-voided payments into the record's status via `LeaseBillingService.apply_payment` (see §31)

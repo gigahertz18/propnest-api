@@ -127,8 +127,12 @@ class PaymentService(ResourceAuthorizationMixin):
         self, db: AsyncSession, payment_method: str | None, reference_number: str | None
     ) -> str | None:
         """Auto-generate a `CASH-####` reference for cash payments that don't
-        already have one; every other method passes through unchanged (format
-        is enforced upstream in the Pydantic schemas, not here)."""
+        already have one. For check/gcash/bank transfer/maya, prepend the
+        method's prefix (e.g. `CHECK-`) onto the caller-supplied core value —
+        the supplied value itself is never rejected/replaced, only prefixed;
+        format of that core value is enforced upstream in the Pydantic
+        schemas, not here. `payment_method=None` and an explicit cash
+        reference_number both pass through completely unchanged."""
         if payment_method == "cash" and reference_number is None:
             seq = await self.payment_repo.next_cash_reference_number(db)
             return f"CASH-{seq:04d}"
