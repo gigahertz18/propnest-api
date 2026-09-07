@@ -1,3 +1,4 @@
+import re
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -18,6 +19,40 @@ def _normalize_payment_method(value: str | None) -> str | None:
     if value.lower() not in PAYMENT_METHODS:
         raise ValueError(f"Invalid payment_method '{value}'. Must be one of {PAYMENT_METHODS}.")
     return value.lower()
+
+
+# `cash` is exempt — it's auto-generated server-side (see
+# PaymentService._resolve_reference_number) rather than format-checked here.
+# `payment_method=None` is exempt too, matching today's fully-optional behavior.
+# The third tuple element is the method's auto-prefix (e.g. "CHECK"), applied
+# by PaymentService._resolve_reference_number to the raw core value validated
+# here — this map validates only the unprefixed value the caller submits.
+REFERENCE_NUMBER_FORMATS: dict[str, tuple[re.Pattern, str, str]] = {
+    "check": (re.compile(r"^\d{4,10}$"), "must be 4-10 digits", "CHECK"),
+    "gcash": (re.compile(r"^\d{13}$"), "must be exactly 13 digits", "GCASH"),
+    "bank transfer": (
+        re.compile(r"^[A-Za-z0-9-]{6,34}$"),
+        "must be 6-34 alphanumeric characters or dashes",
+        "TRANSFER",
+    ),
+    "maya": (re.compile(r"^[A-Za-z0-9-]{6,34}$"), "must be 6-34 alphanumeric characters or dashes", "MAYA"),
+}
+
+
+def _validate_reference_number_format(payment_method: str | None, reference_number: str | None) -> None:
+    if payment_method not in REFERENCE_NUMBER_FORMATS:
+        return
+    pattern, message, _ = REFERENCE_NUMBER_FORMATS[payment_method]
+    if not reference_number or not pattern.match(reference_number):
+        raise ValueError(f"reference_number for payment_method '{payment_method}' {message}.")
+
+
+def get_reference_number_prefix(payment_method: str | None) -> str | None:
+    """The method's auto-prefix (e.g. 'CHECK'), or None if it doesn't get
+    one. `cash` isn't in this map — its `CASH-` prefix is composed from a DB
+    sequence in PaymentService._resolve_reference_number, not here."""
+    entry = REFERENCE_NUMBER_FORMATS.get(payment_method)
+    return entry[2] if entry else None
 
 
 # ─── Base ─────────────────────────────────────────────────
@@ -43,6 +78,11 @@ class PaymentCreate(PaymentBase):
         self.payment_method = _normalize_payment_method(self.payment_method)
         return self
 
+    @model_validator(mode="after")
+    def validate_reference_number_format(self) -> "PaymentCreate":
+        _validate_reference_number_format(self.payment_method, self.reference_number)
+        return self
+
 
 # ─── Update ───────────────────────────────────────────────
 class PaymentUpdate(BaseModel):
@@ -62,6 +102,17 @@ class PaymentUpdate(BaseModel):
     @model_validator(mode="after")
     def validate_payment_method(self) -> "PaymentUpdate":
         self.payment_method = _normalize_payment_method(self.payment_method)
+        return self
+
+    @model_validator(mode="after")
+    def validate_reference_number_format(self) -> "PaymentUpdate":
+        # Partial-update semantics: None means "leave unchanged," not "unset."
+        # We can only format-check when the caller sets both fields together
+        # in the same payload — checking a lone reference_number against an
+        # existing row's payment_method would need a DB read, which schemas
+        # don't have access to.
+        if self.payment_method is not None and self.reference_number is not None:
+            _validate_reference_number_format(self.payment_method, self.reference_number)
         return self
 
     @model_validator(mode="after")
@@ -91,6 +142,11 @@ class PaymentCorrectionCreate(BaseModel):
     @model_validator(mode="after")
     def validate_payment_method(self) -> "PaymentCorrectionCreate":
         self.payment_method = _normalize_payment_method(self.payment_method)
+        return self
+
+    @model_validator(mode="after")
+    def validate_reference_number_format(self) -> "PaymentCorrectionCreate":
+        _validate_reference_number_format(self.payment_method, self.reference_number)
         return self
 
     @model_validator(mode="after")

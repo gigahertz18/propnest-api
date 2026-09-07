@@ -16,7 +16,12 @@ from app.leasing.repositories.lease import LeaseRepository
 from app.billing.repositories.payment import PaymentRepository
 from app.properties.repositories.property import PropertyRepository
 from app.core.schemas.base import PaginatedResponse
-from app.billing.schemas.payment import PaymentCorrectionCreate, PaymentCreate, PaymentUpdate
+from app.billing.schemas.payment import (
+    PaymentCorrectionCreate,
+    PaymentCreate,
+    PaymentUpdate,
+    get_reference_number_prefix,
+)
 from app.core.services.audit import write_audit_log
 from app.core.services.base import ResourceAuthorizationMixin
 from app.core.services.exceptions import (
@@ -104,7 +109,10 @@ class PaymentService(ResourceAuthorizationMixin):
         if payload.billing_record_id is not None:
             billing_record = await self._get_billing_record_for_contract(db, payload.billing_record_id, ctx.contract_id)
 
-        resolved_payload = payload.model_copy(update={"contract_id": ctx.contract_id})
+        reference_number = await self._resolve_reference_number(db, payload.payment_method, payload.reference_number)
+        resolved_payload = payload.model_copy(
+            update={"contract_id": ctx.contract_id, "reference_number": reference_number}
+        )
 
         payment = await self.payment_repo.create(db, resolved_payload)
         write_audit_log(db, current_user, AuditAction.CREATE, "Payment", payment.id)
@@ -114,6 +122,24 @@ class PaymentService(ResourceAuthorizationMixin):
 
         await db.commit()
         return payment
+
+    async def _resolve_reference_number(
+        self, db: AsyncSession, payment_method: str | None, reference_number: str | None
+    ) -> str | None:
+        """Auto-generate a `CASH-####` reference for cash payments that don't
+        already have one. For check/gcash/bank transfer/maya, prepend the
+        method's prefix (e.g. `CHECK-`) onto the caller-supplied core value —
+        the supplied value itself is never rejected/replaced, only prefixed;
+        format of that core value is enforced upstream in the Pydantic
+        schemas, not here. `payment_method=None` and an explicit cash
+        reference_number both pass through completely unchanged."""
+        if payment_method == "cash" and reference_number is None:
+            seq = await self.payment_repo.next_cash_reference_number(db)
+            return f"CASH-{seq:04d}"
+        prefix = get_reference_number_prefix(payment_method)
+        if prefix and reference_number is not None and not reference_number.upper().startswith(f"{prefix}-"):
+            return f"{prefix}-{reference_number}"
+        return reference_number
 
     async def _get_billing_record_for_contract(self, db: AsyncSession, billing_record_id: UUID, contract_id: UUID):
         billing_record = await self.billing_record_repo.get_by_id(db, billing_record_id)
@@ -160,6 +186,12 @@ class PaymentService(ResourceAuthorizationMixin):
         if payment.status == PaymentStatus.VOIDED:
             raise PaymentAlreadyVoidedError(f"Payment {payment_id} is voided and can no longer be modified.")
 
+        if payload.payment_method is not None and payload.reference_number is not None:
+            resolved_reference_number = await self._resolve_reference_number(
+                db, payload.payment_method, payload.reference_number
+            )
+            payload = payload.model_copy(update={"reference_number": resolved_reference_number})
+
         payment = await self.payment_repo.update(db, payment_id, payload)
         write_audit_log(db, current_user, AuditAction.UPDATE, "Payment", payment_id)
         await db.commit()
@@ -195,6 +227,9 @@ class PaymentService(ResourceAuthorizationMixin):
         correction_data = payload.model_dump()
         correction_data["contract_id"] = original.contract_id
         correction_data["corrects_payment_id"] = original.id
+        correction_data["reference_number"] = await self._resolve_reference_number(
+            db, payload.payment_method, payload.reference_number
+        )
 
         new_payment = await self.payment_repo.create(db, correction_data)
         await self.payment_repo.update(db, original.id, {"status": PaymentStatus.VOIDED})

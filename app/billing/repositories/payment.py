@@ -161,6 +161,13 @@ class PaymentRepository(BaseRepository[Payment, PaymentCreate, PaymentUpdate]):
         result = await db.execute(stmt)
         return result.scalars().all()
 
+    async def next_cash_reference_number(self, db: AsyncSession) -> int:
+        """Atomically allocate the next value from `cash_reference_number_seq`
+        (see the migration that creates it) — mirrors
+        `ReceiptRepository.next_receipt_number`."""
+        result = await db.execute(select(func.nextval("cash_reference_number_seq")))
+        return result.scalar_one()
+
 
 # Instantiate once — import this instance everywhere
 payment_repo = PaymentRepository(Payment)

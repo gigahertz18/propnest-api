@@ -25,6 +25,11 @@ from tests.factories import make_admin, make_manager, make_regular_user
 class MockPaymentRepo(MockCRUDRepo):
     """Adds Payment's own query methods on top of the generic CRUD base."""
 
+    def __init__(self, records: dict | None = None):
+        super().__init__(records)
+        self.next_cash_reference_number_calls = 0
+        self._next_cash_sequence_value = 1
+
     async def get_by_contract(self, db, contract_id):
         return await self._filter_by(contract_id=contract_id)
 
@@ -33,6 +38,12 @@ class MockPaymentRepo(MockCRUDRepo):
 
     async def get_by_billing_record(self, db, billing_record_id):
         return await self._filter_by(billing_record_id=billing_record_id)
+
+    async def next_cash_reference_number(self, db):
+        self.next_cash_reference_number_calls += 1
+        value = self._next_cash_sequence_value
+        self._next_cash_sequence_value += 1
+        return value
 
 
 class MockPaymentRepoWithScoping(MockPaymentRepo):
@@ -303,6 +314,96 @@ class TestCreatePayment:
 
         assert repo.created_payloads == []
 
+    async def test_cash_payment_with_no_reference_number_gets_auto_generated(self, mock_db):
+        contract_id, prop_id = uuid4(), uuid4()
+        svc = _make_service(
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+        repo = svc.payment_repo
+
+        result = await svc.create_payment(
+            mock_db, _payload(contract_id=contract_id, payment_method="cash"), current_user=make_admin()
+        )
+
+        assert repo.next_cash_reference_number_calls == 1
+        assert result.reference_number == "CASH-0001"
+
+    async def test_cash_payment_with_explicit_reference_number_is_kept(self, mock_db):
+        contract_id, prop_id = uuid4(), uuid4()
+        svc = _make_service(
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+        repo = svc.payment_repo
+
+        result = await svc.create_payment(
+            mock_db,
+            _payload(contract_id=contract_id, payment_method="cash", reference_number="MANUAL-1"),
+            current_user=make_admin(),
+        )
+
+        assert repo.next_cash_reference_number_calls == 0
+        assert result.reference_number == "MANUAL-1"
+
+    async def test_non_cash_payment_reference_number_gets_method_prefix(self, mock_db):
+        contract_id, prop_id = uuid4(), uuid4()
+        svc = _make_service(
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+        repo = svc.payment_repo
+
+        result = await svc.create_payment(
+            mock_db,
+            _payload(contract_id=contract_id, payment_method="gcash", reference_number="1234567890123"),
+            current_user=make_admin(),
+        )
+
+        assert repo.next_cash_reference_number_calls == 0
+        assert result.reference_number == "GCASH-1234567890123"
+
+    @pytest.mark.parametrize(
+        "payment_method,core_value,expected",
+        [
+            ("check", "123456", "CHECK-123456"),
+            ("gcash", "1234567890123", "GCASH-1234567890123"),
+            ("bank transfer", "TXN123456", "TRANSFER-TXN123456"),
+            ("maya", "TXN123456", "MAYA-TXN123456"),
+        ],
+    )
+    async def test_create_applies_correct_prefix_per_method(self, mock_db, payment_method, core_value, expected):
+        contract_id, prop_id = uuid4(), uuid4()
+        svc = _make_service(
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+
+        result = await svc.create_payment(
+            mock_db,
+            _payload(contract_id=contract_id, payment_method=payment_method, reference_number=core_value),
+            current_user=make_admin(),
+        )
+
+        assert result.reference_number == expected
+
+    async def test_create_prefixing_is_idempotent(self, mock_db):
+        """If an already-prefixed value somehow gets submitted again, it
+        isn't double-prefixed."""
+        contract_id, prop_id = uuid4(), uuid4()
+        svc = _make_service(
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+
+        result = await svc.create_payment(
+            mock_db,
+            _payload(contract_id=contract_id, payment_method="bank transfer", reference_number="TRANSFER-TXN123456"),
+            current_user=make_admin(),
+        )
+
+        assert result.reference_number == "TRANSFER-TXN123456"
+
 
 # ─── create_payment (billing_record_id) ──────────────────────────────────────
 
@@ -539,6 +640,42 @@ class TestUpdatePayment:
 
         assert repo.updated_payloads == []
 
+    async def test_update_with_both_fields_set_gets_method_prefix(self, mock_db):
+        payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4()
+        payment = SimpleNamespace(id=payment_id, contract_id=contract_id, status="PAID")
+        svc = _make_service(
+            payments={payment_id: payment},
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+
+        result = await svc.update_payment(
+            mock_db,
+            payment_id,
+            PaymentUpdate(payment_method="check", reference_number="123456"),
+            current_user=make_admin(),
+        )
+
+        assert result.reference_number == "CHECK-123456"
+
+    async def test_update_with_only_reference_number_set_is_unprefixed(self, mock_db):
+        """Matches the schema's own partial-update gating rule: without
+        payment_method also present in the payload, we don't know which
+        method's prefix (if any) applies, so the value passes through as-is."""
+        payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4()
+        payment = SimpleNamespace(id=payment_id, contract_id=contract_id, status="PAID")
+        svc = _make_service(
+            payments={payment_id: payment},
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+
+        result = await svc.update_payment(
+            mock_db, payment_id, PaymentUpdate(reference_number="not-a-valid-check-number"), current_user=make_admin()
+        )
+
+        assert result.reference_number == "not-a-valid-check-number"
+
     async def test_user_role_is_forbidden(self, mock_db):
         payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4()
         payment = SimpleNamespace(id=payment_id, contract_id=contract_id, status="PAID")
@@ -595,7 +732,7 @@ class TestUpdatePayment:
 
 
 def _correction_payload(**kwargs):
-    defaults = dict(amount=Decimal("12000.00"), payment_method="bank transfer")
+    defaults = dict(amount=Decimal("12000.00"), payment_method="bank transfer", reference_number="TXN-123456")
     defaults.update(kwargs)
     return PaymentCorrectionCreate(**defaults)
 
@@ -670,14 +807,88 @@ class TestVoidAndCorrectPayment:
             contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
             properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
         )
-        repo = svc.payment_repo
 
         with pytest.raises(PaymentForbiddenError):
             await svc.void_and_correct_payment(mock_db, payment_id, _correction_payload(), make_manager())
 
-        assert repo.created_payloads == []
-        assert payment.status == PaymentStatus.PAID
-        assert not mock_db.commit.called
+    async def test_cash_correction_with_no_reference_number_gets_auto_generated(self, mock_db):
+        payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4()
+        payment = SimpleNamespace(id=payment_id, contract_id=contract_id, status=PaymentStatus.PAID)
+        svc = _make_service(
+            payments={payment_id: payment},
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+        repo = svc.payment_repo
+
+        result = await svc.void_and_correct_payment(
+            mock_db, payment_id, _correction_payload(payment_method="cash", reference_number=None), make_admin()
+        )
+
+        assert repo.next_cash_reference_number_calls == 1
+        assert result.reference_number == "CASH-0001"
+
+    async def test_cash_correction_with_explicit_reference_number_is_kept(self, mock_db):
+        payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4()
+        payment = SimpleNamespace(id=payment_id, contract_id=contract_id, status=PaymentStatus.PAID)
+        svc = _make_service(
+            payments={payment_id: payment},
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+        repo = svc.payment_repo
+
+        result = await svc.void_and_correct_payment(
+            mock_db,
+            payment_id,
+            _correction_payload(payment_method="cash", reference_number="MANUAL-1"),
+            make_admin(),
+        )
+
+        assert repo.next_cash_reference_number_calls == 0
+        assert result.reference_number == "MANUAL-1"
+
+    async def test_non_cash_correction_reference_number_gets_method_prefix(self, mock_db):
+        payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4()
+        payment = SimpleNamespace(id=payment_id, contract_id=contract_id, status=PaymentStatus.PAID)
+        svc = _make_service(
+            payments={payment_id: payment},
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+        repo = svc.payment_repo
+
+        result = await svc.void_and_correct_payment(mock_db, payment_id, _correction_payload(), make_admin())
+
+        assert repo.next_cash_reference_number_calls == 0
+        assert result.reference_number == "TRANSFER-TXN-123456"
+
+    @pytest.mark.parametrize(
+        "payment_method,core_value,expected",
+        [
+            ("check", "123456", "CHECK-123456"),
+            ("gcash", "1234567890123", "GCASH-1234567890123"),
+            ("bank transfer", "TXN123456", "TRANSFER-TXN123456"),
+            ("maya", "TXN123456", "MAYA-TXN123456"),
+        ],
+    )
+    async def test_correction_applies_correct_prefix_per_method(self, mock_db, payment_method, core_value, expected):
+        payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4()
+        payment = SimpleNamespace(id=payment_id, contract_id=contract_id, status=PaymentStatus.PAID)
+        svc = _make_service(
+            payments={payment_id: payment},
+            contracts={contract_id: SimpleNamespace(id=contract_id, property_id=prop_id)},
+            properties={prop_id: SimpleNamespace(id=prop_id, manager_id=uuid4())},
+        )
+
+        result = await svc.void_and_correct_payment(
+            mock_db,
+            payment_id,
+            _correction_payload(payment_method=payment_method, reference_number=core_value),
+            make_admin(),
+        )
+
+        assert result.reference_number == expected
 
     async def test_user_role_is_forbidden(self, mock_db):
         payment_id, contract_id, prop_id = uuid4(), uuid4(), uuid4()

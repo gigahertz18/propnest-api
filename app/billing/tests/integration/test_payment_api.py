@@ -1,4 +1,5 @@
 import pytest
+import re
 import uuid
 
 from tests.factories import (
@@ -115,12 +116,14 @@ class TestCreatePaymentRoute:
             "contract_id": str(contract.id),
             "amount": 5000.0,
             "payment_method": "gcash",
+            "reference_number": "1234567890123",
             "status": "PAID",
         }
 
         response = await client.post("/api/v1/payments/", json=payload, headers=mgr_ctx.headers)
         assert response.status_code == 201
         assert response.json()["contract_id"] == str(contract.id)
+        assert response.json()["reference_number"] == "GCASH-1234567890123"
 
     async def test_returns_404_when_contract_does_not_exist(self, client, authenticate_admin):
         auth_ctx = await authenticate_admin()
@@ -182,6 +185,57 @@ class TestCreatePaymentRoute:
 
         response = await client.post("/api/v1/payments/", json=payload, headers=auth_ctx.headers)
         assert response.status_code == 422
+
+    async def test_cash_payment_without_reference_number_is_auto_generated(self, client, db, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, prop.id, tenant.id)
+
+        payload = {
+            "contract_id": str(contract.id),
+            "amount": 5000.0,
+            "payment_method": "cash",
+            "status": "PAID",
+        }
+
+        response = await client.post("/api/v1/payments/", json=payload, headers=auth_ctx.headers)
+        assert response.status_code == 201
+        assert re.fullmatch(r"CASH-\d{4}", response.json()["reference_number"])
+
+    async def test_returns_422_for_check_payment_missing_reference_number(self, client, db, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, prop.id, tenant.id)
+
+        payload = {
+            "contract_id": str(contract.id),
+            "amount": 5000.0,
+            "payment_method": "check",
+            "status": "PAID",
+        }
+
+        response = await client.post("/api/v1/payments/", json=payload, headers=auth_ctx.headers)
+        assert response.status_code == 422
+
+    async def test_check_payment_reference_number_is_prefixed(self, client, db, authenticate_admin):
+        auth_ctx = await authenticate_admin()
+        prop = await make_property_model(db)
+        tenant = await make_tenant_model(db)
+        contract = await make_contract_model(db, prop.id, tenant.id)
+
+        payload = {
+            "contract_id": str(contract.id),
+            "amount": 5000.0,
+            "payment_method": "check",
+            "reference_number": "123456",
+            "status": "PAID",
+        }
+
+        response = await client.post("/api/v1/payments/", json=payload, headers=auth_ctx.headers)
+        assert response.status_code == 201
+        assert response.json()["reference_number"] == "CHECK-123456"
 
 
 @pytest.mark.asyncio
@@ -379,7 +433,7 @@ class TestCorrectPaymentRoute:
         contract = await make_contract_model(db, prop.id, tenant.id)
         payment = await make_payment_model(db, contract.id, amount=1000.0)
 
-        payload = {"amount": 2500.0, "payment_method": "gcash", "reference_number": "REF-1"}
+        payload = {"amount": 2500.0, "payment_method": "gcash", "reference_number": "1234567890123"}
         response = await client.post(
             f"/api/v1/payments/{payment.id}/corrections", json=payload, headers=auth_ctx.headers
         )
@@ -388,7 +442,7 @@ class TestCorrectPaymentRoute:
         assert body["corrects_payment_id"] == str(payment.id)
         assert body["contract_id"] == str(contract.id)
         assert body["amount"] == "2500.00"
-        assert body["reference_number"] == "REF-1"
+        assert body["reference_number"] == "GCASH-1234567890123"
 
         original = await client.get(f"/api/v1/payments/{payment.id}", headers=auth_ctx.headers)
         assert original.json()["status"] == "VOIDED"
@@ -439,7 +493,7 @@ class TestCorrectPaymentRoute:
         contract = await make_contract_model(db, prop.id, tenant.id)
         payment = await make_payment_model(db, contract.id)
 
-        payload = {"amount": 3000.0, "payment_method": "GCash"}
+        payload = {"amount": 3000.0, "payment_method": "GCash", "reference_number": "1234567890123"}
         response = await client.post(
             f"/api/v1/payments/{payment.id}/corrections", json=payload, headers=auth_ctx.headers
         )
