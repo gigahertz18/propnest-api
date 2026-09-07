@@ -7,8 +7,10 @@ from uuid import UUID, uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.models.audit_log import AuditAction
+from app.billing.repositories.billing_record import BillingRecordRepository
 from app.receipts.models.receipt import Receipt
 from app.identity.models.user import User
+from app.identity.repositories.user import UserRepository
 from app.leasing.repositories.contract import ContractRepository
 from app.billing.repositories.payment import PaymentRepository
 from app.properties.repositories.property import PropertyRepository
@@ -49,6 +51,8 @@ class ReceiptService(ResourceAuthorizationMixin):
         property_repo: PropertyRepository | None = None,
         tenant_repo: TenantRepository | None = None,
         receipt_template_service: ReceiptTemplateService | None = None,
+        billing_record_repo: BillingRecordRepository | None = None,
+        user_repo: UserRepository | None = None,
     ) -> None:
         self.receipt_repo = receipt_repo
         self.payment_repo = payment_repo
@@ -57,6 +61,8 @@ class ReceiptService(ResourceAuthorizationMixin):
         self.property_repo = property_repo
         self.tenant_repo = tenant_repo
         self.receipt_template_service = receipt_template_service
+        self.billing_record_repo = billing_record_repo
+        self.user_repo = user_repo
 
     async def issue_receipt(
         self,
@@ -89,6 +95,16 @@ class ReceiptService(ResourceAuthorizationMixin):
 
         receipt_number = await self.receipt_repo.next_receipt_number(db)
 
+        billing_record = None
+        billing_record_id = getattr(payment, "billing_record_id", None)
+        if billing_record_id is not None and self.billing_record_repo is not None:
+            billing_record = await self.billing_record_repo.get_by_id(db, billing_record_id)
+
+        manager = None
+        manager_id = getattr(property_, "manager_id", None)
+        if manager_id is not None and self.user_repo is not None:
+            manager = await self.user_repo.get_by_id(db, manager_id)
+
         if self.receipt_template_service is not None:
             template_html = await self.receipt_template_service.resolve_active_template_html(
                 db, property_.id, storage_client
@@ -102,6 +118,8 @@ class ReceiptService(ResourceAuthorizationMixin):
             payment=payment,
             property_=property_,
             tenant=tenant,
+            billing_record=billing_record,
+            manager_email=getattr(manager, "email", None),
         )
 
         # contract_id links the generated PDF to the same contract as the

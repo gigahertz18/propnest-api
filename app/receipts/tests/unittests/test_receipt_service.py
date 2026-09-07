@@ -1,6 +1,9 @@
 import pytest
 
+from datetime import date
+from decimal import Decimal
 from types import SimpleNamespace
+from unittest.mock import patch
 from uuid import uuid4
 
 from app.core.models.audit_log import AuditAction, AuditLog
@@ -84,12 +87,16 @@ def _make_service(
     properties=None,
     tenants=None,
     document_service=None,
+    billing_records=None,
+    users=None,
 ) -> ReceiptService:
     receipt_repo = receipts if receipts is not None else MockReceiptRepo({})
     payment_repo = payments if payments is not None else MockReadOnlyRepo({})
     contract_repo = contracts if contracts is not None else MockReadOnlyRepo({})
     property_repo = properties if properties is not None else MockReadOnlyRepo({})
     tenant_repo = tenants if tenants is not None else MockReadOnlyRepo({})
+    billing_record_repo = billing_records if billing_records is not None else MockReadOnlyRepo({})
+    user_repo = users if users is not None else MockReadOnlyRepo({})
 
     doc_service = document_service or _make_document_service(
         properties=property_repo, contracts=contract_repo, tenants=tenant_repo
@@ -102,6 +109,8 @@ def _make_service(
         contract_repo=contract_repo,
         property_repo=property_repo,
         tenant_repo=tenant_repo,
+        billing_record_repo=billing_record_repo,
+        user_repo=user_repo,
     )
 
 
@@ -243,6 +252,62 @@ class TestIssueReceipt:
         assert first.payment_id == second.payment_id == payment.id
         # Neither Document row was ever updated — append-only.
         assert document_repo.updated_payloads == []
+
+
+@pytest.mark.asyncio
+class TestIssueReceiptBillingContext:
+    async def test_billing_record_and_manager_email_are_resolved_and_passed_through(self, mock_db):
+        manager_id = uuid4()
+        payment, contract, property_, tenant = _scenario(manager_id=manager_id)
+        billing_record = SimpleNamespace(
+            id=uuid4(),
+            period_start=date(2026, 1, 1),
+            period_end=date(2026, 1, 31),
+            late_fee_applied=True,
+            late_fee_amount_charged=Decimal("500.00"),
+        )
+        payment.billing_record_id = billing_record.id
+        manager_user = SimpleNamespace(id=manager_id, email="owner@example.com")
+
+        svc = _make_service(
+            payments=MockReadOnlyRepo({payment.id: payment}),
+            contracts=MockReadOnlyRepo({contract.id: contract}),
+            properties=MockReadOnlyRepo({property_.id: property_}),
+            tenants=MockReadOnlyRepo({tenant.id: tenant}),
+            billing_records=MockReadOnlyRepo({billing_record.id: billing_record}),
+            users=MockReadOnlyRepo({manager_user.id: manager_user}),
+        )
+
+        with patch(
+            "app.receipts.services.receipt_service.render_receipt_pdf",
+            wraps=__import__("app.receipts.services.receipt_pdf", fromlist=["render_receipt_pdf"]).render_receipt_pdf,
+        ) as spy:
+            await svc.issue_receipt(mock_db, payment.id, make_admin(), storage_client=FakeStorageClient())
+
+        _, call_kwargs = spy.call_args
+        assert call_kwargs["billing_record"] is billing_record
+        assert call_kwargs["manager_email"] == "owner@example.com"
+
+    async def test_no_billing_record_or_manager_when_neither_is_linked(self, mock_db):
+        payment, contract, property_, tenant = _scenario()
+        property_.manager_id = None  # not set on the fixture default
+
+        svc = _make_service(
+            payments=MockReadOnlyRepo({payment.id: payment}),
+            contracts=MockReadOnlyRepo({contract.id: contract}),
+            properties=MockReadOnlyRepo({property_.id: property_}),
+            tenants=MockReadOnlyRepo({tenant.id: tenant}),
+        )
+
+        with patch(
+            "app.receipts.services.receipt_service.render_receipt_pdf",
+            wraps=__import__("app.receipts.services.receipt_pdf", fromlist=["render_receipt_pdf"]).render_receipt_pdf,
+        ) as spy:
+            await svc.issue_receipt(mock_db, payment.id, make_admin(), storage_client=FakeStorageClient())
+
+        _, call_kwargs = spy.call_args
+        assert call_kwargs["billing_record"] is None
+        assert call_kwargs["manager_email"] is None
 
 
 @pytest.mark.asyncio

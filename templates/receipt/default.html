@@ -1,22 +1,444 @@
-<html>
-<head>
-<style>
-  body { font-family: sans-serif; padding: 48px; color: #111; }
-  h1 { font-size: 20px; margin-bottom: 24px; }
-  table { border-collapse: collapse; width: 100%; }
-  td { padding: 6px 0; vertical-align: top; }
-  td.label { color: #555; width: 160px; }
-</style>
-</head>
-<body>
-  <h1>Receipt #{{ receipt_number }}</h1>
-  <table>
-    <tr><td class="label">Property</td><td>{{ property_name }}</td></tr>
-    <tr><td class="label">Tenant</td><td>{{ tenant_name }}</td></tr>
-    <tr><td class="label">Amount</td><td>{{ amount }}</td></tr>
-    <tr><td class="label">Paid at</td><td>{{ paid_at }}</td></tr>
-    <tr><td class="label">Payment method</td><td>{{ payment_method }}</td></tr>
-    <tr><td class="label">Reference #</td><td>{{ reference_number }}</td></tr>
-  </table>
-</body>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rental Payment Receipt</title>
+
+    <style>
+      @page {
+        size: A4;
+        margin: 0;
+      }
+
+      :root {
+        --ink: #1f2933;
+        --muted: #667085;
+        --border: #d9dee5;
+        --light: #f6f7f9;
+        --accent: #1f2933;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: #eef0f3;
+        color: var(--ink);
+        font-family: Arial, Helvetica, sans-serif;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      body {
+        padding: 24px;
+      }
+
+      .receipt {
+        width: 210mm;
+        min-height: 297mm;
+        margin: 0 auto;
+        padding: 16mm 18mm;
+        background: #fff;
+      }
+
+      /* Header */
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding-bottom: 18px;
+        border-bottom: 2px solid var(--accent);
+      }
+
+      .brand {
+        max-width: 55%;
+      }
+
+      .brand-name {
+        margin: 0;
+        font-size: 17px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+      }
+
+      .brand-subtitle {
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .receipt-heading {
+        text-align: right;
+      }
+
+      .receipt-title {
+        margin: 0;
+        font-size: 21px;
+        line-height: 1.15;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+      }
+
+      .receipt-subtitle {
+        margin-top: 5px;
+        color: var(--muted);
+        font-size: 9px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+      }
+
+      /* Metadata */
+      .meta-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        margin-top: 18px;
+        border: 1px solid var(--border);
+      }
+
+      .meta-item {
+        display: grid;
+        grid-template-columns: 110px 1fr;
+        gap: 12px;
+        padding: 11px 13px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .meta-item:nth-child(odd) {
+        border-right: 1px solid var(--border);
+      }
+
+      .meta-item:nth-last-child(-n + 2) {
+        border-bottom: 0;
+      }
+
+      .label {
+        color: var(--muted);
+        font-size: 8px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .value {
+        font-size: 10px;
+        font-weight: 500;
+      }
+
+      .status {
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+
+      /* Information cards */
+      .section {
+        margin-top: 20px;
+      }
+
+      .section-title {
+        margin: 0 0 8px;
+        color: var(--muted);
+        font-size: 8px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .info-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        border: 1px solid var(--border);
+      }
+
+      .info-item {
+        padding: 12px 13px;
+        min-height: 62px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .info-item:nth-child(odd) {
+        border-right: 1px solid var(--border);
+      }
+
+      .info-item:nth-last-child(-n + 2) {
+        border-bottom: 0;
+      }
+
+      .info-value {
+        margin-top: 5px;
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      /* Payment table */
+      .payment-table {
+        width: 100%;
+        border-collapse: collapse;
+        border: 1px solid var(--border);
+      }
+
+      .payment-table th {
+        padding: 10px 13px;
+        background: var(--light);
+        color: var(--muted);
+        font-size: 8px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-align: left;
+        text-transform: uppercase;
+      }
+
+      .payment-table th:last-child,
+      .payment-table td:last-child {
+        text-align: right;
+      }
+
+      .payment-table td {
+        padding: 12px 13px;
+        border-top: 1px solid var(--border);
+        font-size: 10px;
+      }
+
+      .payment-table .total-row td {
+        padding-top: 15px;
+        padding-bottom: 15px;
+        border-top: 2px solid var(--accent);
+        font-weight: 700;
+      }
+
+      .total-amount {
+        font-size: 17px;
+      }
+
+      /* Secondary details */
+      .details-grid {
+        display: grid;
+        grid-template-columns: 1.8fr 1fr;
+        border: 1px solid var(--border);
+      }
+
+      .detail-item {
+        padding: 11px 13px;
+      }
+
+      .detail-item:first-child {
+        border-right: 1px solid var(--border);
+      }
+
+      .detail-value {
+        margin-top: 5px;
+        font-size: 10px;
+        font-weight: 600;
+      }
+
+      /* Notes */
+      .notes {
+        padding: 12px 13px;
+        border: 1px solid var(--border);
+        background: var(--light);
+        font-size: 9px;
+        line-height: 1.55;
+      }
+
+      /* Signature */
+      .signature-section {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 28px;
+        margin-top: 34px;
+      }
+
+      .signature-box {
+        padding-top: 28px;
+        border-bottom: 1px solid #555;
+      }
+
+      .signature-caption {
+        margin-top: 7px;
+        color: var(--muted);
+        font-size: 8px;
+      }
+
+      /* Footer */
+      .footer {
+        margin-top: 28px;
+        padding-top: 12px;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 7.5px;
+        line-height: 1.5;
+        text-align: center;
+      }
+
+      @media print {
+        html,
+        body {
+          background: #fff;
+        }
+
+        body {
+          padding: 0;
+        }
+
+        .receipt {
+          margin: 0;
+          box-shadow: none;
+        }
+      }
+
+      @media screen {
+        .receipt {
+          box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <main class="receipt">
+      <header class="header">
+        <div class="brand">
+          <h1 class="brand-name">PropNest</h1>
+          <div class="brand-subtitle">Rental Property Management Services</div>
+        </div>
+
+        <div class="receipt-heading">
+          <h2 class="receipt-title">Rental Payment<br />Receipt</h2>
+          <div class="receipt-subtitle">Payment Acknowledgment</div>
+        </div>
+      </header>
+
+      <section class="meta-grid">
+        <div class="meta-item">
+          <div class="label">Receipt No.</div>
+          <div class="value">{{ receipt_number }}</div>
+        </div>
+
+        <div class="meta-item">
+          <div class="label">Date</div>
+          <div class="value">{{ payment.paid_at }}</div>
+        </div>
+
+        <div class="meta-item">
+          <div class="label">Payment Status</div>
+          <div class="value status">PAID</div>
+        </div>
+
+        <div class="meta-item">
+          <div class="label">Payment Method</div>
+          <div class="value">{{ payment.method }}</div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h3 class="section-title">Payment Information</h3>
+
+        <div class="info-grid">
+          <div class="info-item">
+            <div class="label">Received From</div>
+            <div class="info-value">{{ tenant.name }}</div>
+          </div>
+
+          <div class="info-item">
+            <div class="label">Property</div>
+            <div class="info-value">{{ property.name }}</div>
+          </div>
+
+          <div class="info-item">
+            <div class="label">Rental Period</div>
+            <div class="info-value">{{ payment.rental_period }}</div>
+          </div>
+
+          <div class="info-item">
+            <div class="label">Property Address</div>
+            <div class="info-value">{{ property.address }}</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h3 class="section-title">Payment Details</h3>
+
+        <table class="payment-table">
+          <thead>
+            <tr>
+              <th>Description</th>
+              <th>Amount</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            <tr>
+              <td>Monthly Rental Payment</td>
+              <td>{{ payment.amount }}</td>
+            </tr>
+
+            {% for charge in payment.other_charges %}
+            <tr>
+              <td>{{ charge.label }}</td>
+              <td>{{ charge.amount }}</td>
+            </tr>
+            {% endfor %}
+
+            <tr class="total-row">
+              <td>Total Amount Paid</td>
+              <td class="total-amount">{{ payment.total_amount }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="section">
+        <div class="details-grid">
+          <div class="detail-item">
+            <div class="label">Amount in Words</div>
+            <div class="detail-value">{{ payment.amount_in_words }}</div>
+          </div>
+
+          <div class="detail-item">
+            <div class="label">Reference No.</div>
+            <div class="detail-value">{{ payment.reference_number }}</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h3 class="section-title">Notes</h3>
+
+        <div class="notes">
+          Payment received for the rental period stated above. This receipt
+          acknowledges receipt of the amount indicated and does not alter the
+          terms of the applicable lease agreement. {{ notes }}
+        </div>
+      </section>
+
+      <section class="signature-section">
+        <div>
+          <div class="signature-box"></div>
+          <div class="signature-caption">Authorized Representative</div>
+        </div>
+
+        <div>
+          <div class="signature-box"></div>
+          <div class="signature-caption">Date</div>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <div>
+          Property Management • {{ property.address }} • {{ contact_email }} •
+          {{ contact_number }}
+        </div>
+        <div>
+          This document is a payment acknowledgment. Retain this receipt for
+          your records.
+        </div>
+      </footer>
+    </main>
+  </body>
 </html>

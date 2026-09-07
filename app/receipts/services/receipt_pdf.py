@@ -1,8 +1,11 @@
+from dataclasses import asdict
 from io import BytesIO
 from pathlib import Path
 
 from jinja2 import Environment, BaseLoader, select_autoescape
 from weasyprint import HTML
+
+from app.receipts.services.receipt_render_models import ReceiptRenderContext
 
 _jinja_env = Environment(loader=BaseLoader(), autoescape=select_autoescape(["html"]))
 
@@ -31,22 +34,31 @@ def _blocked_url_fetcher(url: str):
     raise ValueError(f"External resource fetching is disabled for receipt rendering: {url}")
 
 
-def render_receipt_pdf(*, template_html: str, receipt_number: int, payment, property_, tenant) -> BytesIO:
+def render_receipt_pdf(
+    *,
+    template_html: str,
+    receipt_number: int,
+    payment,
+    property_,
+    tenant,
+    billing_record=None,
+    manager_email: str | None = None,
+) -> BytesIO:
     """Render `template_html` (Jinja2 placeholders) with this receipt's data
     into a PDF, in-memory. Pure function — no DB/storage access — so both
     the built-in default and any uploaded ReceiptTemplate render through
     the exact same path.
     """
-    template = _jinja_env.from_string(template_html)
-    html = template.render(
+    context = ReceiptRenderContext.build(
         receipt_number=receipt_number,
-        property_name=getattr(property_, "name", "-") or "-",
-        tenant_name=getattr(tenant, "full_name", "-") or "-",
-        amount=payment.amount,
-        paid_at=payment.paid_at.isoformat(),
-        payment_method=payment.payment_method or "-",
-        reference_number=payment.reference_number or "-",
+        payment=payment,
+        property_=property_,
+        tenant=tenant,
+        billing_record=billing_record,
+        manager_email=manager_email,
     )
+    template = _jinja_env.from_string(template_html)
+    html = template.render(**asdict(context))
     buf = BytesIO()
     HTML(string=html, url_fetcher=_blocked_url_fetcher).write_pdf(buf)
     buf.seek(0)
