@@ -1,4 +1,6 @@
 import pytest
+
+from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import uuid4
 
@@ -116,3 +118,43 @@ class TestPaymentUpdateReferenceNumberFormat:
     def test_both_fields_together_valid_format_passes(self):
         payload = PaymentUpdate(payment_method="check", reference_number="123456")
         assert payload.reference_number == "123456"
+
+
+# ─── paid_at date-only rejection ─────────────────────────────────────────────
+
+
+class TestPaidAtDateOnlyRejection:
+    def test_create_rejects_date_only_string(self):
+        with pytest.raises(ValidationError):
+            _create_payload(paid_at="2026-09-03")
+
+    def test_create_accepts_full_iso_datetime(self):
+        payload = _create_payload(paid_at="2026-09-03T14:30:00Z")
+        assert payload.paid_at.hour == 14
+
+    def test_correction_rejects_date_only_string(self):
+        with pytest.raises(ValidationError):
+            _correction_payload(paid_at="2026-09-03")
+
+    def test_correction_accepts_full_iso_datetime(self):
+        payload = _correction_payload(paid_at="2026-09-03T14:30:00Z")
+        assert payload.paid_at.hour == 14
+
+    def test_update_rejects_date_only_string(self):
+        with pytest.raises(ValidationError):
+            PaymentUpdate(paid_at="2026-09-03")
+
+    def test_update_accepts_full_iso_datetime(self):
+        payload = PaymentUpdate(paid_at="2026-09-03T14:30:00Z")
+        assert payload.paid_at.hour == 14
+
+    def test_update_paid_at_omitted_is_still_none(self):
+        """Regression: partial-update semantics unaffected by the new validator."""
+        payload = PaymentUpdate(amount=Decimal("1.00"))
+        assert payload.paid_at is None
+
+    def test_create_accepts_native_datetime_object(self):
+        """Programmatic construction (e.g. from services/tests) passing an
+        actual datetime, not a string, must be untouched."""
+        payload = _create_payload(paid_at=datetime(2026, 9, 3, 14, 30, tzinfo=timezone.utc))
+        assert payload.paid_at.hour == 14
