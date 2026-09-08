@@ -14,6 +14,7 @@ from app.core.services.exceptions import (
     ResourceForbiddenError,
     ServiceException,
 )
+from app.receipts.services.receipt_pdf import format_receipt_number
 from app.receipts.services.receipt_service import ReceiptService
 from tests.mock_repos import MockCRUDRepo, MockReadOnlyRepo
 from tests.factories import make_admin, make_manager, make_regular_user
@@ -308,6 +309,25 @@ class TestIssueReceiptBillingContext:
         _, call_kwargs = spy.call_args
         assert call_kwargs["billing_record"] is None
         assert call_kwargs["manager_email"] is None
+
+
+@pytest.mark.asyncio
+class TestIssueReceiptDocumentFileName:
+    async def test_file_name_uses_the_formatted_receipt_number(self, mock_db):
+        payment, contract, property_, tenant = _scenario()
+        svc = _make_service(
+            payments=MockReadOnlyRepo({payment.id: payment}),
+            contracts=MockReadOnlyRepo({contract.id: contract}),
+            properties=MockReadOnlyRepo({property_.id: property_}),
+            tenants=MockReadOnlyRepo({tenant.id: tenant}),
+        )
+
+        admin = make_admin()
+        receipt = await svc.issue_receipt(mock_db, payment.id, admin, storage_client=FakeStorageClient())
+
+        document = await svc.document_service.document_repo.get_by_id(mock_db, receipt.document_id)
+        expected = f"{format_receipt_number(receipt.receipt_number, property_)}.pdf"
+        assert document.file_name == expected
 
 
 @pytest.mark.asyncio
