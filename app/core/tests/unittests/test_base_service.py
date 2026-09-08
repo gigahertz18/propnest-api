@@ -234,8 +234,42 @@ class TestAuthorizeManager:
         mixin = _make_mixin(properties={prop_id: prop})
         outsider = SimpleNamespace(id=uuid4(), role=UserRole.MANAGER)
 
-        with pytest.raises(ResourceForbiddenError):
+        with pytest.raises(ResourceForbiddenError) as exc_info:
             await mixin._authorize_user_to_property(mock_db, outsider, property_id=prop_id, contract_id=None)
+        assert str(exc_info.value) == "User not authorized to manage this resource."
+
+    async def test_manager_forbidden_with_distinct_message_when_property_has_no_manager(self, mock_db):
+        """Unassigned property (manager_id is None) must be diagnosable as
+        such, not indistinguishable from a plain ownership mismatch."""
+        prop_id = uuid4()
+        prop = SimpleNamespace(id=prop_id, manager_id=None)
+        mixin = _make_mixin(properties={prop_id: prop})
+        manager = SimpleNamespace(id=uuid4(), role=UserRole.MANAGER)
+
+        with pytest.raises(ResourceForbiddenError) as exc_info:
+            await mixin._authorize_user_to_property(mock_db, manager, property_id=prop_id, contract_id=None)
+        assert str(exc_info.value) == ("This property has no manager assigned. Contact an admin to assign one.")
+
+    async def test_manager_forbidden_message_unchanged_when_property_not_found(self, mock_db):
+        """prop is None (nothing resolved) keeps the existing generic
+        message — only the manager_id-is-None case gets a new one."""
+        mixin = _make_mixin()
+        manager = SimpleNamespace(id=uuid4(), role=UserRole.MANAGER)
+
+        with pytest.raises(ResourceForbiddenError) as exc_info:
+            await mixin._authorize_user_to_property(mock_db, manager, property_id=None, contract_id=None)
+        assert str(exc_info.value) == "User not authorized to manage this resource."
+
+    async def test_raises_custom_forbidden_error_when_property_has_no_manager(self, mock_db):
+        """Per-service forbidden_error override applies to this branch too,
+        not just the pre-existing ones."""
+        prop_id = uuid4()
+        prop = SimpleNamespace(id=prop_id, manager_id=None)
+        mixin = _make_mixin(properties={prop_id: prop}, forbidden_error=_CustomForbiddenError)
+        manager = SimpleNamespace(id=uuid4(), role=UserRole.MANAGER)
+
+        with pytest.raises(_CustomForbiddenError):
+            await mixin._authorize_user_to_property(mock_db, manager, property_id=prop_id, contract_id=None)
 
     async def test_manager_forbidden_when_no_property_or_contract_at_all(self, mock_db):
         """A manager operating on a fully unattached resource (no

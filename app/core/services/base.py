@@ -142,6 +142,10 @@ class ResourceAuthorizationMixin:
         Fails closed: any role other than ADMIN/MANAGEr - including a plain USER, or a missing/unrecognized role -
         is forbidden outright rather than silently treated as authorized.
         Managers must own the resolved property; if nothing resolves, managers are forbidden.
+        If the property resolves but has no manager assigned yet, a distinct
+        message is raised so this is diagnosable without a DB lookup — the
+        fail-closed *outcome* is identical to an ownership mismatch, only the
+        message differs.
 
         Raises:
             RelatedResourceNotFoundError: bubbled up from `_resolve_property`.
@@ -156,7 +160,13 @@ class ResourceAuthorizationMixin:
 
         prop = await self._resolve_property(db, property_id=property_id, contract_id=contract_id, contract=contract)
 
-        if prop is None or prop.manager_id != current_user.id:
+        if prop is None:
+            raise self.forbidden_error("User not authorized to manage this resource.")
+
+        if prop.manager_id is None:
+            raise self.forbidden_error("This property has no manager assigned. Contact an admin to assign one.")
+
+        if prop.manager_id != current_user.id:
             raise self.forbidden_error("User not authorized to manage this resource.")
 
     async def _list_scoped_by_manager(
