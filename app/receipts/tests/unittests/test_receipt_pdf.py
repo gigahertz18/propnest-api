@@ -4,9 +4,13 @@ from dataclasses import fields, is_dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
+from unittest.mock import patch
+from uuid import uuid4
 
 from app.receipts.services.receipt_pdf import (
     _blocked_url_fetcher,
+    format_property_code,
+    format_receipt_number,
     load_default_template,
     render_receipt_pdf,
 )
@@ -39,7 +43,7 @@ def _receipt_kwargs(**overrides):
     defaults = dict(
         receipt_number=1,
         payment=_payment(),
-        property_=SimpleNamespace(name="Sunset Villa", address="123 Sunset Ave"),
+        property_=SimpleNamespace(name="Sunset Villa", address="123 Sunset Ave", id=uuid4()),
         tenant=SimpleNamespace(full_name="Jane Doe"),
         billing_record=None,
         manager_email=None,
@@ -89,6 +93,19 @@ class TestRenderReceiptPdf:
         assert _render(template_html=malicious).read(5) == b"%PDF-"
 
 
+class TestRenderReceiptPdfFormatsReceiptNumber:
+    def test_context_receives_formatted_string_not_raw_int(self):
+        property_ = SimpleNamespace(name="Sunset Villa", address="123 Sunset Ave", id=uuid4())
+        with patch(
+            "app.receipts.services.receipt_pdf.ReceiptRenderContext.build",
+            wraps=ReceiptRenderContext.build,
+        ) as spy:
+            _render(receipt_number=1, property_=property_)
+
+        _, call_kwargs = spy.call_args
+        assert call_kwargs["receipt_number"] == format_receipt_number(1, property_)
+
+
 class TestBlockedUrlFetcher:
     @pytest.mark.parametrize(
         "url",
@@ -106,6 +123,11 @@ class TestBlockedUrlFetcher:
 
 class TestBuildRenderContext:
     def _context(self, **kwargs):
+        """`ReceiptRenderContext.build()` takes `receipt_number` as an
+        already-formatted display string (`render_receipt_pdf` formats it
+        before calling `build()`) — override the shared fixture's raw int
+        default unless the caller supplies its own."""
+        kwargs.setdefault("receipt_number", "RCPT-TEST-000001")
         return ReceiptRenderContext.build(**_receipt_kwargs(**kwargs))
 
     def _assert_no_field_is_blank(self, obj, path=""):
@@ -195,3 +217,49 @@ class TestAmountToWords:
 
     def test_magnitude_boundary_exactly_one_thousand(self):
         assert amount_to_words(Decimal("1000.00")) == "One Thousand Pesos and 00/100"
+
+
+class TestFormatPropertyCode:
+    def test_derives_prefix_from_property_name(self):
+        property_ = SimpleNamespace(name="Grand Apartments", id=uuid4())
+        code = format_property_code(property_)
+        assert code.startswith("GRAN-")
+
+    def test_falls_back_to_prop_when_name_has_no_alnum_chars(self):
+        property_ = SimpleNamespace(name="---", id=uuid4())
+        code = format_property_code(property_)
+        assert code.startswith("PROP-")
+
+    def test_id_suffix_is_last_four_hex_chars_of_the_uuid(self):
+        fixed_id = uuid4()
+        property_ = SimpleNamespace(name="Sunset Villa", id=fixed_id)
+        expected_suffix = str(fixed_id).replace("-", "")[-4:].upper()
+        assert format_property_code(property_).endswith(expected_suffix)
+
+    def test_is_deterministic_for_the_same_property(self):
+        property_ = SimpleNamespace(name="Sunset Villa", id=uuid4())
+        assert format_property_code(property_) == format_property_code(property_)
+
+    def test_differs_for_properties_with_different_ids(self):
+        first = SimpleNamespace(name="Sunset Villa", id=uuid4())
+        second = SimpleNamespace(name="Sunset Villa", id=uuid4())
+        assert format_property_code(first) != format_property_code(second)
+
+
+class TestFormatReceiptNumber:
+    def _property(self):
+        return SimpleNamespace(name="Sunset Villa", id=uuid4())
+
+    def test_pads_to_six_digits(self):
+        property_ = self._property()
+        expected = f"RCPT-{format_property_code(property_)}-000001"
+        assert format_receipt_number(1, property_) == expected
+
+    def test_does_not_truncate_numbers_past_the_pad_width(self):
+        property_ = self._property()
+        expected = f"RCPT-{format_property_code(property_)}-1000000"
+        assert format_receipt_number(1000000, property_) == expected
+
+    def test_includes_the_property_code(self):
+        property_ = self._property()
+        assert format_property_code(property_) in format_receipt_number(1, property_)

@@ -23,6 +23,23 @@ def load_default_template() -> str:
     return _DEFAULT_RECEIPT_TEMPLATE.read_text()
 
 
+def format_property_code(property_) -> str:
+    """Short, human-readable property tag for receipt numbers. Derived, not
+    stored — combines a name-based prefix with a slice of the property's id
+    so two properties can never produce the same code in practice, without
+    requiring a dedicated unique column on Property."""
+    name_part = "".join(ch for ch in property_.name.upper() if ch.isalnum())[:4] or "PROP"
+    id_part = str(property_.id).replace("-", "")[-4:].upper()
+    return f"{name_part}-{id_part}"
+
+
+def format_receipt_number(receipt_number: int, property_) -> str:
+    """Zero-padded (min 6 digits), property-tagged display format for a raw
+    receipt_number, e.g. RCPT-GRAN-3F2A-000002. Presentation-only — the
+    underlying int stays the DB/API-facing value."""
+    return f"RCPT-{format_property_code(property_)}-{receipt_number:06d}"
+
+
 def _blocked_url_fetcher(url: str):
     """Templates may be uploaded by managers (see ReceiptTemplateService) —
     without this, WeasyPrint would happily follow an <img src="http://...">
@@ -50,7 +67,7 @@ def render_receipt_pdf(
     the exact same path.
     """
     context = ReceiptRenderContext.build(
-        receipt_number=receipt_number,
+        receipt_number=format_receipt_number(receipt_number, property_),
         payment=payment,
         property_=property_,
         tenant=tenant,

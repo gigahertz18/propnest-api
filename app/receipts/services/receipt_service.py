@@ -25,7 +25,7 @@ from app.core.services.exceptions import (
     ReceiptForbiddenError,
     RelatedResourceNotFoundError,
 )
-from app.receipts.services.receipt_pdf import load_default_template, render_receipt_pdf
+from app.receipts.services.receipt_pdf import format_receipt_number, load_default_template, render_receipt_pdf
 from app.receipts.services.receipt_template_service import ReceiptTemplateService
 
 logger = logging.getLogger(__name__)
@@ -128,7 +128,7 @@ class ReceiptService(ResourceAuthorizationMixin):
         # also be allowed to create the Document backing the receipt), and
         # keeps the receipt PDF discoverable alongside other contract docs.
         doc_payload = DocumentCreate(
-            file_name=f"receipt_{receipt_number}.pdf",
+            file_name=f"{format_receipt_number(receipt_number, property_)}.pdf",
             file_type="application/pdf",
             contract_id=payment.contract_id,
         )

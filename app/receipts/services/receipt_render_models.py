@@ -160,7 +160,7 @@ class ReceiptRenderContext:
     flat list of fields, mirroring the domain objects each group is
     sourced from."""
 
-    receipt_number: int
+    receipt_number: str
     property: PropertyInfo
     tenant: TenantInfo
     payment: PaymentInfo
@@ -172,7 +172,7 @@ class ReceiptRenderContext:
     def build(
         cls,
         *,
-        receipt_number: int,
+        receipt_number: str,
         payment,
         property_,
         tenant,
